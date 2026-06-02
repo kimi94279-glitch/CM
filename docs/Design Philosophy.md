@@ -11,7 +11,7 @@ related:
     
 - "[[MVP]]"
     
-- "[[ADR-004 Product Scope Expansion]]"  
+- "[[ADR-005 Product Scope Expansion]]"  
     tags:
     
 - design
