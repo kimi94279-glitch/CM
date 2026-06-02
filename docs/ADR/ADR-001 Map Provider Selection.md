@@ -8,79 +8,101 @@ Status: Accepted
 
 ## Context
 
-커플이 저장한 장소를 지도 위에 표시해야 한다.
+Couple Map은 장소를 지도 위에 표시하고,  
+코스를 연결해야 한다.
 
 필수 요구사항:
 
 - 마커
+    
 - 폴리라인
+    
 - 커스텀 오버레이
-- RN 연동
+    
+- React Native 연동
+    
 
 ---
 
 ## Options Considered
 
-### Naver Maps
+### Option A: Naver Map
 
 장점
 
-- RN 라이브러리 성숙
+- React Native 라이브러리 성숙
+    
+- 유지보수 활발
+    
 
 단점
 
-- 검색 API와 플랫폼 분리
+- 검색 API와 지도 플랫폼 분리
+    
 - NCP 의존
+    
 
----
-
-### Kakao Native SDK
+### Option B: Kakao Native SDK
 
 장점
 
-- 카카오 생태계
+- 카카오 생태계 활용 가능
+    
 
 단점
 
 - RN 라이브러리 기능 부족
-- 마커/폴리라인 제약
+    
+- 마커 및 폴리라인 지원 한계
+    
 
----
-
-### Kakao JS SDK + WebView
+### Option C: Kakao JS SDK + WebView
 
 장점
 
-- 기능 완전
 - 마커 지원
+    
 - 폴리라인 지원
+    
 - 커스텀 오버레이 지원
+    
+- 카카오 지도 기능 대부분 사용 가능
+    
 
 단점
 
-- WebView 사용
+- WebView 의존
+    
 - JS SDK 의존
+    
 
 ---
 
 ## Decision
 
-Kakao JS SDK + WebView 채택
+Kakao JS SDK + WebView를 채택한다.
 
 ---
 
 ## Rationale
 
-제품 요구사항을 유일하게 모두 충족.
+제품 요구사항을 가장 완전하게 충족하는 유일한 선택지였다.
 
 ---
 
 ## Consequences
 
-긍정
+### Positive
 
-- 기능 구현 가능
+- 마커 구현 가능
+    
+- 폴리라인 구현 가능
+    
+- 확장성 확보
+    
 
-부정
+### Negative
 
 - WebView 유지 필요
+    
+- JS SDK 변경에 영향 받음
