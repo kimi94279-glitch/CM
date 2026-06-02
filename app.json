@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Couple Map",
+    "slug": "couple-map",
+    "scheme": "couplemap",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.couplemap.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a2f3ff3d-c749-4d07-895b-e73a7bb91a2e"
+      }
+    },
+    "plugins": [
+      "expo-build-properties"
+    ]
+  }
+}

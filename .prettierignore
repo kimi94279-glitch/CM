@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+package-lock.json
+
+# 기획 문서는 수기 작성본 유지
+PRD.md
+ARCHITECTURE.md
+HARNESS.md
+CLAUDE.md
+AGENTS.md
+.claude/
