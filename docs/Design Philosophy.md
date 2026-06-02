@@ -22,7 +22,9 @@ related:
     
 - philosophy
     
-
+Primary: "#2F6B5A"
+Secondary: "#F5F1E8"
+Accent: "#F29D52"
 ---
 
 # Design Philosophy
