@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "ARCHITECTURE.md",
+                "file": "docs/Architecture.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "ARCHITECTURE"
+              "title": "Architecture"
             }
           }
         ]
@@ -185,33 +185,35 @@
       "homepage:Open homepage": false
     }
   },
-  "active": "24329bda652d1e3c",
+  "active": "e7a7b303c61786dc",
   "lastOpenFiles": [
     "docs/Product Vision.md",
-    "docs/Open Questions.md",
-    "docs/Map Decision Record.md",
-    "docs/MVP.md",
-    "docs/HOME.md",
-    "docs/Feature List.md",
-    "docs/Development Log.md",
-    "docs/Design Philosophy.md",
-    "docs/Architecture.md",
+    "docs/ADR/ADR-006 Search Provider Consolidation.md",
+    "docs/ADR/ADR-007 Branch Strategy.md",
+    "docs/ADR/ADR-000 Template.md",
     "docs/ADR/ADR-005 Product Scope Expansion.md",
     "docs/ADR/ADR-004 Search Architecture.md",
     "docs/ADR/ADR-003 Kakao WebView Strategy.md",
-    "docs/ADR/ADR-000 Template.md",
     "docs/ADR/ADR-002 Supabase Adoption.md",
     "docs/ADR/ADR-001 Map Provider Selection.md",
-    "docs/ADR",
-    "docs",
-    "README.md",
+    "docs/Architecture.md",
+    "docs/Feature List.md",
+    "docs/Design Philosophy.md",
+    "ARCHITECTURE.md",
     "src/screens/InviteJoinScreen.tsx",
     "src/screens/InviteCreateScreen.tsx",
     "src/components/mapWebViewHtml.ts",
     "src/components/MapWebView.tsx",
     "patches/@react-native+gradle-plugin+0.85.3.patch",
     "patches",
-    "docs/ADR/ADR-006 Search Provider Consolidation.md",
+    "docs/Open Questions.md",
+    "docs/Map Decision Record.md",
+    "docs/MVP.md",
+    "docs/HOME.md",
+    "docs/Development Log.md",
+    "docs/ADR",
+    "docs",
+    "README.md",
     "AGENTS.md",
     "supabase/migrations/0003_place_provider_kakao.sql",
     "supabase/migrations/0003_place_provider_kakao.sql.tmp.1812.45a1e118b844",
@@ -220,7 +222,6 @@
     "커플앱(가칭)/ADR/ADR-003 Kakao WebView Strategy.md",
     "커플앱(가칭)/ADR/ADR-002 Supabase Adoption.md",
     "커플앱(가칭)/ADR/ADR-001 Map Provider Selection.md",
-    "커플앱(가칭)/ADR/ADR-000 Template.md",
-    "커플앱(가칭)/Product Vision.md"
+    "커플앱(가칭)/ADR/ADR-000 Template.md"
   ]
 }

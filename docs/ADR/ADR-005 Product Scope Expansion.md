@@ -1,3 +1,16 @@
+---
+type: adr
+adr: 005
+title: Product Scope Expansion
+status: accepted
+created: 2026-06-03
+updated: 2026-06-03
+tags:
+  - adr
+  - product
+  - vision
+  - scope
+---
 # ADR-005 Product Scope Expansion
 
 Date: 2026-06-03

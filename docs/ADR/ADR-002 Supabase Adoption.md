@@ -1,3 +1,16 @@
+---
+type: adr
+adr: 002
+title: Supabase Adoption
+status: accepted
+created: 2026-06-03
+updated: 2026-06-03
+tags:
+  - adr
+  - backend
+  - supabase
+  - architecture
+---
 # ADR-002 Supabase Adoption
 
 Date: 2026-06-03

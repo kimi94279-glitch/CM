@@ -1,3 +1,16 @@
+---
+type: adr
+adr: 004
+title: Search Architecture
+status: accepted
+created: 2026-06-03
+updated: 2026-06-03
+tags:
+  - adr
+  - architecture
+  - search
+  - edge-function
+---
 # ADR-004 Search Architecture
 
 Date: 2026-06-03

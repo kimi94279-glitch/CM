@@ -1,3 +1,16 @@
+---
+type: adr
+adr: 003
+title: Kakao WebView Strategy
+status: accepted
+created: 2026-06-03
+updated: 2026-06-03
+tags:
+  - adr
+  - frontend
+  - kakao
+  - webview
+---
 # ADR-003 Kakao WebView Strategy
 
 Date: 2026-06-03

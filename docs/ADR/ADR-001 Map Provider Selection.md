@@ -1,3 +1,16 @@
+---
+type: adr
+adr: 001
+title: Map Provider Selection
+status: accepted
+created: 2026-06-03
+updated: 2026-06-03
+tags:
+  - adr
+  - architecture
+  - map
+  - kakao
+---
 # ADR-001 Map Provider Selection
 
 Date: 2026-06-03
