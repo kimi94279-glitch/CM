@@ -28,6 +28,12 @@ async function nextOrderIndex(boardId: string): Promise<number> {
   return data ? data.order_index + 1 : 0;
 }
 
+// 장소 삭제 (RLS: 커플 멤버만). order_index 재인덱싱은 하지 않는다(공백 허용).
+export async function removePlace(placeId: string): Promise<void> {
+  const { error } = await supabase.from('places').delete().eq('id', placeId);
+  if (error) throw error;
+}
+
 // 검색 결과를 보드에 추가
 export async function addPlace(boardId: string, result: PlaceSearchResult): Promise<Place> {
   const { data: userData, error: userError } = await supabase.auth.getUser();

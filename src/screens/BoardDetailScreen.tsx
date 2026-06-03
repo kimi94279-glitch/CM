@@ -1,14 +1,23 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Button } from '../components/Button';
 import { MapWebView } from '../components/MapWebView';
 import { PlaceCard } from '../components/PlaceCard';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { usePlaces } from '../hooks/usePlaces';
+import { useDeletePlace, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
+import type { Place } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 type ViewMode = 'list' | 'map';
@@ -21,6 +30,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const [mode, setMode] = useState<ViewMode>('list');
   // 지도에서 마커 클릭 시 설정. 화면 전환은 하지 않고, 목록 탭으로 가면 강조 상태로 보인다.
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const deletePlace = useDeletePlace(boardId);
+
+  // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
+  const confirmDelete = (place: Place) => {
+    Alert.alert('장소 삭제', `'${place.name}'을(를) 삭제할까요?`, [
+      { text: '취소', style: 'cancel' },
+      { text: '삭제', style: 'destructive', onPress: () => deletePlace.mutate(place.id) },
+    ]);
+  };
 
   const renderContent = () => {
     if (placesQuery.isLoading) {
@@ -64,7 +82,13 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         data={places}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <PlaceCard place={item} index={index + 1} highlighted={item.id === highlightedId} />
+          <PlaceCard
+            place={item}
+            index={index + 1}
+            highlighted={item.id === highlightedId}
+            onDelete={() => confirmDelete(item)}
+            deleting={deletePlace.isPending && deletePlace.variables === item.id}
+          />
         )}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}

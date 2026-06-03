@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { addPlace, listPlaces } from '../services/placeService';
+import { addPlace, listPlaces, removePlace } from '../services/placeService';
 import { searchPlaces } from '../services/placeSearchService';
 import type { PlaceSearchResult } from '../types/models';
 
@@ -17,6 +17,17 @@ export function useAddPlace(boardId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (result: PlaceSearchResult) => addPlace(boardId, result),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['places', boardId] });
+    },
+  });
+}
+
+// 장소 삭제 (성공 시 목록 무효화)
+export function useDeletePlace(boardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (placeId: string) => removePlace(placeId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['places', boardId] });
     },

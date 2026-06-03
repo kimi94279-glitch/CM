@@ -63,14 +63,19 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
           var bounds = new kakao.maps.LatLngBounds();
           var path = [];
 
-          PLACES.forEach(function(p){
+          // 번호형 핀: 배열 순서(1..N) = order_index 정렬 결과. 번호는 UI 파생값(미저장).
+          PLACES.forEach(function(p, i){
             var pos = new kakao.maps.LatLng(p.latitude, p.longitude);
-            var marker = new kakao.maps.Marker({ position: pos, map: map, title: p.name });
             bounds.extend(pos);
             path.push(pos);
-            kakao.maps.event.addListener(marker, 'click', function(){
-              send({ type:'markerClick', id: p.id });
-            });
+
+            var el = document.createElement('div');
+            el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:#FF6B81;color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;';
+            el.textContent = String(i + 1);
+            el.addEventListener('click', function(){ send({ type:'markerClick', id: p.id }); });
+
+            var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: true });
+            overlay.setMap(map);
           });
 
           // order_index 순서대로 폴리라인 (2개 이상일 때)
