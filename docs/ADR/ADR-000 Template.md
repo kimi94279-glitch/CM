@@ -1,3 +1,13 @@
+---
+id: ADR-008
+title: Map Canvas Architecture
+date: 2026-06-04
+status: Accepted
+tags:
+  - architecture
+  - map-canvas
+  - canvas-object
+---
 # ADR-XXX Title
 
 Date:
