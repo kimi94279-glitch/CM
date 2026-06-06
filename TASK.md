@@ -1,3 +1,12 @@
+---
+title: Current Task
+status: active
+owner: project
+last_review: 2026-06-07
+category: task
+related:
+  - HARNESS.md
+---
 # TASK.md
 
 ## Current Task

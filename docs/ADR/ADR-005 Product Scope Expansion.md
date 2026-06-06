@@ -1,10 +1,14 @@
 ---
-type: adr
-adr: 005
 title: Product Scope Expansion
-status: accepted
-created: 2026-06-03
-updated: 2026-06-03
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - PRD.md
+  - ADR-008 Map Canvas Architecture
+adr: "005"
+date: 2026-06-03
 tags:
   - adr
   - product

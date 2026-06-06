@@ -1,3 +1,14 @@
+---
+title: Database Design
+status: active
+owner: project
+last_review: 2026-06-07
+category: database
+related:
+  - ARCHITECTURE.md
+  - FLOW_AUTH.md
+  - ADR-002 Supabase Adoption
+---
 # DATABASE.md
 
 # Couple Map Database Design

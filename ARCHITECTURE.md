@@ -1,3 +1,14 @@
+---
+title: Architecture
+status: active
+owner: project
+last_review: 2026-06-07
+category: architecture
+related:
+  - PRD.md
+  - DATABASE.md
+  - ADR-008 Map Canvas Architecture
+---
 # ARCHITECTURE.md
 
 # Couple Map Architecture
@@ -41,8 +52,33 @@
 
 ## Map
 
-- Naver Map SDK
-- Naver Directions API
+- Kakao Maps JavaScript SDK (react-native-webview 기반)
+- 네이티브 카카오 SDK 미사용 (마커/폴리라인/CustomOverlay 지원 한계)
+
+> 결정 근거: ADR-001 Map Provider Selection, ADR-003 Kakao WebView Strategy
+
+---
+
+## Search
+
+**현재 구현**: 장소 검색은 Naver 지역검색 API를 사용한다.
+
+경로:
+
+```text
+App
+→ Supabase Edge Function (place-search)
+→ Naver Local Search API
+```
+
+- 인증 키: `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` (Supabase Secrets, 서버측 보관)
+- 응답 정규화: Supabase Edge Function에서 처리
+- 데이터 모델: `provider = 'naver' | 'manual'` (`src/types/models.ts`, migration `0001_init.sql`)
+
+**목표(미구현)**: ADR-006은 검색 공급자를 Kakao Local API로 통합(지도·검색 단일 공급자화)하기로 결정했다. 단일 키 관리·좌표 변환 제거·데이터 일관성을 위한 것이나, **코드에는 아직 반영되지 않았다**. 전환 시 Edge Function / models / migration을 함께 갱신해야 한다.
+
+> 결정 근거: ADR-006 Search Provider Consolidation (Accepted, 미구현)
+> 지도 공급자는 Kakao(ADR-003)로 검색과 분리되어 있다.
 
 ---
 

@@ -1,3 +1,13 @@
+---
+title: Map Canvas Architecture
+status: active
+owner: project
+last_review: 2026-06-07
+category: architecture
+related:
+  - ADR-008 Map Canvas Architecture
+  - ADR-009 Adaptive Canvas Layout
+---
 # MAP CANVAS.md
 
 # Couple Map — Map Canvas Architecture

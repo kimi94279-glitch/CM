@@ -1,3 +1,13 @@
+---
+title: Development Harness
+status: active
+owner: project
+last_review: 2026-06-07
+category: process
+related:
+  - ARCHITECTURE.md
+  - ADR-007 Branch Strategy
+---
 # HARNESS.md
 
 # Couple Map Development Harness

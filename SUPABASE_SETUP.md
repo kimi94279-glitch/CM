@@ -1,3 +1,13 @@
+---
+title: Supabase Setup Runbook
+status: active
+owner: project
+last_review: 2026-06-07
+category: runbook
+related:
+  - DATABASE.md
+  - ADR-002 Supabase Adoption
+---
 # SUPABASE_SETUP.md
 
 # Couple Map — Supabase 프로비저닝 & Auth 런타임 검증 런북

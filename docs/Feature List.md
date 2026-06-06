@@ -1,3 +1,12 @@
+---
+title: Feature List
+status: active
+owner: project
+last_review: 2026-06-07
+category: product
+related:
+  - PRD.md
+---
 # Feature List
 
 | 기능 | 설명 | 상태 | 우선순위 |
@@ -7,7 +16,7 @@
 | 보드 생성 | 장소 그룹 생성 | 완료 | P1 |
 | 보드 목록 | 보드 조회 | 완료 | P1 |
 | 장소 추가 | 보드에 장소 저장 | 완료 | P1 |
-| 장소 검색 | 네이버 검색 API | 진행중 | P1 |
+| 장소 검색 | 네이버 지역검색 API (Edge Function `place-search`) | 진행중 | P1 |
 | 장소 목록 | 저장 장소 조회 | 완료 | P1 |
 | 지도 보기 | 카카오 지도 | 완료 | P1 |
 | 마커 표시 | 장소 위치 표시 | 완료 | P1 |
@@ -20,3 +29,5 @@
 | 사진 첨부 | 장소 사진 | 미착수 | P3 |
 | 반응 기능 | 좋아요 등 | 미착수 | P3 |
 | 실시간 동기화 | 즉시 반영 | 미착수 | P3 |
+
+> 검색 공급자 참고: 현재 구현은 **Naver 지역검색 API**(`supabase/functions/place-search`)이다. ADR-006은 검색을 **Kakao Local API로 통합**하기로 결정했으나 코드에는 아직 반영되지 않았다(전환 예정). 지도 렌더링은 Kakao를 사용한다.

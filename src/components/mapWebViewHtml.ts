@@ -39,14 +39,46 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <style>html,body,#map{margin:0;padding:0;width:100%;height:100%;}</style>
+  <style>
+    html,body,#map{margin:0;padding:0;width:100%;height:100%;}
+    /* 지도를 앱처럼: 텍스트/번호 핀 선택 및 long-press 콜아웃/하이라이트 차단 (지도 제스처에는 영향 없음) */
+    *{
+      -webkit-user-select:none;
+      user-select:none;
+      -webkit-touch-callout:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
   <script>
     function send(o){ try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }catch(e){} }
+    // 보강: long-press 텍스트 선택/컨텍스트 메뉴 차단 (CSS user-select가 놓치는 잔여 케이스 대비)
+    document.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive:false });
+    document.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive:false });
     var PLACES = ${placesJson};
     var DEFAULT_CENTER = ${centerJson};
+    var map, bounds;
+    // fitBounds 패딩(px). 현재 하드코딩 — Search 상단 영역/우하단 FAB에 핀이 가려지지 않도록 한 근사치.
+    // TODO: 추후 RN safe area / insets(상단 Search, 우하단 Utility FAB 높이) 기반 계산값을 주입해 대체 예정.
+    var PAD = { top: 96, right: 80, bottom: 112, left: 24 };
+
+    // 0/1/2+ 카메라 단일 진입점 — 초기 로드와 window.recenter()가 공용 사용(분기 중복 제거).
+    function applyCamera(){
+      if (!map) return;
+      if (PLACES.length === 0) {
+        map.setLevel(5);
+        map.setCenter(new kakao.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng));
+      } else if (PLACES.length === 1) {
+        map.setLevel(4);
+        map.setCenter(new kakao.maps.LatLng(PLACES[0].latitude, PLACES[0].longitude));
+      } else {
+        map.setBounds(bounds, PAD.top, PAD.right, PAD.bottom, PAD.left);
+      }
+    }
+    // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
+    window.recenter = function(){ applyCamera(); };
 
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false';
@@ -55,12 +87,12 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       if(!window.kakao || !window.kakao.maps){ send({ type:'error', stage:'sdk', message:'kakao.maps undefined' }); return; }
       kakao.maps.load(function(){
         try {
-          var map = new kakao.maps.Map(document.getElementById('map'), {
+          map = new kakao.maps.Map(document.getElementById('map'), {
             center: new kakao.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
             level: 5
           });
 
-          var bounds = new kakao.maps.LatLngBounds();
+          bounds = new kakao.maps.LatLngBounds();
           var path = [];
 
           // 번호형 핀: 배열 순서(1..N) = order_index 정렬 결과. 번호는 UI 파생값(미저장).
@@ -70,7 +102,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
             path.push(pos);
 
             var el = document.createElement('div');
-            el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:#FF6B81;color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;';
+            el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:#FF6B81;color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
             el.textContent = String(i + 1);
             el.addEventListener('click', function(){ send({ type:'markerClick', id: p.id }); });
 
@@ -84,13 +116,8 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
             line.setMap(map);
           }
 
-          // 카메라: 0개=기본 중심 / 1개=해당 장소 / 2개 이상=fitBounds
-          if (PLACES.length === 1) {
-            map.setCenter(new kakao.maps.LatLng(PLACES[0].latitude, PLACES[0].longitude));
-            map.setLevel(4);
-          } else if (PLACES.length >= 2) {
-            map.setBounds(bounds);
-          }
+          // 카메라: applyCamera()로 위임 — 초기 로드와 Recenter가 동일 0/1/2+ 로직 공용.
+          applyCamera();
 
           send({ type:'ready', count: PLACES.length });
         } catch(e){ send({ type:'error', stage:'map', message:String(e) }); }

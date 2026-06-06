@@ -1,12 +1,15 @@
 ---
-id: ADR-008
-title: Map Canvas Architecture
-date: 2026-06-04
-status: Accepted
+title: ADR Template
+status: draft
+owner: project
+last_review: 2026-06-07
+category: adr
+related: []
+adr: "000"
+date: 2026-06-03
 tags:
-  - architecture
-  - map-canvas
-  - canvas-object
+  - adr
+  - template
 ---
 # ADR-XXX Title
 

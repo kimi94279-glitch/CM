@@ -1,10 +1,13 @@
 ---
-type: adr
-adr: 003
 title: Kakao WebView Strategy
-status: accepted
-created: 2026-06-03
-updated: 2026-06-03
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - ADR-001 Map Provider Selection
+adr: "003"
+date: 2026-06-03
 tags:
   - adr
   - frontend

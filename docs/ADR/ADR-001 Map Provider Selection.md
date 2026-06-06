@@ -1,10 +1,13 @@
 ---
-type: adr
-adr: 001
 title: Map Provider Selection
-status: accepted
-created: 2026-06-03
-updated: 2026-06-03
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - ADR-003 Kakao WebView Strategy
+adr: "001"
+date: 2026-06-03
 tags:
   - adr
   - architecture

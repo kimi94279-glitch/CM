@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
@@ -13,11 +13,33 @@ interface MapWebViewProps {
   onMarkerPress?: (placeId: string) => void;
 }
 
+// 상위(BoardDetailScreen)가 ref로 호출하는 명령형 API.
+export interface MapWebViewHandle {
+  // 카메라를 의미 있는 기준으로 되돌린다(R1: 0개=기본 중심 / 1개=센터 / 2+=fitBounds).
+  recenter(): void;
+}
+
 // 프로덕션 지도 컴포넌트: WebView + Kakao JS SDK.
 // places 는 order_index 기준으로 정렬되어 마커/폴리라인으로 렌더된다.
-export function MapWebView({ places, onMarkerPress }: MapWebViewProps) {
+export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function MapWebView(
+  { places, onMarkerPress },
+  ref
+) {
+  const webRef = useRef<WebView>(null);
+
   // places 가 바뀔 때만 HTML 재생성
   const html = useMemo(() => buildMapHtml(KAKAO_JS_KEY, toMapPlaces(places)), [places]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      recenter() {
+        // ready 이전 호출 대비 가드 + injectJavaScript 마지막 표현식 true; 관례.
+        webRef.current?.injectJavaScript('window.recenter && window.recenter(); true;');
+      },
+    }),
+    []
+  );
 
   const handleMessage = (e: WebViewMessageEvent) => {
     try {
@@ -40,6 +62,7 @@ export function MapWebView({ places, onMarkerPress }: MapWebViewProps) {
 
   return (
     <WebView
+      ref={webRef}
       originWhitelist={['*']}
       javaScriptEnabled
       domStorageEnabled
@@ -49,7 +72,7 @@ export function MapWebView({ places, onMarkerPress }: MapWebViewProps) {
       style={styles.web}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: colors.bg },

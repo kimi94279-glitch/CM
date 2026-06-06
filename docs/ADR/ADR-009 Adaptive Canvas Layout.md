@@ -1,22 +1,21 @@
 ---
-
-id: ADR-009  
-title: Adaptive Canvas Layout  
-date: 2026-06-04  
-status: Accepted  
+title: Adaptive Canvas Layout
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - ADR-008 Map Canvas Architecture
+  - ADR-010 Floating Actions Architecture
+adr: "009"
+date: 2026-06-04
 tags:
-
-- architecture
-    
-- ux
-    
-- map-canvas
-    
-- layout
-    
-- adaptive-ui
-    
-
+  - adr
+  - architecture
+  - ux
+  - map-canvas
+  - layout
+  - adaptive-ui
 ---
 
 # ADR-009 Adaptive Canvas Layout

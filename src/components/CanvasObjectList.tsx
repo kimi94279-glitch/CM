@@ -65,16 +65,23 @@ export function CanvasObjectList({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: spacing.md },
+  // 컨테이너는 수평 패딩을 두지 않는다 → row divider/highlight 틴트가 목록 폭 전체에 닿게(풀블리드).
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   title: { ...typography.label, color: colors.textStrong },
   close: { ...typography.body, color: colors.textMuted },
-  empty: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: spacing.md },
+  empty: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
   emptyText: { ...typography.body, color: colors.textMuted },
   list: { flex: 1 },
   listContent: { paddingBottom: spacing.lg },

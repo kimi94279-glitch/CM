@@ -1,3 +1,13 @@
+---
+title: Product Requirements
+status: active
+owner: project
+last_review: 2026-06-07
+category: product
+related:
+  - DESIGN.md
+  - ADR-005 Product Scope Expansion
+---
 # PRD.md
 
 # Couple Map
@@ -328,3 +338,52 @@ MVP에서 구현하지 않는다.
 지도 앱처럼 느껴지지 않고
 
 함께 계획을 만드는 공간처럼 느껴져야 한다.
+
+---
+
+# Mission & Core Values
+
+## Mission
+
+함께 지도를 보며 어디 갈지 이야기하는 시간을 더 즐겁게 만든다.
+
+## Core Values
+
+- **Collaboration** — 혼자 정리하지 않고 함께 장소를 모으고 계획을 만든다.
+- **Conversation** — 어디 갈지 이야기하는 과정 자체가 경험의 일부다.
+- **Visualization** — 장소와 동선을 지도 위에서 한눈에 본다.
+- **Ownership** — 단순한 목록이 아니라 함께 만든 계획이 지도 위에 쌓인다.
+
+---
+
+# Differentiation (경쟁 앱 대비)
+
+- **카카오맵**: 장소 저장은 되지만 공동 계획 경험·장소 간 관계가 약하다.
+- **인스타그램**: 장소 발견은 되지만 계획 수립 도구가 아니다.
+- **노션**: 정리는 되지만 위치 기반 경험과 지도 위 계획의 재미가 없다.
+
+---
+
+# MoSCoW 우선순위
+
+## Must
+
+- 인증: 회원가입, 로그인
+- 보드: 생성, 조회
+- 장소: 검색, 추가, 목록 조회
+- 지도: 표시, 마커, 코스 연결(폴리라인)
+- 데이터: Supabase 저장
+
+## Should
+
+- 장소 상세: 방문 날짜, 간단 메모
+- UX: 마커 클릭 → 장소 강조, 장소 선택 → 지도 이동
+- 공유: 커플 초대
+
+## Could
+
+- 감정 기록(좋았어요/다시 가고 싶어요), 여행별 보드, 통계(방문 수/지역 분포), 장소 사진 첨부
+
+## Won't (MVP 제외)
+
+- 공개 SNS, 커뮤니티, 댓글, 팔로우, 광고 시스템, 추천 알고리즘

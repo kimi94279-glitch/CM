@@ -1,10 +1,13 @@
 ---
-type: adr
-adr: 004
 title: Search Architecture
-status: accepted
-created: 2026-06-03
-updated: 2026-06-03
+status: deprecated
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - ADR-006 Search Provider Consolidation
+adr: 004
+date: 2026-06-03
 tags:
   - adr
   - architecture
@@ -15,7 +18,9 @@ tags:
 
 Date: 2026-06-03
 
-Status: Accepted
+Status: Deprecated — Superseded by ADR-006 Search Provider Consolidation
+
+> ⚠️ 이 결정(Naver Search API 경유)은 ADR-006에서 Kakao Local API 단일 공급자로 대체되었다. 현재 유효하지 않으며 기록 목적으로만 유지한다.
 
 ---
 

@@ -1,20 +1,21 @@
 ---
-
-id: ADR-008  
-title: Map Canvas Architecture  
-date: 2026-06-04  
-status: Accepted  
+title: Map Canvas Architecture
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - MAP CANVAS.md
+  - ADR-005 Product Scope Expansion
+  - ADR-009 Adaptive Canvas Layout
+adr: "008"
+date: 2026-06-04
 tags:
-
-- architecture
-    
-- map-canvas
-    
-- product-direction
-    
-- canvas-object
-    
-
+  - adr
+  - architecture
+  - map-canvas
+  - product-direction
+  - canvas-object
 ---
 
 # ADR-008 Map Canvas Architecture
@@ -219,20 +220,8 @@ CanvasObject Adapter 패턴을 사용하면:
 
 ## Related Documents
 
-- MAP_CANVAS.md
-    
+- MAP CANVAS.md
 - ADR-001 Map Provider Selection
-    
-- ADR-004 Search Architecture
-    
+- ADR-003 Kakao WebView Strategy
 - ADR-005 Product Scope Expansion
-    
-- ADR-007 Kakao Search Integration
----
-
-## Related Documents
-
-- [[MAP CANVAS]]
-- [[ADR-005 Product Scope Expansion]]
-- [[ADR-003 Kakao WebView Strategy]]
-- [[DATABASE]]
+- DATABASE.md

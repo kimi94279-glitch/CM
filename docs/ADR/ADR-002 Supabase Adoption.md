@@ -1,10 +1,14 @@
 ---
-type: adr
-adr: 002
 title: Supabase Adoption
-status: accepted
-created: 2026-06-03
-updated: 2026-06-03
+status: active
+owner: project
+last_review: 2026-06-07
+category: adr
+related:
+  - ADR-004 Search Architecture
+  - ADR-006 Search Provider Consolidation
+adr: "002"
+date: 2026-06-03
 tags:
   - adr
   - backend

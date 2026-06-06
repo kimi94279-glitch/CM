@@ -1,3 +1,13 @@
+---
+title: Auth & Couple Flow
+status: active
+owner: project
+last_review: 2026-06-07
+category: flow
+related:
+  - DATABASE.md
+  - UX_AUTH.md
+---
 # FLOW_AUTH.md
 
 # Couple Map — Auth & Couple 연결 흐름

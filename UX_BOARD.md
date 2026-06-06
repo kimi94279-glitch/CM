@@ -1,3 +1,14 @@
+---
+title: Board & Place UX/UI
+status: active
+owner: project
+last_review: 2026-06-07
+category: ux
+related:
+  - DESIGN.md
+  - DATABASE.md
+  - MAP CANVAS.md
+---
 # UX_BOARD.md
 
 # Couple Map — Board & Place 경험 UX/UI 설계

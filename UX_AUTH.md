@@ -1,3 +1,13 @@
+---
+title: Auth UX/UI
+status: active
+owner: project
+last_review: 2026-06-07
+category: ux
+related:
+  - FLOW_AUTH.md
+  - DESIGN.md
+---
 # UX_AUTH.md
 
 # Couple Map — Auth 화면 UX/UI 설계
