@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/ADR/ADR-000 Template.md",
+                "file": "docs/Development Log.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "ADR-000 Template"
+              "title": "Development Log"
             }
           }
         ]
@@ -185,22 +185,27 @@
   },
   "active": "c981f56289eb96e2",
   "lastOpenFiles": [
+    "src/screens/BoardDetailScreen.tsx.tmp.6852.b4811be5c02a",
+    "src/components/PlaceCard.tsx.tmp.6852.7abf28bec527",
+    "src/components/PlaceCard.tsx.tmp.6852.e3a892ff39d1",
+    "src/components/MapSearchBar.tsx.tmp.6852.05626e19903c",
+    "docs/Feature List.md",
+    "docs/Design Philosophy.md",
+    "docs/Development Log.md",
+    "docs/Architecture.md",
+    "docs/ADR/ADR-009 Adaptive Canvas Layout.md",
+    "node_modules/expo-modules-core/android/build/intermediates/cxx/Debug/2w3y163k/logs/arm64-v8a/generate_cxx_metadata_296_timing.txt",
+    "android/app/build/intermediates/cxx/Debug/166u26m1/logs/arm64-v8a/generate_cxx_metadata_289_timing.txt",
+    "src/screens/BoardDetailScreen.tsx.tmp.29864.81e062cba418",
+    "docs/ADR/ADR-000 Template.md",
     "docs/ADR/ADR-008 Map Canvas Architecture.md",
     "docs/ADR/ADR-001 Map Provider Selection.md",
-    "docs/ADR/ADR-000 Template.md",
     "node_modules/ms/license.md",
     "src/components/MapSearchBar.tsx",
     "src/components/MapSearchBar.tsx.tmp.27712.0a780398b280",
     "docs/MAP CANVAS.md",
     "docs/MAP CANVAS.md.tmp.27712.2fdc4c3ef73b",
-    "docs/Architecture.md",
     "node_modules/expo-modules-core/android/build/intermediates/cxx/Debug/2w3y163k/logs/arm64-v8a/generate_cxx_metadata_768_timing.txt",
-    "node_modules/react-native-screens/android/build/intermediates/cxx/Debug/24681e3i/logs/arm64-v8a/generate_cxx_metadata_765_timing.txt",
-    "android/app/build/intermediates/cxx/Debug/166u26m1/logs/arm64-v8a/generate_cxx_metadata_768_timing.txt",
-    "android/app/build/intermediates/cxx/Debug/166u26m1/logs/arm64-v8a/generate_cxx_metadata_625_timing.txt",
-    "node_modules/expo-modules-core/android/build/intermediates/cxx/Debug/2w3y163k/logs/arm64-v8a/generate_cxx_metadata_626_timing.txt",
-    "node_modules/react-native-screens/android/build/intermediates/cxx/Debug/24681e3i/logs/arm64-v8a/generate_cxx_metadata_629_timing.txt",
-    "node_modules/expo-constants/android/build/generated/assets/expo-constants/app.config",
     "docs/Product Vision.md",
     "docs/ADR/ADR-006 Search Provider Consolidation.md",
     "docs/ADR/ADR-007 Branch Strategy.md",
@@ -208,18 +213,13 @@
     "docs/ADR/ADR-004 Search Architecture.md",
     "docs/ADR/ADR-003 Kakao WebView Strategy.md",
     "docs/ADR/ADR-002 Supabase Adoption.md",
-    "docs/Feature List.md",
-    "docs/Design Philosophy.md",
     "ARCHITECTURE.md",
     "docs/Open Questions.md",
     "docs/Map Decision Record.md",
     "docs/MVP.md",
     "docs/HOME.md",
-    "docs/Development Log.md",
     "README.md",
     "AGENTS.md",
-    "커플앱(가칭)/ADR/ADR-005 Product Scope Expansion.md",
-    "커플앱(가칭)/ADR/ADR-004 Search Architecture.md",
-    "커플앱(가칭)/ADR/ADR-003 Kakao WebView Strategy.md"
+    "커플앱(가칭)/ADR/ADR-005 Product Scope Expansion.md"
   ]
 }

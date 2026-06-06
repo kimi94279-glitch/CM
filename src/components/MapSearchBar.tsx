@@ -22,6 +22,7 @@ export function MapSearchBar({ onPress, placeholder = '장소를 검색해보세
 }
 
 const styles = StyleSheet.create({
+  // 지도 앱 수준의 compact 검색창 (높이 40)
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -29,15 +30,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.field,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    height: 48,
+    paddingHorizontal: spacing.sm,
+    height: 40,
   },
   icon: {
-    fontSize: 16,
-    marginRight: spacing.sm,
+    fontSize: 14,
+    marginRight: spacing.xs,
   },
   placeholder: {
-    ...typography.body,
+    ...typography.label,
     color: colors.textMuted,
     flex: 1,
   },

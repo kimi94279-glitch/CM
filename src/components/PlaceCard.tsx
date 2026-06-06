@@ -28,9 +28,6 @@ export function PlaceCard({
         <Text style={styles.name} numberOfLines={1}>
           {place.name}
         </Text>
-        <Text style={styles.address} numberOfLines={1}>
-          📍 {place.latitude.toFixed(5)}, {place.longitude.toFixed(5)}
-        </Text>
       </View>
       {onDelete ? (
         <Pressable onPress={onDelete} disabled={deleting} hitSlop={8} style={styles.delete}>
@@ -78,11 +75,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontWeight: '600',
     color: colors.textStrong,
-  },
-  address: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   delete: {
     paddingHorizontal: spacing.sm,

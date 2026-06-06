@@ -1,5 +1,3 @@
----
-
 type: design-philosophy  
 status: active  
 owner: 하민  
