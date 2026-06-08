@@ -1,10 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  KeyboardAvoidingView,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,10 +19,12 @@ import { Button } from '../components/Button';
 import { CanvasObjectList } from '../components/CanvasObjectList';
 import { MapSearchBar } from '../components/MapSearchBar';
 import { MapWebView, type MapWebViewHandle } from '../components/MapWebView';
+import { SearchBar } from '../components/SearchBar';
+import { SearchSheet } from '../components/SearchSheet';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { useDeletePlace, usePlaces } from '../hooks/usePlaces';
+import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
-import type { Place } from '../types/models';
+import type { Place, PlaceSearchResult } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -48,6 +52,36 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const deletePlace = useDeletePlace(boardId);
   const deletingId = deletePlace.isPending ? (deletePlace.variables ?? null) : null;
+
+  // Surface First Search(P2): 검색을 지도 위에서(상단 SearchBar + 하단 SearchSheet) 수행.
+  // 목록 Sheet 와 상호 배타. searchText(입력) → 300ms 디바운스 → searchQuery(제출).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setSearchQuery(searchText.trim()), 300);
+    return () => clearTimeout(id);
+  }, [searchText]);
+  const search = usePlaceSearch(searchQuery);
+  const addPlace = useAddPlace(boardId);
+
+  // 상호 배타 전환 헬퍼.
+  const openSearch = () => {
+    setSheetOpen(false);
+    setSearchOpen(true);
+  };
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchText('');
+    setSearchQuery('');
+  };
+  const openSheet = () => {
+    setSearchOpen(false);
+    setSheetOpen(true);
+  };
+  const onAddResult = (result: PlaceSearchResult) => {
+    addPlace.mutate(result, { onSuccess: () => closeSearch() });
+  };
 
   // Half Sheet 높이(고정 px). drag-down dismiss 임계값도 이 값을 공유한다.
   const cardHeight = Math.round(height * 0.5);
@@ -130,22 +164,29 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* Top Overlay: Back + Search */}
+      {/* Top Overlay: 검색 활성 시 SearchBar(전체폭), 아니면 Back + (표시용) MapSearchBar.
+          모바일 검색 진입은 PlaceAdd 풀스크린 대신 지도 위 검색(openSearch). 태블릿은 기존 PlaceAdd 유지. */}
       <View
         style={[styles.topOverlay, { paddingTop: insets.top + spacing.xs }]}
         pointerEvents="box-none"
       >
-        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
-          <Text style={styles.backIcon}>‹</Text>
-        </Pressable>
-        <View style={styles.searchWrap}>
-          <MapSearchBar onPress={goAdd} />
-        </View>
+        {!isTablet && searchOpen ? (
+          <SearchBar value={searchText} onChangeText={setSearchText} onClose={closeSearch} />
+        ) : (
+          <>
+            <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
+              <Text style={styles.backIcon}>‹</Text>
+            </Pressable>
+            <View style={styles.searchWrap}>
+              <MapSearchBar onPress={isTablet ? goAdd : openSearch} />
+            </View>
+          </>
+        )}
       </View>
 
       {/* 모바일 전용 Floating 버튼(목록). 시트가 열려 있으면 숨김.
           향후 Floating Actions 그룹(목록/추가/현재위치)으로 확장 가능한 컨테이너 구조. */}
-      {!isTablet && !sheetOpen ? (
+      {!isTablet && !sheetOpen && !searchOpen ? (
         <View
           style={[styles.fabGroup, { bottom: insets.bottom + spacing.lg }]}
           pointerEvents="box-none"
@@ -161,7 +202,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           </Pressable>
           <Pressable
             style={styles.fab}
-            onPress={() => setSheetOpen(true)}
+            onPress={openSheet}
             accessibilityRole="button"
             accessibilityLabel={`목록 ${places.length}개 열기`}
           >
@@ -199,8 +240,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       {mapArea}
 
       {/* Half Sheet: backdrop 없음 → 시트 미점유 영역의 지도는 계속 보이고 조작 가능(Surface First).
-          컨테이너 box-none + sheetCard만 터치 수신 → 상단 지도 팬/줌/마커탭 통과. */}
-      {sheetOpen ? (
+          컨테이너 box-none + sheetCard만 터치 수신 → 상단 지도 팬/줌/마커탭 통과.
+          검색 Sheet 와 상호 배타(searchOpen 시 미표시). */}
+      {sheetOpen && !searchOpen ? (
         <View style={[styles.sheet, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
           <Animated.View
             style={[styles.sheetCard, { height: cardHeight, transform: [{ translateY }] }]}
@@ -222,12 +264,33 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               places={places}
               highlightedId={highlightedId}
               deletingId={deletingId}
-              onAdd={goAdd}
+              onAdd={openSearch}
               onDelete={confirmDelete}
               onClose={dismiss}
             />
           </Animated.View>
         </View>
+      ) : null}
+
+      {/* 검색 결과 Sheet: 키보드 위로 밀어 올림(iOS=padding / Android=adjustResize 기본).
+          box-none → 시트 미점유 상단 지도는 계속 보이고 조작 가능(Surface First). */}
+      {searchOpen ? (
+        <KeyboardAvoidingView
+          style={styles.searchSheetWrap}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          pointerEvents="box-none"
+        >
+          <SearchSheet
+            query={searchQuery}
+            isFetching={search.isFetching}
+            isError={search.isError}
+            results={search.data ?? []}
+            onAdd={onAddResult}
+            adding={addPlace.isPending}
+            maxHeight={Math.round(height * 0.6)}
+            bottomInset={insets.bottom}
+          />
+        </KeyboardAvoidingView>
       ) : null}
     </View>
   );
@@ -324,6 +387,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: spacing.md,
+  },
+  // 검색 Sheet 래퍼: 화면 전체를 덮되 box-none(상단 지도 통과), 카드는 하단 정렬.
+  searchSheetWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.md,
   },
   sheetCard: {
