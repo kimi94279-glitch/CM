@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/archive/MVP.md",
+                "file": "docs/archive/Architecture.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "MVP"
+              "title": "Architecture"
             }
           }
         ]
@@ -185,6 +185,7 @@
   },
   "active": "c981f56289eb96e2",
   "lastOpenFiles": [
+    "docs/archive/MVP.md",
     "docs/archive/Architecture.md",
     "docs/archive/HOME.md",
     "docs/archive/Design Philosophy.md",
@@ -203,7 +204,6 @@
     "docs/ADR/ADR-008 Map Canvas Architecture.md.tmp.13712.d99c31bf74ef",
     "docs/Feature List.md",
     "docs/archive/Open Questions.md",
-    "docs/archive/MVP.md",
     "docs/archive/Map Decision Record.md",
     "docs/Design Philosophy.md",
     "docs/Architecture.md",
