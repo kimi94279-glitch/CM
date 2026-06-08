@@ -1,0 +1,60 @@
+name: Notion Sync
+
+# Git(Source of Truth) → Notion 단방향 동기화 (Portal/Index only).
+# 본문 복제 없음. ADR + Documentation Database 자동 갱신.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'PRD.md'
+      - 'DATABASE.md'
+      - 'ARCHITECTURE.md'
+      - 'DESIGN.md'
+  workflow_dispatch:
+
+# 토큰 등 시크릿만 사용. 레포 쓰기 권한 불필요(단방향, Git→Notion).
+permissions:
+  contents: read
+
+# 동시 실행 직렬화(중복 동기화/레이스 방지). 진행 중 작업은 취소하지 않음.
+concurrency:
+  group: notion-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/notion-sync
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # lastModified(git commit date) 정확도를 위해 전체 히스토리 확보.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/notion-sync/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync to Notion (Git -> Notion, one-way)
+        run: npm run sync -- --target=all
+        env:
+          # 시크릿(절대 로그 출력 금지). 코드(config.ts)는 토큰/ID를 출력하지 않음.
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ADR: ${{ secrets.NOTION_DB_ADR }}
+          NOTION_DB_DOCS: ${{ secrets.NOTION_DB_DOCS }}
+          # 비밀 아님: permalink 생성용.
+          REPO_BASE_URL: https://github.com/kimi94279-glitch/CM
+          REPO_REF: main
