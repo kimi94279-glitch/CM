@@ -1,15 +1,13 @@
 import type { PlaceSearchResult } from '../types/models';
 import { supabase } from './supabase';
 
-// [DEBUG] 진단용: 마지막 검색 호출의 원본 정보를 보관 (UI 표시용)
-export interface SearchDebugInfo {
+// 검색 실패 시 에러 메시지를 보강하기 위한 진단 정보.
+interface SearchDebugInfo {
   status?: number;
-  rawData?: unknown;
   errorName?: string;
   errorMessage?: string;
   contextBody?: string;
 }
-export let lastSearchDebug: SearchDebugInfo = {};
 
 // place-search Edge Function 호출 (네이버 지역 검색 프록시)
 export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
@@ -31,7 +29,6 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
         debug.contextBody = '(context body 읽기 실패)';
       }
     }
-    lastSearchDebug = debug;
     // 진단을 위해 context 본문을 메시지에 포함시켜 던진다.
     throw new Error(
       `invoke error: ${error.message}` +
@@ -40,7 +37,5 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
     );
   }
 
-  debug.rawData = data;
-  lastSearchDebug = debug;
   return (data?.results ?? []) as PlaceSearchResult[];
 }

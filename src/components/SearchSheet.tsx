@@ -32,20 +32,28 @@ export function SearchSheet({
     <View style={[styles.card, { maxHeight, paddingBottom: bottomInset }]}>
       {query.length === 0 ? (
         <View style={styles.center}>
+          <Text style={styles.emoji}>🔍</Text>
           <Text style={styles.invite}>어디 가고 싶어?</Text>
-          <Text style={styles.inviteSub}>가고 싶은 곳을 검색해보세요.</Text>
+          <Text style={styles.inviteSub}>카페·맛집·가보고 싶은 곳을 검색해보세요.</Text>
         </View>
       ) : isFetching ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
+          <Text style={styles.inviteSub}>검색 중…</Text>
         </View>
       ) : isError ? (
         <View style={styles.center}>
-          <Text style={styles.error}>검색에 문제가 생겼어요. 잠시 후 다시 시도해주세요.</Text>
+          <Text style={styles.emoji}>⚠️</Text>
+          <Text style={styles.error}>검색에 문제가 생겼어요.</Text>
+          <Text style={styles.inviteSub}>잠시 후 다시 시도해주세요.</Text>
         </View>
       ) : results.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.muted}>검색 결과가 없어요. 다른 키워드로 찾아보세요.</Text>
+          <Text style={styles.emoji}>🗺️</Text>
+          <Text style={styles.noResultTitle} numberOfLines={2}>
+            ‘{query}’ 검색 결과가 없어요
+          </Text>
+          <Text style={styles.inviteSub}>이름을 바꾸거나 더 간단히 검색해볼까요?</Text>
         </View>
       ) : (
         <FlatList
@@ -83,8 +91,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
+  emoji: { fontSize: 28, marginBottom: spacing.xs },
   invite: { ...typography.title, color: colors.textStrong },
-  inviteSub: { ...typography.body, color: colors.textMuted },
+  inviteSub: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   error: { ...typography.body, color: colors.danger, textAlign: 'center' },
-  muted: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  noResultTitle: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.textStrong,
+    textAlign: 'center',
+  },
 });

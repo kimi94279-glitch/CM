@@ -91,7 +91,10 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     }
 
     // 장소 배열로 마커/폴리라인/카메라를 재구성. 초기 로드와 RN 증분 업데이트가 공용 사용(단일 경로).
-    function renderPlaces(list){
+    // 주의: 워커 함수명은 window.renderPlaces 와 반드시 달라야 한다.
+    // (classic script에서 최상위 function 선언은 전역 프로퍼티가 되어, 동명 window.x 재할당 시
+    //  맨이름 호출이 자기 자신을 가리켜 무한 재귀 → Maximum call stack 발생.)
+    function applyPlaces(list){
       if (!map) return;
       PLACES = list || [];
       clearOverlays();
@@ -123,7 +126,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       applyCamera();
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
-    window.renderPlaces = function(list){ renderPlaces(list); };
+    window.renderPlaces = function(list){ applyPlaces(list); };
 
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false';
@@ -137,8 +140,8 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
             level: 5
           });
 
-          // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(renderPlaces) 사용.
-          renderPlaces(PLACES);
+          // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
+          applyPlaces(PLACES);
 
           send({ type:'ready', count: PLACES.length });
         } catch(e){ send({ type:'error', stage:'map', message:String(e) }); }

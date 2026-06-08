@@ -185,6 +185,8 @@
   },
   "active": "c981f56289eb96e2",
   "lastOpenFiles": [
+    "src/components/MapWebView.tsx.tmp.18504.1c832610a39a",
+    "src/components/MapWebView.tsx.tmp.18504.fd1f42fd8509",
     "docs/archive/MVP.md",
     "docs/archive/Architecture.md",
     "docs/archive/HOME.md",
@@ -201,7 +203,6 @@
     "docs/ADR/ADR-011 Half Sheet Dismiss UX.md.tmp.13712.626e59886a27",
     "docs/ADR/ADR-010 Floating Actions Architecture.md.tmp.13712.3d68f5ee0950",
     "docs/ADR/ADR-009 Adaptive Canvas Layout.md.tmp.13712.8407ed43647f",
-    "docs/ADR/ADR-008 Map Canvas Architecture.md.tmp.13712.d99c31bf74ef",
     "docs/Feature List.md",
     "docs/archive/Open Questions.md",
     "docs/archive/Map Decision Record.md",

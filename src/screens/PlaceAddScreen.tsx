@@ -7,7 +7,6 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAddPlace, usePlaceSearch } from '../hooks/usePlaces';
-import { lastSearchDebug } from '../services/placeSearchService';
 import type { RootStackParamList } from '../navigation/types';
 import type { PlaceSearchResult } from '../types/models';
 
@@ -59,23 +58,6 @@ export function PlaceAddScreen({ route, navigation }: Props) {
           />
         </View>
         <Button title="검색" onPress={() => setQuery(text.trim())} style={styles.searchButton} />
-      </View>
-
-      {/* [DEBUG] 진단 패널 — 원인 확정 후 제거 예정 */}
-      <View style={styles.debugBox}>
-        <Text style={styles.debugText} selectable>
-          query={JSON.stringify(query)} | isFetching={String(search.isFetching)} | isError=
-          {String(search.isError)} | results={search.data?.length ?? 'undefined'}
-        </Text>
-        {search.isError ? (
-          <Text style={styles.debugText} selectable>
-            error.message=
-            {search.error instanceof Error ? search.error.message : String(search.error)}
-          </Text>
-        ) : null}
-        <Text style={styles.debugText} selectable>
-          lastDebug={JSON.stringify(lastSearchDebug).slice(0, 500)}
-        </Text>
       </View>
 
       {addPlace.isError ? (
@@ -169,16 +151,5 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
-  },
-  debugBox: {
-    backgroundColor: '#111',
-    borderRadius: 8,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  debugText: {
-    color: '#9EFFA0',
-    fontSize: 10,
-    fontFamily: 'monospace',
   },
 });

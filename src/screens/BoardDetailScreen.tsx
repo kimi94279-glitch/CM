@@ -4,9 +4,8 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  KeyboardAvoidingView,
+  Keyboard,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -64,6 +63,19 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   }, [searchText]);
   const search = usePlaceSearch(searchQuery);
   const addPlace = useAddPlace(boardId);
+
+  // 키보드 높이 추적 → SearchSheet를 키보드 위로 올린다(라이브러리 없이 결정적 제어).
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // 상호 배타 전환 헬퍼.
   const openSearch = () => {
@@ -272,12 +284,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* 검색 결과 Sheet: 키보드 위로 밀어 올림(iOS=padding / Android=adjustResize 기본).
+      {/* 검색 결과 Sheet: keyboardHeight 만큼 위로 올림(양 플랫폼 결정적).
           box-none → 시트 미점유 상단 지도는 계속 보이고 조작 가능(Surface First). */}
       {searchOpen ? (
-        <KeyboardAvoidingView
-          style={styles.searchSheetWrap}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <View
+          style={[styles.searchSheetWrap, { paddingBottom: keyboardHeight }]}
           pointerEvents="box-none"
         >
           <SearchSheet
@@ -287,10 +298,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             results={search.data ?? []}
             onAdd={onAddResult}
             adding={addPlace.isPending}
-            maxHeight={Math.round(height * 0.6)}
-            bottomInset={insets.bottom}
+            maxHeight={Math.max(200, height - keyboardHeight - insets.top - 80)}
+            bottomInset={keyboardHeight > 0 ? spacing.sm : insets.bottom}
           />
-        </KeyboardAvoidingView>
+        </View>
       ) : null}
     </View>
   );
