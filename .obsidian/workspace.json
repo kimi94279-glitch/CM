@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/archive/Architecture.md",
+                "file": "docs/archive/MVP.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Architecture"
+              "title": "MVP"
             }
           }
         ]
@@ -185,8 +185,8 @@
   },
   "active": "c981f56289eb96e2",
   "lastOpenFiles": [
-    "docs/archive/HOME.md",
     "docs/archive/Architecture.md",
+    "docs/archive/HOME.md",
     "docs/archive/Design Philosophy.md",
     "docs/archive/Development Log.md",
     "docs/ADR/ADR-011 Half Sheet Dismiss UX.md.tmp.32044.352602fe29f2",
