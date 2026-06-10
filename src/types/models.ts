@@ -37,6 +37,17 @@ export interface Place {
   updated_at: string;
 }
 
+// 장소 반응(banter). DB place_reactions.reaction_type 와 일치. 이모지는 UI 파생값(미저장).
+export type ReactionType = 'love' | 'lol' | 'nope' | 'wow';
+
+export interface PlaceReaction {
+  id: string;
+  place_id: string;
+  user_id: string;
+  reaction_type: ReactionType;
+  created_at: string;
+}
+
 // 검색 결과(저장 전). place-search Edge Function 의 정규화 출력과 일치.
 export interface PlaceSearchResult {
   name: string;

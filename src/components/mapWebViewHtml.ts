@@ -63,6 +63,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     var map, bounds;
     var overlays = [];
     var polyline = null;
+    var reactionOverlays = [];
     // fitBounds 패딩(px). 현재 하드코딩 — Search 상단 영역/우하단 FAB에 핀이 가려지지 않도록 한 근사치.
     // TODO: 추후 RN safe area / insets(상단 Search, 우하단 Utility FAB 높이) 기반 계산값을 주입해 대체 예정.
     var PAD = { top: 96, right: 80, bottom: 112, left: 24 };
@@ -88,6 +89,12 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       for (var i = 0; i < overlays.length; i++){ overlays[i].setMap(null); }
       overlays = [];
       if (polyline){ polyline.setMap(null); polyline = null; }
+    }
+
+    // 반응 배지 전용 정리(장소 오버레이와 분리 — 서로 지우지 않는다).
+    function clearReactionOverlays(){
+      for (var i = 0; i < reactionOverlays.length; i++){ reactionOverlays[i].setMap(null); }
+      reactionOverlays = [];
     }
 
     // 장소 배열로 마커/폴리라인/카메라를 재구성. 초기 로드와 RN 증분 업데이트가 공용 사용(단일 경로).
@@ -127,6 +134,33 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderPlaces = function(list){ applyPlaces(list); };
+
+    // 장소별 반응 배지 재구성. 입력: { placeId: [이모지, ...] } (RN이 type→이모지 변환·유니크화 후 전달).
+    // 좌표는 현재 PLACES 에서 동일 id 조회(없으면 skip). 핀 위에 작은 이모지 칩으로 표시.
+    // 주의(전역명 충돌): 워커 함수명(applyReactions)은 window.renderReactions 와 반드시 달라야 한다.
+    function applyReactions(byPlaceId){
+      if (!map) return;
+      clearReactionOverlays();
+      if (!byPlaceId) return;
+      for (var pid in byPlaceId){
+        if (!Object.prototype.hasOwnProperty.call(byPlaceId, pid)) continue;
+        var emojis = byPlaceId[pid];
+        if (!emojis || !emojis.length) continue;
+        var place = null;
+        for (var i = 0; i < PLACES.length; i++){ if (PLACES[i].id === pid){ place = PLACES[i]; break; } }
+        if (!place) continue;
+        var pos = new kakao.maps.LatLng(place.latitude, place.longitude);
+        var el = document.createElement('div');
+        el.style.cssText = 'display:inline-block;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,0.95);box-shadow:0 1px 2px rgba(0,0,0,0.25);font-size:13px;line-height:16px;white-space:nowrap;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        el.textContent = emojis.join('');
+        // 핀(번호 원, yAnchor 0.5) 위에 떠 있도록 yAnchor 를 1보다 크게.
+        var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 1.7, xAnchor: 0.5, clickable: false, zIndex: 5 });
+        overlay.setMap(map);
+        reactionOverlays.push(overlay);
+      }
+    }
+    // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
+    window.renderReactions = function(byPlaceId){ applyReactions(byPlaceId); };
 
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false';

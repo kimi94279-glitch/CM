@@ -20,7 +20,9 @@ import { MapSearchBar } from '../components/MapSearchBar';
 import { MapWebView, type MapWebViewHandle } from '../components/MapWebView';
 import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
+import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import { useAddReaction, usePlaceReactions } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { Place, PlaceSearchResult } from '../types/models';
@@ -41,6 +43,13 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   const placesQuery = usePlaces(boardId);
   const places = placesQuery.data ?? [];
+
+  // 장소 반응(banter). 핀 위 이모지 배지로 표시. 재진입/앱 복귀 시 상대 반응 반영.
+  const reactionsQuery = usePlaceReactions(boardId);
+  const reactions = reactionsQuery.data ?? [];
+  const addReaction = useAddReaction(boardId);
+  // 반응 팔레트가 열린 핀 id (null = 닫힘).
+  const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
 
   // 지도 명령형 핸들(Recenter 등). RN → WebView injectJavaScript 경유.
   const mapRef = useRef<MapWebViewHandle>(null);
@@ -166,7 +175,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             <Button title="다시 시도" variant="secondary" onPress={() => placesQuery.refetch()} />
           </View>
         ) : (
-          <MapWebView ref={mapRef} places={places} onMarkerPress={(id) => setHighlightedId(id)} />
+          <MapWebView
+            ref={mapRef}
+            places={places}
+            reactions={reactions}
+            onMarkerPress={(id) => {
+              setHighlightedId(id);
+              setReactionPlaceId(id);
+            }}
+          />
         )}
       </View>
 
@@ -221,6 +238,37 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             <Text style={styles.fabIcon}>☰</Text>
             <Text style={styles.fabCount}>{places.length}</Text>
           </Pressable>
+        </View>
+      ) : null}
+
+      {/* 반응 팔레트(핀 탭 시): 하단 중앙 가로 바. (i) 좌표변환 불필요 — 어느 핀인지는 핀 강조로 표시. */}
+      {reactionPlaceId ? (
+        <View
+          style={[styles.reactionBar, { bottom: insets.bottom + spacing.lg }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.reactionBarInner}>
+            {REACTION_ORDER.map((type) => (
+              <Pressable
+                key={type}
+                style={styles.reactionEmojiBtn}
+                onPress={() => addReaction.mutate({ placeId: reactionPlaceId, type })}
+                accessibilityRole="button"
+                accessibilityLabel={`반응 ${type}`}
+              >
+                <Text style={styles.reactionEmoji}>{REACTION_EMOJI[type]}</Text>
+              </Pressable>
+            ))}
+            <Pressable
+              style={styles.reactionClose}
+              onPress={() => setReactionPlaceId(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="반응 닫기"
+            >
+              <Text style={styles.reactionCloseText}>✕</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -438,4 +486,42 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.border,
   },
+
+  // 반응 팔레트(핀 탭 시 하단 중앙). box-none 컨테이너 + 가운데 바만 터치 수신.
+  reactionBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  reactionBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  reactionEmojiBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionEmoji: { fontSize: 24 },
+  reactionClose: {
+    width: 32,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionCloseText: { ...typography.body, color: colors.textMuted },
 });
