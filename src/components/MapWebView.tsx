@@ -20,6 +20,8 @@ interface MapWebViewProps {
   places: Place[];
   reactions?: PlaceReaction[];
   onMarkerPress?: (placeId: string) => void;
+  // 핀 외 빈 지도(배경) 탭. 반응 팔레트 닫기 등에 사용.
+  onMapPress?: () => void;
 }
 
 // 반응(PlaceReaction[]) → { placeId: [이모지, ...] }. (a) 유니크 이모지만(귀속·카운트 미표시).
@@ -43,7 +45,7 @@ export interface MapWebViewHandle {
 // 프로덕션 지도 컴포넌트: WebView + Kakao JS SDK.
 // places 는 order_index 기준으로 정렬되어 마커/폴리라인으로 렌더된다.
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function MapWebView(
-  { places, reactions, onMarkerPress },
+  { places, reactions, onMarkerPress, onMapPress },
   ref
 ) {
   const webRef = useRef<WebView>(null);
@@ -114,6 +116,10 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           pushReactions(reactionPendingRef.current);
           reactionPendingRef.current = null;
         }
+        return;
+      }
+      if (msg.type === 'mapTap') {
+        onMapPress?.();
         return;
       }
       if (msg.type === 'markerClick' && typeof msg.id === 'string') {

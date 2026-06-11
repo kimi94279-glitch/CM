@@ -183,6 +183,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               setHighlightedId(id);
               setReactionPlaceId(id);
             }}
+            onMapPress={() => {
+              setReactionPlaceId(null);
+              setHighlightedId(null);
+            }}
           />
         )}
       </View>

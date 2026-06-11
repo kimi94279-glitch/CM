@@ -174,6 +174,10 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
             level: 5
           });
 
+          // 빈 지도(핀 외 배경) 탭 → RN에 알림(반응 팔레트 닫기 등).
+          // 핀(CustomOverlay clickable:true)은 이벤트를 가로채 여기로 전파되지 않는다.
+          kakao.maps.event.addListener(map, 'click', function(){ send({ type:'mapTap' }); });
+
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
           applyPlaces(PLACES);
 
