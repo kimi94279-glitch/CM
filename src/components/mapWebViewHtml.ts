@@ -64,6 +64,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     var overlays = [];
     var polyline = null;
     var reactionOverlays = [];
+    var objectOverlays = [];
     // fitBounds 패딩(px). 현재 하드코딩 — Search 상단 영역/우하단 FAB에 핀이 가려지지 않도록 한 근사치.
     // TODO: 추후 RN safe area / insets(상단 Search, 우하단 Utility FAB 높이) 기반 계산값을 주입해 대체 예정.
     var PAD = { top: 96, right: 80, bottom: 112, left: 24 };
@@ -95,6 +96,12 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     function clearReactionOverlays(){
       for (var i = 0; i < reactionOverlays.length; i++){ reactionOverlays[i].setMap(null); }
       reactionOverlays = [];
+    }
+
+    // 지리 객체(스티커 등) 전용 정리.
+    function clearObjectOverlays(){
+      for (var i = 0; i < objectOverlays.length; i++){ objectOverlays[i].setMap(null); }
+      objectOverlays = [];
     }
 
     // 장소 배열로 마커/폴리라인/카메라를 재구성. 초기 로드와 RN 증분 업데이트가 공용 사용(단일 경로).
@@ -162,6 +169,31 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderReactions = function(byPlaceId){ applyReactions(byPlaceId); };
 
+    // 지리 객체 렌더. 입력: [{ id, type, latitude, longitude, payload }, ...].
+    // P0: type==='sticker' 만 렌더(payload.emoji). text/arrow/draw 는 데이터만 존재하고 렌더 금지.
+    // 좌표 고정 + 화면기준 크기(CustomOverlay 기본). zoom 레벨 정책 미적용(전부 표시).
+    // 주의(전역명 충돌): 워커 함수명(applyObjects)은 window.renderObjects 와 반드시 달라야 한다.
+    function applyObjects(list){
+      if (!map) return;
+      clearObjectOverlays();
+      if (!list || !list.length) return;
+      for (var i = 0; i < list.length; i++){
+        var o = list[i];
+        if (!o || o.type !== 'sticker') continue; // P0: sticker 외 렌더 금지
+        var emoji = o.payload && o.payload.emoji;
+        if (!emoji) continue;
+        var pos = new kakao.maps.LatLng(o.latitude, o.longitude);
+        var el = document.createElement('div');
+        el.style.cssText = 'font-size:24px;line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        el.textContent = emoji;
+        var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: false, zIndex: 4 });
+        overlay.setMap(map);
+        objectOverlays.push(overlay);
+      }
+    }
+    // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
+    window.renderObjects = function(list){ applyObjects(list); };
+
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false';
     s.onerror = function(){ send({ type:'error', stage:'script', message:'SDK script load failed' }); };
@@ -176,7 +208,10 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
 
           // 빈 지도(핀 외 배경) 탭 → RN에 알림(반응 팔레트 닫기 등).
           // 핀(CustomOverlay clickable:true)은 이벤트를 가로채 여기로 전파되지 않는다.
-          kakao.maps.event.addListener(map, 'click', function(){ send({ type:'mapTap' }); });
+          kakao.maps.event.addListener(map, 'click', function(mouseEvent){
+            var ll = mouseEvent && mouseEvent.latLng;
+            send({ type:'mapTap', lat: ll ? ll.getLat() : null, lng: ll ? ll.getLng() : null, level: map.getLevel() });
+          });
 
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
           applyPlaces(PLACES);

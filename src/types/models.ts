@@ -58,6 +58,23 @@ export interface PlaceSearchResult {
   providerPlaceId: string | null;
 }
 
+// Infinite Geographic Canvas 객체(Place 비종속, 좌표 고정). DB map_objects 와 일치.
+// zoom_level 은 생성 당시 줌(LOD 키) — P0 에서는 저장만 하고 렌더에 쓰지 않는다.
+export type MapObjectType = 'text' | 'sticker' | 'arrow' | 'draw';
+
+export interface MapObject {
+  id: string;
+  board_id: string;
+  type: MapObjectType;
+  latitude: number;
+  longitude: number;
+  zoom_level: number;
+  payload: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Board {
   id: string;
   couple_id: string;

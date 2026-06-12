@@ -22,16 +22,20 @@ import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
 import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import { useAddMapObject, useMapObjects } from '../hooks/useMapObjects';
 import { useAddReaction, usePlaceReactions } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
-import type { Place, PlaceSearchResult } from '../types/models';
+import type { MapObject, Place, PlaceSearchResult } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
 // 태블릿 판정: 짧은 변(세로/가로 회전 무관)이 600dp 이상이면 Side Panel 레이아웃.
 const TABLET_MIN = 600;
 const SIDE_PANEL_WIDTH = 320;
+
+// P0 스티커 이모지 셋(지리 고정 객체). Text/Arrow/Draw 는 P0 범위 밖.
+const STICKER_EMOJIS = ['❤️', '😂', '👀', '🤮', '☕', '🌳', '📸'];
 
 // Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다.
 // 기본 상태는 지도만. 목록은 모바일=Floating 버튼→Half Sheet, 태블릿=Right Side Panel.
@@ -50,6 +54,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const addReaction = useAddReaction(boardId);
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
+
+  // Infinite Geographic Canvas P0: 지리 고정 스티커. 도구 ON 시 지도 탭으로 배치.
+  const objectsQuery = useMapObjects(boardId);
+  const objects = objectsQuery.data ?? [];
+  const addMapObject = useAddMapObject(boardId);
+  const [stickerMode, setStickerMode] = useState(false);
+  const [stickerEmoji, setStickerEmoji] = useState('❤️');
+  // 실기기 검증용(테스트 경로): 마지막 저장된 객체의 좌표/레벨 표시.
+  const [lastSaved, setLastSaved] = useState<MapObject | null>(null);
 
   // 지도 명령형 핸들(Recenter 등). RN → WebView injectJavaScript 경유.
   const mapRef = useRef<MapWebViewHandle>(null);
@@ -179,11 +192,27 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             ref={mapRef}
             places={places}
             reactions={reactions}
+            objects={objects}
             onMarkerPress={(id) => {
               setHighlightedId(id);
               setReactionPlaceId(id);
             }}
-            onMapPress={() => {
+            onMapPress={(point) => {
+              // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
+              if (stickerMode && point) {
+                addMapObject.mutate(
+                  {
+                    type: 'sticker',
+                    latitude: point.lat,
+                    longitude: point.lng,
+                    zoomLevel: point.level,
+                    payload: { emoji: stickerEmoji },
+                  },
+                  { onSuccess: (saved) => setLastSaved(saved) }
+                );
+                return;
+              }
+              // 기본: 배경 탭 → 팔레트/강조 해제.
               setReactionPlaceId(null);
               setHighlightedId(null);
             }}
@@ -224,6 +253,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           style={[styles.fabGroup, { bottom: insets.bottom + spacing.lg }]}
           pointerEvents="box-none"
         >
+          {/* 스티커 도구(P0): ON 시 지도 탭으로 지리 고정 스티커 배치. */}
+          <Pressable
+            style={[styles.fab, stickerMode && styles.fabActive]}
+            onPress={() => setStickerMode((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="스티커 모드"
+          >
+            <Text style={styles.fabIcon}>✨</Text>
+          </Pressable>
           {/* Recenter(Utility): 전체 장소 fitBounds. 중립 스타일, 목록 위에 위치(ADR-010 빈도순). */}
           <Pressable
             style={styles.fab}
@@ -273,6 +311,47 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               <Text style={styles.reactionCloseText}>✕</Text>
             </Pressable>
           </View>
+        </View>
+      ) : null}
+
+      {/* 스티커 도구 바(P0): 이모지 선택 + 종료 + (테스트) 마지막 저장 좌표. */}
+      {stickerMode ? (
+        <View
+          style={[styles.stickerBar, { bottom: insets.bottom + spacing.lg }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.stickerBarInner}>
+            {STICKER_EMOJIS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                style={[
+                  styles.stickerEmojiBtn,
+                  stickerEmoji === emoji && styles.stickerEmojiSelected,
+                ]}
+                onPress={() => setStickerEmoji(emoji)}
+                accessibilityRole="button"
+                accessibilityLabel={`스티커 ${emoji}`}
+              >
+                <Text style={styles.stickerEmoji}>{emoji}</Text>
+              </Pressable>
+            ))}
+            <Pressable
+              style={styles.reactionClose}
+              onPress={() => setStickerMode(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="스티커 모드 종료"
+            >
+              <Text style={styles.reactionCloseText}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.stickerHint}>지도를 탭해 {stickerEmoji} 스티커를 놓으세요</Text>
+          {lastSaved ? (
+            <Text style={styles.stickerDebug}>
+              저장됨 · lat {lastSaved.latitude.toFixed(5)} · lng {lastSaved.longitude.toFixed(5)} ·
+              lv {lastSaved.zoom_level}
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -528,4 +607,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reactionCloseText: { ...typography.body, color: colors.textMuted },
+
+  // 스티커 도구(P0) — 반응 팔레트와 구분되는 별도 바.
+  fabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  stickerBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  stickerBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  stickerEmojiBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.card,
+  },
+  stickerEmojiSelected: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  stickerEmoji: { fontSize: 22 },
+  stickerHint: {
+    ...typography.caption,
+    color: colors.textStrong,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+  },
+  stickerDebug: {
+    ...typography.caption,
+    color: colors.textMuted,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+  },
 });
