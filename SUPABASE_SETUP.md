@@ -83,6 +83,44 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
+## 3.5 추가 마이그레이션 (0002 / 0003 / 0004)
+
+`0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
+
+| 마이그레이션 | 내용 | 적용 |
+| --- | --- | --- |
+| `0002_solo_workspace.sql` | Solo 워크스페이스(`couples.status`에 `solo`) + `create_solo_workspace` / `accept_invite` 재정의 | 필수(앱 진입 게이팅) |
+| `0003_reaction_types.sql` | `place_reactions.reaction_type` CHECK → `love/lol/nope/wow` | 필수(반응 4종) |
+| `0004_map_objects.sql` | `map_objects` 테이블(스티커/노트 등) + RLS | 필수(스티커 P0) |
+
+### 적용 전 상태 점검 (읽기 전용)
+
+```sql
+-- map_objects 존재 여부 (null = 0004 미적용)
+select to_regclass('public.map_objects');
+-- 반응 CHECK 현재 정의 (구집합이면 0003 미적용)
+select pg_get_constraintdef(oid) from pg_constraint
+where conname = 'place_reactions_reaction_type_check';
+-- couples.status 에 solo 포함 여부 (없으면 0002 미적용)
+select pg_get_constraintdef(oid) from pg_constraint
+where conname = 'couples_status_check';
+```
+
+> ⚠️ `0004`는 `IF NOT EXISTS`가 없어 **중복 실행 시 실패**한다. 위 점검에서 `map_objects`가 `null`일 때만 적용한다.
+> `0003` ADD CONSTRAINT 전, `select distinct reaction_type from public.place_reactions;` 로 신규 집합(`love/lol/nope/wow`) 밖 값이 없는지 확인한다(있으면 먼저 정리 필요).
+
+### 적용 확인
+
+```sql
+select to_regclass('public.map_objects');             -- public.map_objects
+select pg_get_constraintdef(oid) from pg_constraint   -- ...('love','lol','nope','wow')
+where conname = 'place_reactions_reaction_type_check';
+```
+
+> 참고: 테이블 존재만이라면 anon 키 + REST로도 확인된다 — `GET /rest/v1/map_objects?select=id&limit=1` 가 404(`PGRST205`)면 미적용, 200이면 적용.
+
+---
+
 ## 4. 이메일 인증 비활성화
 
 FLOW_AUTH.md 정책: MVP는 verify email을 사용하지 않는다(가입 즉시 세션).
