@@ -59,7 +59,7 @@ export interface PlaceSearchResult {
 }
 
 // Infinite Geographic Canvas 객체(Place 비종속, 좌표 고정). DB map_objects 와 일치.
-// zoom_level 은 생성 당시 줌(LOD 키) — P0 에서는 저장만 하고 렌더에 쓰지 않는다.
+// zoom_level 은 생성 당시 줌 — world-space 스케일 기준값으로 렌더(객체 크기)에 사용된다.
 export type MapObjectType = 'text' | 'sticker' | 'arrow' | 'draw';
 
 export interface MapObject {

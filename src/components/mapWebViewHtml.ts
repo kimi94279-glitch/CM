@@ -104,6 +104,23 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       objectOverlays = [];
     }
 
+    // world-space 크기: 객체는 "지도 위에 실제 크기를 가진 것". BASE 24px = 생성 레벨에서의 크기,
+    // 현재 레벨과의 차이를 2^Δ로 환산 → 줌인 시 거대화(일부만 보임)·줌아웃 시 축소.
+    // CAP(2500px)=브라우저 크래시 가드, MIN(6px) 밑은 cull(소멸).
+    function worldScaleFontPx(createLvl){
+      if (createLvl == null || isNaN(createLvl)) createLvl = map.getLevel();
+      return Math.min(2500, 24 * Math.pow(2, createLvl - map.getLevel()));
+    }
+    function resizeObjects(){
+      for (var i = 0; i < objectOverlays.length; i++){
+        var el = objectOverlays[i].getContent();
+        if (!el || !el.dataset) continue;
+        var px = worldScaleFontPx(parseFloat(el.dataset.lvl));
+        el.style.fontSize = px + 'px';
+        el.style.display = px < 6 ? 'none' : '';
+      }
+    }
+
     // 장소 배열로 마커/폴리라인/카메라를 재구성. 초기 로드와 RN 증분 업데이트가 공용 사용(단일 경로).
     // 주의: 워커 함수명은 window.renderPlaces 와 반드시 달라야 한다.
     // (classic script에서 최상위 function 선언은 전역 프로퍼티가 되어, 동명 window.x 재할당 시
@@ -171,7 +188,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
 
     // 지리 객체 렌더. 입력: [{ id, type, latitude, longitude, payload }, ...].
     // P0: type==='sticker' 만 렌더(payload.emoji). text/arrow/draw 는 데이터만 존재하고 렌더 금지.
-    // 좌표 고정 + 화면기준 크기(CustomOverlay 기본). zoom 레벨 정책 미적용(전부 표시).
+    // 좌표 고정 + world-space 크기: 생성 줌(zoom_level) 기준 스케일(worldScaleFontPx), 줌 변경 시 갱신.
     // 주의(전역명 충돌): 워커 함수명(applyObjects)은 window.renderObjects 와 반드시 달라야 한다.
     function applyObjects(list){
       if (!map) return;
@@ -184,8 +201,13 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
         if (!emoji) continue;
         var pos = new kakao.maps.LatLng(o.latitude, o.longitude);
         var el = document.createElement('div');
-        el.style.cssText = 'font-size:24px;line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        el.style.cssText = 'line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
         el.textContent = emoji;
+        // world-space 크기: 생성 줌(zoom_level) 기준으로 화면 px 산출. 줌 변경 시 resizeObjects가 갱신.
+        el.dataset.lvl = (o.zoom_level == null ? map.getLevel() : o.zoom_level);
+        var px = worldScaleFontPx(parseFloat(el.dataset.lvl));
+        el.style.fontSize = px + 'px';
+        el.style.display = px < 6 ? 'none' : '';
         var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: false, zIndex: 4 });
         overlay.setMap(map);
         objectOverlays.push(overlay);
@@ -212,6 +234,9 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
             var ll = mouseEvent && mouseEvent.latLng;
             send({ type:'mapTap', lat: ll ? ll.getLat() : null, lng: ll ? ll.getLng() : null, level: map.getLevel() });
           });
+
+          // 줌 변경 시 객체 크기를 world-space 기준으로 재계산.
+          kakao.maps.event.addListener(map, 'zoom_changed', resizeObjects);
 
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
           applyPlaces(PLACES);

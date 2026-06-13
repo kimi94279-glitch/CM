@@ -33,6 +33,7 @@ function toRenderObjects(objects: MapObject[]) {
     latitude: o.latitude,
     longitude: o.longitude,
     payload: o.payload,
+    zoom_level: o.zoom_level, // world-space 스케일 기준: 생성 당시 줌 레벨
   }));
 }
 

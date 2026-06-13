@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 // 모든 데이터 접근은 service 계층을 통해서만 수행한다. (ARCHITECTURE.md)
 // map_objects 는 보드(캔버스)에 종속되며, 권한은 board→couple 경로의 RLS 로 강제된다.
 
-// 생성 입력. zoom_level 은 생성 당시 줌(LOD 키, P0 렌더 미사용).
+// 생성 입력. zoom_level 은 생성 당시 줌 — world-space 스케일 기준(렌더에서 객체 크기로 사용).
 export interface NewMapObject {
   type: MapObjectType;
   latitude: number;

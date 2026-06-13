@@ -208,7 +208,12 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                     zoomLevel: point.level,
                     payload: { emoji: stickerEmoji },
                   },
-                  { onSuccess: (saved) => setLastSaved(saved) }
+                  {
+                    onSuccess: (saved) => setLastSaved(saved),
+                    // 무음 실패 방지: insert 실패(테이블 부재/RLS/제약)를 실기기에서 즉시 가시화.
+                    onError: (e) =>
+                      Alert.alert('스티커 저장 실패', e instanceof Error ? e.message : String(e)),
+                  }
                 );
                 return;
               }
@@ -294,7 +299,16 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               <Pressable
                 key={type}
                 style={styles.reactionEmojiBtn}
-                onPress={() => addReaction.mutate({ placeId: reactionPlaceId, type })}
+                onPress={() =>
+                  addReaction.mutate(
+                    { placeId: reactionPlaceId, type },
+                    {
+                      // 무음 실패 방지: reaction_type CHECK 위반(0003 미적용 시 lol/nope/wow)을 가시화.
+                      onError: (e) =>
+                        Alert.alert('반응 저장 실패', e instanceof Error ? e.message : String(e)),
+                    }
+                  )
+                }
                 accessibilityRole="button"
                 accessibilityLabel={`반응 ${type}`}
               >
