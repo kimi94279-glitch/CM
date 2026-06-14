@@ -23,6 +23,11 @@ interface MapWebViewProps {
   onMarkerPress?: (placeId: string) => void;
   // 핀 외 빈 지도(배경) 탭. point(좌표/레벨)는 객체 배치용 — 없으면 단순 배경 탭(팔레트 닫기 등).
   onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
+  // 객체(스티커) 탭 → 편집 선택. 드래그 이동 종료 → 새 좌표 저장.
+  onObjectPress?: (id: string) => void;
+  onObjectMove?: (id: string, lat: number, lng: number) => void;
+  // 현재 편집 선택된 객체 id(선택 링 표시). null = 해제.
+  selectedObjectId?: string | null;
 }
 
 // 지리 객체 → WebView 렌더용 슬림 형태(필요 필드만).
@@ -58,7 +63,7 @@ export interface MapWebViewHandle {
 // 프로덕션 지도 컴포넌트: WebView + Kakao JS SDK.
 // places 는 order_index 기준으로 정렬되어 마커/폴리라인으로 렌더된다.
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function MapWebView(
-  { places, reactions, objects, onMarkerPress, onMapPress },
+  { places, reactions, objects, onMarkerPress, onMapPress, onObjectPress, onObjectMove, selectedObjectId },
   ref
 ) {
   const webRef = useRef<WebView>(null);
@@ -121,6 +126,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     }
   }, [objects, pushObjects]);
 
+  // 편집 선택 변경 → WebView 선택 링 갱신. (선택은 ready 이후 사용자 상호작용이라 단순 주입)
+  useEffect(() => {
+    webRef.current?.injectJavaScript(
+      `window.selectObject && window.selectObject(${JSON.stringify(selectedObjectId ?? null)}); true;`
+    );
+  }, [selectedObjectId]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -162,6 +174,19 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       }
       if (msg.type === 'markerClick' && typeof msg.id === 'string') {
         onMarkerPress?.(msg.id);
+        return;
+      }
+      if (msg.type === 'objectTap' && typeof msg.id === 'string') {
+        onObjectPress?.(msg.id);
+        return;
+      }
+      if (
+        msg.type === 'objectMove' &&
+        typeof msg.id === 'string' &&
+        typeof msg.lat === 'number' &&
+        typeof msg.lng === 'number'
+      ) {
+        onObjectMove?.(msg.id, msg.lat, msg.lng);
       }
     } catch {
       // 진단용 메시지는 무시

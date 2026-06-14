@@ -44,6 +44,24 @@ export async function addMapObject(boardId: string, obj: NewMapObject): Promise<
   return data;
 }
 
+// 부분 수정(이동: lat/lng / 크기: payload.scale 등). RLS: 커플 멤버(0004 update 정책).
+// payload는 컬럼 전체 치환이므로, 호출측에서 기존 payload를 병합해 전달한다.
+export interface MapObjectPatch {
+  latitude?: number;
+  longitude?: number;
+  payload?: Record<string, unknown>;
+}
+export async function updateMapObject(id: string, patch: MapObjectPatch): Promise<MapObject> {
+  const { data, error } = await supabase
+    .from('map_objects')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // 지리 객체 삭제 (RLS: 커플 멤버).
 export async function removeMapObject(id: string): Promise<void> {
   const { error } = await supabase.from('map_objects').delete().eq('id', id);

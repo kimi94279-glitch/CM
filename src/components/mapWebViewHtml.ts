@@ -65,6 +65,8 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     var polyline = null;
     var reactionOverlays = [];
     var objectOverlays = [];
+    var OBJECTS = [];        // 마지막 렌더된 객체 목록(선택 갱신 시 재사용)
+    var SELECTED_ID = null;  // 편집 선택된 객체 id
     // fitBounds 패딩(px). 현재 하드코딩 — Search 상단 영역/우하단 FAB에 핀이 가려지지 않도록 한 근사치.
     // TODO: 추후 RN safe area / insets(상단 Search, 우하단 Utility FAB 높이) 기반 계산값을 주입해 대체 예정.
     var PAD = { top: 96, right: 80, bottom: 112, left: 24 };
@@ -115,7 +117,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       for (var i = 0; i < objectOverlays.length; i++){
         var el = objectOverlays[i].getContent();
         if (!el || !el.dataset) continue;
-        var px = worldScaleFontPx(parseFloat(el.dataset.lvl));
+        var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * (parseFloat(el.dataset.scale) || 1);
         el.style.fontSize = px + 'px';
         el.style.display = px < 6 ? 'none' : '';
       }
@@ -193,28 +195,54 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     function applyObjects(list){
       if (!map) return;
       clearObjectOverlays();
-      if (!list || !list.length) return;
-      for (var i = 0; i < list.length; i++){
-        var o = list[i];
-        if (!o || o.type !== 'sticker') continue; // P0: sticker 외 렌더 금지
+      OBJECTS = list || [];
+      if (!OBJECTS.length) return;
+      OBJECTS.forEach(function(o){
+        if (!o || o.type !== 'sticker') return; // P0: sticker 외 렌더 금지
         var emoji = o.payload && o.payload.emoji;
-        if (!emoji) continue;
+        if (!emoji) return;
+        var scale = (o.payload && o.payload.scale) ? o.payload.scale : 1;
         var pos = new kakao.maps.LatLng(o.latitude, o.longitude);
         var el = document.createElement('div');
         el.style.cssText = 'line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
         el.textContent = emoji;
-        // world-space 크기: 생성 줌(zoom_level) 기준으로 화면 px 산출. 줌 변경 시 resizeObjects가 갱신.
+        // world-space 크기: 생성 줌(zoom_level) × 사용자 배수(payload.scale). 줌 변경 시 resizeObjects가 갱신.
         el.dataset.lvl = (o.zoom_level == null ? map.getLevel() : o.zoom_level);
-        var px = worldScaleFontPx(parseFloat(el.dataset.lvl));
+        el.dataset.scale = scale;
+        el.dataset.id = o.id;
+        var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * scale;
         el.style.fontSize = px + 'px';
         el.style.display = px < 6 ? 'none' : '';
-        var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: false, zIndex: 4 });
+        if (o.id === SELECTED_ID){ el.style.outline = '3px solid #FF6B81'; el.style.outlineOffset = '4px'; el.style.borderRadius = '6px'; }
+        var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: true, zIndex: 4 });
         overlay.setMap(map);
         objectOverlays.push(overlay);
-      }
+        // 탭 = 선택(편집 진입). 드래그 직후 발생하는 click 은 무시.
+        el.addEventListener('click', function(){
+          if (el.dataset.dragging === '1'){ el.dataset.dragging = '0'; return; }
+          send({ type:'objectTap', id: o.id });
+        });
+        // 드래그 = 이동(선택된 객체만). 드래그 중 지도 팬 억제(stopPropagation).
+        el.addEventListener('touchstart', function(e){ if (o.id !== SELECTED_ID) return; e.stopPropagation(); }, { passive:false });
+        el.addEventListener('touchmove', function(e){
+          if (o.id !== SELECTED_ID) return;
+          e.preventDefault(); e.stopPropagation();
+          el.dataset.dragging = '1';
+          var t = e.touches[0];
+          var coords = map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(t.clientX, t.clientY));
+          overlay.setPosition(coords);
+        }, { passive:false });
+        el.addEventListener('touchend', function(e){
+          if (o.id !== SELECTED_ID) return;
+          e.stopPropagation();
+          if (el.dataset.dragging === '1'){ var p = overlay.getPosition(); send({ type:'objectMove', id:o.id, lat:p.getLat(), lng:p.getLng() }); }
+        }, { passive:false });
+      });
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderObjects = function(list){ applyObjects(list); };
+    // 편집 선택 갱신: 선택 id 설정 후 재렌더(선택 링 반영). null 이면 해제.
+    window.selectObject = function(id){ SELECTED_ID = id; applyObjects(OBJECTS); };
 
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false';

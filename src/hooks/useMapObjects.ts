@@ -4,6 +4,8 @@ import {
   addMapObject,
   listMapObjects,
   removeMapObject,
+  updateMapObject,
+  type MapObjectPatch,
   type NewMapObject,
 } from '../services/mapObjectService';
 
@@ -22,6 +24,17 @@ export function useAddMapObject(boardId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (obj: NewMapObject) => addMapObject(boardId, obj),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['map-objects', boardId] });
+    },
+  });
+}
+
+// 지리 객체 수정 (이동/크기 등). 성공 시 목록 무효화.
+export function useUpdateMapObject(boardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: MapObjectPatch }) => updateMapObject(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['map-objects', boardId] });
     },

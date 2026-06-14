@@ -22,7 +22,12 @@ import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
 import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { useAddMapObject, useMapObjects } from '../hooks/useMapObjects';
+import {
+  useAddMapObject,
+  useMapObjects,
+  useRemoveMapObject,
+  useUpdateMapObject,
+} from '../hooks/useMapObjects';
 import { useAddReaction, usePlaceReactions } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
@@ -59,6 +64,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const objectsQuery = useMapObjects(boardId);
   const objects = objectsQuery.data ?? [];
   const addMapObject = useAddMapObject(boardId);
+  const updateMapObject = useUpdateMapObject(boardId);
+  const removeMapObject = useRemoveMapObject(boardId);
+  // 편집(Explore→Peek→Edit): 탭으로 객체 선택, 배경 탭으로 해제. 선택 시 편집 툴바 노출.
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? null;
   const [stickerMode, setStickerMode] = useState(false);
   const [stickerEmoji, setStickerEmoji] = useState('❤️');
   // 실기기 검증용(테스트 경로): 마지막 저장된 객체의 좌표/레벨 표시.
@@ -170,6 +180,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   const goAdd = () => navigation.navigate('PlaceAdd', { boardId });
 
+  // 선택 객체 크기 조정(payload.scale 배수). 거대/화면밖 객체도 항상 동작(툴바 방식).
+  const resizeSelected = (factor: number) => {
+    if (!selectedObject) return;
+    const prev = (selectedObject.payload?.scale as number) ?? 1;
+    updateMapObject.mutate(
+      { id: selectedObject.id, patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } } },
+      { onError: (e) => Alert.alert('크기 저장 실패', e instanceof Error ? e.message : String(e)) }
+    );
+  };
+  // 선택 객체 삭제.
+  const deleteSelected = () => {
+    if (!selectedObject) return;
+    removeMapObject.mutate(selectedObject.id, {
+      onSuccess: () => setSelectedObjectId(null),
+      onError: (e) => Alert.alert('삭제 실패', e instanceof Error ? e.message : String(e)),
+    });
+  };
+
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
     Alert.alert('장소 삭제', `'${place.name}'을(를) 삭제할까요?`, [
@@ -196,7 +224,20 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             onMarkerPress={(id) => {
               setHighlightedId(id);
               setReactionPlaceId(id);
+              setSelectedObjectId(null);
             }}
+            selectedObjectId={selectedObjectId}
+            onObjectPress={(id) => {
+              setReactionPlaceId(null);
+              setHighlightedId(null);
+              setSelectedObjectId(id);
+            }}
+            onObjectMove={(id, lat, lng) =>
+              updateMapObject.mutate(
+                { id, patch: { latitude: lat, longitude: lng } },
+                { onError: (e) => Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)) }
+              )
+            }
             onMapPress={(point) => {
               // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
               if (stickerMode && point) {
@@ -217,9 +258,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                 );
                 return;
               }
-              // 기본: 배경 탭 → 팔레트/강조 해제.
+              // 기본: 배경 탭 → 팔레트/강조/선택 해제.
               setReactionPlaceId(null);
               setHighlightedId(null);
+              setSelectedObjectId(null);
             }}
           />
         )}
@@ -366,6 +408,51 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               lv {lastSaved.zoom_level}
             </Text>
           ) : null}
+        </View>
+      ) : null}
+
+      {/* 편집 툴바(객체 선택 시): 크기 −/＋ · 삭제. 이동은 지도에서 객체를 드래그. */}
+      {selectedObject ? (
+        <View
+          style={[styles.editBar, { bottom: insets.bottom + spacing.lg }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.editBarInner}>
+            <Pressable
+              style={styles.editBtn}
+              onPress={() => resizeSelected(1 / 1.25)}
+              accessibilityRole="button"
+              accessibilityLabel="크기 줄이기"
+            >
+              <Text style={styles.editIcon}>➖</Text>
+            </Pressable>
+            <Pressable
+              style={styles.editBtn}
+              onPress={() => resizeSelected(1.25)}
+              accessibilityRole="button"
+              accessibilityLabel="크기 키우기"
+            >
+              <Text style={styles.editIcon}>➕</Text>
+            </Pressable>
+            <Pressable
+              style={styles.editBtn}
+              onPress={deleteSelected}
+              accessibilityRole="button"
+              accessibilityLabel="삭제"
+            >
+              <Text style={styles.editIcon}>🗑</Text>
+            </Pressable>
+            <Pressable
+              style={styles.reactionClose}
+              onPress={() => setSelectedObjectId(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="선택 해제"
+            >
+              <Text style={styles.reactionCloseText}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.stickerHint}>드래그로 이동 · 크기 조정은 자동 저장</Text>
         </View>
       ) : null}
     </View>
@@ -663,6 +750,33 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   stickerEmoji: { fontSize: 22 },
+
+  // 편집 툴바(객체 선택 시) — 반응/스티커 바와 동일 톤.
+  editBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  editBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  editBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  editIcon: { fontSize: 20 },
   stickerHint: {
     ...typography.caption,
     color: colors.textStrong,
