@@ -64,7 +64,7 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     var overlays = [];
     var polyline = null;
     var reactionOverlays = [];
-    var objectOverlays = [];
+    var objectOverlayMap = {}; // id -> { overlay, el } (증분 렌더: clear+rebuild 대신 id diff)
     var OBJECTS = [];        // 마지막 렌더된 객체 목록(선택 갱신 시 재사용)
     var SELECTED_ID = null;  // 편집 선택된 객체 id
     // fitBounds 패딩(px). 현재 하드코딩 — Search 상단 영역/우하단 FAB에 핀이 가려지지 않도록 한 근사치.
@@ -100,10 +100,12 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       reactionOverlays = [];
     }
 
-    // 지리 객체(스티커 등) 전용 정리.
+    // 지리 객체(스티커 등) 전체 정리(full reset 용). 증분 갱신은 applyObjects diff가 담당.
     function clearObjectOverlays(){
-      for (var i = 0; i < objectOverlays.length; i++){ objectOverlays[i].setMap(null); }
-      objectOverlays = [];
+      for (var id in objectOverlayMap){
+        if (Object.prototype.hasOwnProperty.call(objectOverlayMap, id)) objectOverlayMap[id].overlay.setMap(null);
+      }
+      objectOverlayMap = {};
     }
 
     // world-space 크기: 객체는 "지도 위에 실제 크기를 가진 것". BASE 24px = 생성 레벨에서의 크기,
@@ -121,8 +123,9 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       else if (!shown && px >= 6){ el.style.display = ''; el.dataset.vis = '1'; }
     }
     function resizeObjects(){
-      for (var i = 0; i < objectOverlays.length; i++){
-        var el = objectOverlays[i].getContent();
+      for (var id in objectOverlayMap){
+        if (!Object.prototype.hasOwnProperty.call(objectOverlayMap, id)) continue;
+        var el = objectOverlayMap[id].el;
         if (!el || !el.dataset) continue;
         var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * (parseFloat(el.dataset.scale) || 1);
         el.style.fontSize = px + 'px';
@@ -199,58 +202,83 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
     // P0: type==='sticker' 만 렌더(payload.emoji). text/arrow/draw 는 데이터만 존재하고 렌더 금지.
     // 좌표 고정 + world-space 크기: 생성 줌(zoom_level) 기준 스케일(worldScaleFontPx), 줌 변경 시 갱신.
     // 주의(전역명 충돌): 워커 함수명(applyObjects)은 window.renderObjects 와 반드시 달라야 한다.
+    // el 의 데이터/시각(크기·이모지·가시성·선택링)을 객체 상태에 맞춰 갱신. ADD/UPDATE 공용.
+    function styleObjectEl(el, o){
+      var scale = (o.payload && o.payload.scale) ? o.payload.scale : 1;
+      el.dataset.lvl = (o.zoom_level == null ? map.getLevel() : o.zoom_level);
+      el.dataset.scale = scale;
+      el.dataset.id = o.id;
+      el.textContent = (o.payload && o.payload.emoji) || '';
+      var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * scale;
+      el.style.fontSize = px + 'px';
+      // 가시성 기준선(이후 줌 변경은 resizeObjects 히스테리시스가 관리).
+      el.dataset.vis = px >= 6 ? '1' : '0';
+      el.style.display = el.dataset.vis === '1' ? '' : 'none';
+      // 선택 링(선택 시 표시, 아니면 해제) — UPDATE 시 토글도 처리.
+      el.style.outline = (o.id === SELECTED_ID) ? '3px solid #FF6B81' : 'none';
+      el.style.outlineOffset = '4px';
+      el.style.borderRadius = '6px';
+    }
+    // 핸들러는 id·overlay(안정)만 참조 → 생성 시 1회만 부착(UPDATE 시 재부착 불필요).
+    function attachObjectHandlers(el, overlay, id){
+      el.addEventListener('click', function(){
+        if (el.dataset.dragging === '1'){ el.dataset.dragging = '0'; return; }
+        send({ type:'objectTap', id: id });
+      });
+      el.addEventListener('touchstart', function(e){ if (id !== SELECTED_ID) return; e.stopPropagation(); }, { passive:false });
+      el.addEventListener('touchmove', function(e){
+        if (id !== SELECTED_ID) return;
+        e.preventDefault(); e.stopPropagation();
+        el.dataset.dragging = '1';
+        var t = e.touches[0];
+        var coords = map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(t.clientX, t.clientY));
+        overlay.setPosition(coords);
+      }, { passive:false });
+      el.addEventListener('touchend', function(e){
+        if (id !== SELECTED_ID) return;
+        e.stopPropagation();
+        if (el.dataset.dragging === '1'){ var p = overlay.getPosition(); send({ type:'objectMove', id:id, lat:p.getLat(), lng:p.getLng() }); }
+      }, { passive:false });
+    }
+    // 증분 렌더: id 기반 diff(REMOVE/UPDATE/ADD). 전체 clear 없음 → 미변경 객체 DOM 유지(깜빡임 제거).
     function applyObjects(list){
       if (!map) return;
-      clearObjectOverlays();
       OBJECTS = list || [];
-      if (!OBJECTS.length) return;
+      // incoming: 유효한 sticker 만 id 맵으로.
+      var incoming = {};
       OBJECTS.forEach(function(o){
         if (!o || o.type !== 'sticker') return; // P0: sticker 외 렌더 금지
-        var emoji = o.payload && o.payload.emoji;
-        if (!emoji) return;
-        var scale = (o.payload && o.payload.scale) ? o.payload.scale : 1;
-        var pos = new kakao.maps.LatLng(o.latitude, o.longitude);
-        var el = document.createElement('div');
-        el.style.cssText = 'line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
-        el.textContent = emoji;
-        // world-space 크기: 생성 줌(zoom_level) × 사용자 배수(payload.scale). 줌 변경 시 resizeObjects가 갱신.
-        el.dataset.lvl = (o.zoom_level == null ? map.getLevel() : o.zoom_level);
-        el.dataset.scale = scale;
-        el.dataset.id = o.id;
-        var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * scale;
-        el.style.fontSize = px + 'px';
-        // 초기 가시성 기준선(이후 줌 변경은 resizeObjects의 히스테리시스가 관리).
-        el.dataset.vis = px >= 6 ? '1' : '0';
-        el.style.display = el.dataset.vis === '1' ? '' : 'none';
-        if (o.id === SELECTED_ID){ el.style.outline = '3px solid #FF6B81'; el.style.outlineOffset = '4px'; el.style.borderRadius = '6px'; }
-        var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: true, zIndex: 4 });
-        overlay.setMap(map);
-        objectOverlays.push(overlay);
-        // 탭 = 선택(편집 진입). 드래그 직후 발생하는 click 은 무시.
-        el.addEventListener('click', function(){
-          if (el.dataset.dragging === '1'){ el.dataset.dragging = '0'; return; }
-          send({ type:'objectTap', id: o.id });
-        });
-        // 드래그 = 이동(선택된 객체만). 드래그 중 지도 팬 억제(stopPropagation).
-        el.addEventListener('touchstart', function(e){ if (o.id !== SELECTED_ID) return; e.stopPropagation(); }, { passive:false });
-        el.addEventListener('touchmove', function(e){
-          if (o.id !== SELECTED_ID) return;
-          e.preventDefault(); e.stopPropagation();
-          el.dataset.dragging = '1';
-          var t = e.touches[0];
-          var coords = map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(t.clientX, t.clientY));
-          overlay.setPosition(coords);
-        }, { passive:false });
-        el.addEventListener('touchend', function(e){
-          if (o.id !== SELECTED_ID) return;
-          e.stopPropagation();
-          if (el.dataset.dragging === '1'){ var p = overlay.getPosition(); send({ type:'objectMove', id:o.id, lat:p.getLat(), lng:p.getLng() }); }
-        }, { passive:false });
+        if (!(o.payload && o.payload.emoji)) return;
+        incoming[o.id] = o;
+      });
+      // REMOVE: 기존에 있으나 incoming 에 없는 것.
+      for (var id in objectOverlayMap){
+        if (!Object.prototype.hasOwnProperty.call(objectOverlayMap, id)) continue;
+        if (!incoming[id]){ objectOverlayMap[id].overlay.setMap(null); delete objectOverlayMap[id]; }
+      }
+      // ADD / UPDATE.
+      Object.keys(incoming).forEach(function(id){
+        var o = incoming[id];
+        var entry = objectOverlayMap[id];
+        if (entry){
+          // UPDATE: 기존 overlay 재사용 — 위치/스타일만 갱신(DOM 유지).
+          entry.overlay.setPosition(new kakao.maps.LatLng(o.latitude, o.longitude));
+          styleObjectEl(entry.el, o);
+        } else {
+          // ADD: 신규 생성.
+          var el = document.createElement('div');
+          el.style.cssText = 'line-height:1;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+          styleObjectEl(el, o);
+          var overlay = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(o.latitude, o.longitude), content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: true, zIndex: 4 });
+          overlay.setMap(map);
+          objectOverlayMap[id] = { overlay: overlay, el: el };
+          attachObjectHandlers(el, overlay, id);
+        }
       });
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderObjects = function(list){ applyObjects(list); };
-    // 편집 선택 갱신: 선택 id 설정 후 재렌더(선택 링 반영). null 이면 해제.
+    // 편집 선택 갱신: 선택 id 설정 후 diff 재적용(선택 링만 UPDATE, 재빌드 없음). null 이면 해제.
     window.selectObject = function(id){ SELECTED_ID = id; applyObjects(OBJECTS); };
 
     var s = document.createElement('script');
