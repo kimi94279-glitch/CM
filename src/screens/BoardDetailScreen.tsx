@@ -28,7 +28,8 @@ import {
   useRemoveMapObject,
   useUpdateMapObject,
 } from '../hooks/useMapObjects';
-import { useAddReaction, usePlaceReactions } from '../hooks/usePlaceReactions';
+import { useAuth } from '../hooks/useAuthState';
+import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { MapObject, Place, PlaceSearchResult } from '../types/models';
@@ -57,6 +58,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const reactionsQuery = usePlaceReactions(boardId);
   const reactions = reactionsQuery.data ?? [];
   const addReaction = useAddReaction(boardId);
+  const removeReaction = useRemoveReaction(boardId);
+  // 반응 토글 판정용 내 uid (이미 누른 반응이면 제거).
+  const { session } = useAuth();
+  const myId = session?.user?.id ?? null;
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
 
@@ -222,12 +227,16 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             reactions={reactions}
             objects={objects}
             onMarkerPress={(id) => {
+              // 하단 바 상호배타: 핀 반응 표시 시 스티커 모드/편집 선택 해제.
+              setStickerMode(false);
+              setSelectedObjectId(null);
               setHighlightedId(id);
               setReactionPlaceId(id);
-              setSelectedObjectId(null);
             }}
             selectedObjectId={selectedObjectId}
             onObjectPress={(id) => {
+              // 하단 바 상호배타: 편집 선택 시 반응/스티커 모드 해제.
+              setStickerMode(false);
               setReactionPlaceId(null);
               setHighlightedId(null);
               setSelectedObjectId(id);
@@ -303,7 +312,17 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           {/* 스티커 도구(P0): ON 시 지도 탭으로 지리 고정 스티커 배치. */}
           <Pressable
             style={[styles.fab, stickerMode && styles.fabActive]}
-            onPress={() => setStickerMode((v) => !v)}
+            onPress={() =>
+              setStickerMode((v) => {
+                const next = !v;
+                // 하단 바 상호배타: 스티커 모드 켤 때 반응/편집 해제.
+                if (next) {
+                  setReactionPlaceId(null);
+                  setSelectedObjectId(null);
+                }
+                return next;
+              })
+            }
             accessibilityRole="button"
             accessibilityLabel="스티커 모드"
           >
@@ -341,16 +360,22 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               <Pressable
                 key={type}
                 style={styles.reactionEmojiBtn}
-                onPress={() =>
-                  addReaction.mutate(
-                    { placeId: reactionPlaceId, type },
-                    {
-                      // 무음 실패 방지: reaction_type CHECK 위반(0003 미적용 시 lol/nope/wow)을 가시화.
-                      onError: (e) =>
-                        Alert.alert('반응 저장 실패', e instanceof Error ? e.message : String(e)),
-                    }
-                  )
-                }
+                onPress={() => {
+                  const onError = (e: unknown) =>
+                    Alert.alert('반응 저장 실패', e instanceof Error ? e.message : String(e));
+                  // 토글: 내가 이미 누른 반응이면 제거, 아니면 추가.
+                  const mine = reactions.some(
+                    (r) =>
+                      r.place_id === reactionPlaceId &&
+                      r.user_id === myId &&
+                      r.reaction_type === type
+                  );
+                  if (mine) {
+                    removeReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
+                  } else {
+                    addReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
+                  }
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`반응 ${type}`}
               >

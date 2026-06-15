@@ -113,13 +113,20 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
       if (createLvl == null || isNaN(createLvl)) createLvl = map.getLevel();
       return Math.min(2500, 24 * Math.pow(2, createLvl - map.getLevel()));
     }
+    // cull 히스테리시스: 표시중이면 4px 미만에서 숨김, 숨김중이면 6px 이상에서 표시.
+    // 경계(정확히 6px)에서 display none↔'' 가 반복 토글되는 줌 중 깜빡임을 방지한다.
+    function applyCull(el, px){
+      var shown = el.dataset.vis !== '0';
+      if (shown && px < 4){ el.style.display = 'none'; el.dataset.vis = '0'; }
+      else if (!shown && px >= 6){ el.style.display = ''; el.dataset.vis = '1'; }
+    }
     function resizeObjects(){
       for (var i = 0; i < objectOverlays.length; i++){
         var el = objectOverlays[i].getContent();
         if (!el || !el.dataset) continue;
         var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * (parseFloat(el.dataset.scale) || 1);
         el.style.fontSize = px + 'px';
-        el.style.display = px < 6 ? 'none' : '';
+        applyCull(el, px);
       }
     }
 
@@ -212,7 +219,9 @@ export function buildMapHtml(jsKey: string, places: MapPlace[]): string {
         el.dataset.id = o.id;
         var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * scale;
         el.style.fontSize = px + 'px';
-        el.style.display = px < 6 ? 'none' : '';
+        // 초기 가시성 기준선(이후 줌 변경은 resizeObjects의 히스테리시스가 관리).
+        el.dataset.vis = px >= 6 ? '1' : '0';
+        el.style.display = el.dataset.vis === '1' ? '' : 'none';
         if (o.id === SELECTED_ID){ el.style.outline = '3px solid #FF6B81'; el.style.outlineOffset = '4px'; el.style.borderRadius = '6px'; }
         var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, xAnchor: 0.5, clickable: true, zIndex: 4 });
         overlay.setMap(map);
