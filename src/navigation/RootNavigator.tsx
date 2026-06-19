@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 
+import { colors } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { BoardDetailScreen } from '../screens/BoardDetailScreen';
 import { BoardListScreen } from '../screens/BoardListScreen';
@@ -27,7 +28,9 @@ export function RootNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
+    >
       {status === 'unauthenticated' && (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
