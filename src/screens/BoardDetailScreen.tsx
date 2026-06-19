@@ -1,5 +1,6 @@
+import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../components/Button';
 import { CanvasObjectList } from '../components/CanvasObjectList';
+import { useMapHost } from '../components/MapHostContext';
 import { MapSearchBar } from '../components/MapSearchBar';
-import { MapWebView, type MapWebViewHandle } from '../components/MapWebView';
 import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
 import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
@@ -79,8 +80,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 실기기 검증용(테스트 경로): 마지막 저장된 객체의 좌표/레벨 표시.
   const [lastSaved, setLastSaved] = useState<MapObject | null>(null);
 
-  // 지도 명령형 핸들(Recenter 등). RN → WebView injectJavaScript 경유.
-  const mapRef = useRef<MapWebViewHandle>(null);
+  // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/Mapbox 1개). 포커스 시 데이터만 교체.
+  const map = useMapHost();
+  const isFocused = useIsFocused();
 
   // 지도 마커 클릭 → 강조 ID만 설정(시트 자동 오픈 안 함, Surface First 우선).
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -185,6 +187,81 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   const goAdd = () => navigation.navigate('PlaceAdd', { boardId });
 
+  // ── 싱글톤 MapHost 구동 ────────────────────────────────────────────────
+  // 보드 진입/이탈 → 토큰 설정(잔상 가드) + 표시 전환. show()는 데이터 주입 이후로 미뤄 빈 지도 깜빡임 방지.
+  useEffect(() => {
+    if (!isFocused) {
+      map.hide();
+      return;
+    }
+    map.beginBoard(boardId);
+  }, [isFocused, boardId, map]);
+
+  // 보드 데이터 → 지도 주입(포커스 중에만). 주입 후 표시. setData가 토큰 가드로 늦은 응답 차단.
+  useEffect(() => {
+    if (!isFocused) return;
+    map.setData(boardId, { places, reactions, objects });
+    map.show();
+  }, [isFocused, boardId, places, reactions, objects, map]);
+
+  // 편집 선택(선택 링) 동기화.
+  useEffect(() => {
+    if (!isFocused) return;
+    map.setSelectedObjectId(boardId, selectedObjectId);
+  }, [isFocused, boardId, selectedObjectId, map]);
+
+  // WebView 메시지 콜백을 현재 보드로 등록. stickerMode/Emoji 최신값 반영 위해 변경 시 재등록.
+  useEffect(() => {
+    if (!isFocused) return;
+    map.setCallbacks(boardId, {
+      onMarkerPress: (id) => {
+        // 하단 바 상호배타: 핀 반응 표시 시 스티커 모드/편집 선택 해제.
+        setStickerMode(false);
+        setSelectedObjectId(null);
+        setHighlightedId(id);
+        setReactionPlaceId(id);
+      },
+      onObjectPress: (id) => {
+        // 하단 바 상호배타: 편집 선택 시 반응/스티커 모드 해제.
+        setStickerMode(false);
+        setReactionPlaceId(null);
+        setHighlightedId(null);
+        setSelectedObjectId(id);
+      },
+      onObjectMove: (id, lat, lng) =>
+        updateMapObject.mutate(
+          { id, patch: { latitude: lat, longitude: lng } },
+          { onError: (e) => Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)) }
+        ),
+      onMapPress: (point) => {
+        // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
+        if (stickerMode && point) {
+          addMapObject.mutate(
+            {
+              type: 'sticker',
+              latitude: point.lat,
+              longitude: point.lng,
+              zoomLevel: point.level,
+              payload: { emoji: stickerEmoji },
+            },
+            {
+              onSuccess: (saved) => setLastSaved(saved),
+              onError: (e) =>
+                Alert.alert('스티커 저장 실패', e instanceof Error ? e.message : String(e)),
+            }
+          );
+          return;
+        }
+        // 기본: 배경 탭 → 팔레트/강조/선택 해제.
+        setReactionPlaceId(null);
+        setHighlightedId(null);
+        setSelectedObjectId(null);
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, boardId, stickerMode, stickerEmoji, map]);
+  // ───────────────────────────────────────────────────────────────────────
+
   // 선택 객체 크기 조정(payload.scale 배수). 거대/화면밖 객체도 항상 동작(툴바 방식).
   const resizeSelected = (factor: number) => {
     if (!selectedObject) return;
@@ -213,68 +290,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 지도 영역(지도 + 로딩/에러 + 상단 Overlay + 모바일 FAB)
   const mapArea = (
-    <View style={styles.mapArea}>
-      <View style={StyleSheet.absoluteFill}>
-        {placesQuery.isError ? (
-          <View style={styles.errorFill}>
-            <Text style={styles.errorText}>장소를 불러오지 못했어요.</Text>
-            <Button title="다시 시도" variant="secondary" onPress={() => placesQuery.refetch()} />
-          </View>
-        ) : (
-          <MapWebView
-            ref={mapRef}
-            places={places}
-            reactions={reactions}
-            objects={objects}
-            onMarkerPress={(id) => {
-              // 하단 바 상호배타: 핀 반응 표시 시 스티커 모드/편집 선택 해제.
-              setStickerMode(false);
-              setSelectedObjectId(null);
-              setHighlightedId(id);
-              setReactionPlaceId(id);
-            }}
-            selectedObjectId={selectedObjectId}
-            onObjectPress={(id) => {
-              // 하단 바 상호배타: 편집 선택 시 반응/스티커 모드 해제.
-              setStickerMode(false);
-              setReactionPlaceId(null);
-              setHighlightedId(null);
-              setSelectedObjectId(id);
-            }}
-            onObjectMove={(id, lat, lng) =>
-              updateMapObject.mutate(
-                { id, patch: { latitude: lat, longitude: lng } },
-                { onError: (e) => Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)) }
-              )
-            }
-            onMapPress={(point) => {
-              // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
-              if (stickerMode && point) {
-                addMapObject.mutate(
-                  {
-                    type: 'sticker',
-                    latitude: point.lat,
-                    longitude: point.lng,
-                    zoomLevel: point.level,
-                    payload: { emoji: stickerEmoji },
-                  },
-                  {
-                    onSuccess: (saved) => setLastSaved(saved),
-                    // 무음 실패 방지: insert 실패(테이블 부재/RLS/제약)를 실기기에서 즉시 가시화.
-                    onError: (e) =>
-                      Alert.alert('스티커 저장 실패', e instanceof Error ? e.message : String(e)),
-                  }
-                );
-                return;
-              }
-              // 기본: 배경 탭 → 팔레트/강조/선택 해제.
-              setReactionPlaceId(null);
-              setHighlightedId(null);
-              setSelectedObjectId(null);
-            }}
-          />
-        )}
-      </View>
+    <View style={styles.mapArea} pointerEvents="box-none">
+      {/* 지도는 네비게이터 뒤 싱글톤 MapHost가 렌더한다. 여기는 투명 + box-none 으로 터치를 통과시키고,
+          데이터/콜백/카메라는 위쪽 effect에서 컨트롤러로 주입한다. 오류 시에만 지도를 가리는 오버레이. */}
+      {placesQuery.isError ? (
+        <View style={[StyleSheet.absoluteFill, styles.errorFill]}>
+          <Text style={styles.errorText}>장소를 불러오지 못했어요.</Text>
+          <Button title="다시 시도" variant="secondary" onPress={() => placesQuery.refetch()} />
+        </View>
+      ) : null}
 
       {placesQuery.isLoading ? (
         <View style={styles.loadingOverlay} pointerEvents="none">
@@ -331,7 +355,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           {/* Recenter(Utility): 전체 장소 fitBounds. 중립 스타일, 목록 위에 위치(ADR-010 빈도순). */}
           <Pressable
             style={styles.fab}
-            onPress={() => mapRef.current?.recenter()}
+            onPress={() => map.recenter()}
             accessibilityRole="button"
             accessibilityLabel="전체 장소 보기"
           >
@@ -486,8 +510,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 태블릿: 좌 지도 + 우 Side Panel(목록 상시)
   if (isTablet) {
     return (
-      <View style={styles.surface}>
-        <View style={styles.tabletRow}>
+      <View style={styles.surface} pointerEvents="box-none">
+        <View style={styles.tabletRow} pointerEvents="box-none">
           {mapArea}
           <View style={[styles.sidePanel, { paddingTop: insets.top + spacing.sm }]}>
             <CanvasObjectList
@@ -505,7 +529,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 모바일: 지도 + (요청 시) Half Sheet
   return (
-    <View style={styles.surface}>
+    <View style={styles.surface} pointerEvents="box-none">
       {mapArea}
 
       {/* Half Sheet: backdrop 없음 → 시트 미점유 영역의 지도는 계속 보이고 조작 가능(Surface First).
@@ -565,7 +589,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  surface: { flex: 1, backgroundColor: colors.bg },
+  // 투명: 네비게이터 뒤 싱글톤 MapHost가 비쳐 보이도록(BoardDetail은 오버레이 UI만 소유).
+  surface: { flex: 1, backgroundColor: 'transparent' },
   mapArea: { flex: 1 },
   tabletRow: { flex: 1, flexDirection: 'row' },
   sidePanel: {
@@ -575,7 +600,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
 
-  errorFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  errorFill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: colors.bg, // 오류 시 지도를 가린다(absoluteFill 위).
+  },
   errorText: { ...typography.body, color: colors.danger, marginBottom: spacing.md },
   loadingOverlay: {
     position: 'absolute',

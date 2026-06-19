@@ -56,7 +56,11 @@ export function RootNavigator() {
         <>
           <Stack.Screen name="BoardList" component={BoardListScreen} />
           <Stack.Screen name="CreateBoard" component={CreateBoardScreen} />
-          <Stack.Screen name="BoardDetail" component={BoardDetailScreen} />
+          <Stack.Screen
+            name="BoardDetail"
+            component={BoardDetailScreen}
+            options={{ contentStyle: { backgroundColor: 'transparent' } }}
+          />
           <Stack.Screen name="PlaceAdd" component={PlaceAddScreen} />
           <Stack.Screen name="InviteCreate" component={InviteCreateScreen} />
         </>
@@ -67,7 +71,11 @@ export function RootNavigator() {
         <>
           <Stack.Screen name="BoardList" component={BoardListScreen} />
           <Stack.Screen name="CreateBoard" component={CreateBoardScreen} />
-          <Stack.Screen name="BoardDetail" component={BoardDetailScreen} />
+          <Stack.Screen
+            name="BoardDetail"
+            component={BoardDetailScreen}
+            options={{ contentStyle: { backgroundColor: 'transparent' } }}
+          />
           <Stack.Screen name="PlaceAdd" component={PlaceAddScreen} />
         </>
       )}
