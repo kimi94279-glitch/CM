@@ -11,7 +11,7 @@ import {
 
 const EMPTY_DATA: MapBoardData = { places: [], reactions: [], objects: [] };
 
-// 싱글톤 지도 호스트: WebView+Mapbox 인스턴스를 앱 수명 동안 1개만 유지한다.
+// 싱글톤 지도 호스트: WebView+MapLibre 인스턴스를 앱 수명 동안 1개만 유지한다.
 // 네비게이터 "뒤"(최하단 absoluteFill)에 깔리고, 포커스된 BoardDetail이 컨트롤러로 데이터만 교체한다.
 // MapWebView 는 거의 그대로 재사용 — 컨트롤러 setter가 상태를 바꾸면 기존 증분 주입 effect가 동작.
 export function MapHost({ children }: { children: ReactNode }) {

@@ -30,15 +30,16 @@ export function safeJson(data: unknown): string {
 
 // 기본 중심(서울시청)
 const DEFAULT_CENTER = { lat: 37.5666, lng: 126.9784 };
-// Mapbox GL JS CDN 버전 (style/marker API 안정 버전).
-const MAPBOX_GL_VERSION = 'v3.9.0';
-// 시작 지도 스타일 — Light/미니멀(캔버스 위 요소가 돋보이도록). 추후 Studio 커스텀 URL로 교체.
-const MAP_STYLE = 'mapbox://styles/mapbox/light-v11';
-// 카메라 줌(Mapbox zoom, 높을수록 확대). Kakao level 대체값 — 디바이스에서 미세조정 가능.
+// MapLibre GL JS CDN 버전 (Mapbox GL v1 포크 — Marker/LngLatBounds/카메라 API 동일).
+const MAPLIBRE_GL_VERSION = '5.24.0';
+// 시작 지도 스타일 — OpenFreeMap positron(무료·키리스, OSM/OpenMapTiles). Light/미니멀이라 캔버스 위 요소가 돋보인다.
+// 추후 CM Style V1(자체 style.json)로 교체 예정 — source URL만 바꾸면 PMTiles 자가호스팅으로도 전환 가능(ADR-013).
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+// 카메라 줌(GL zoom, 높을수록 확대). Kakao level 대체값 — 디바이스에서 미세조정 가능.
 const EMPTY_ZOOM = 11; // 핀 0개: 도시 레벨
 const SINGLE_ZOOM = 14; // 핀 1개: 동네 레벨
 
-export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
+export function buildMapHtml(places: MapPlace[]): string {
   const placesJson = safeJson(places);
   const centerJson = safeJson(DEFAULT_CENTER);
 
@@ -47,7 +48,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/${MAPBOX_GL_VERSION}/mapbox-gl.css" rel="stylesheet" />
+  <link href="https://unpkg.com/maplibre-gl@${MAPLIBRE_GL_VERSION}/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     html,body,#map{margin:0;padding:0;width:100%;height:100%;}
     /* 지도를 앱처럼: 텍스트/번호 핀 선택 및 long-press 콜아웃/하이라이트 차단 (지도 제스처에는 영향 없음) */
@@ -120,7 +121,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
 
     // world-space 크기: 객체는 "지도 위에 실제 크기를 가진 것". BASE 24px = 생성 줌에서의 크기,
     // 현재 줌과의 차이를 2^Δ로 환산 → 줌인 시 거대화(일부만 보임)·줌아웃 시 축소.
-    // Mapbox zoom은 높을수록 확대 → (getZoom - createZoom). CAP(2500px)=크래시 가드, MIN(6px) 밑은 cull.
+    // GL zoom은 높을수록 확대 → (getZoom - createZoom). CAP(2500px)=크래시 가드, MIN(6px) 밑은 cull.
     function worldScaleFontPx(createZoom){
       if (createZoom == null || isNaN(createZoom)) createZoom = map.getZoom();
       return Math.min(2500, 24 * Math.pow(2, map.getZoom() - createZoom));
@@ -160,7 +161,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
       if (!map) return;
       PLACES = list || [];
       clearOverlays();
-      bounds = new mapboxgl.LngLatBounds();
+      bounds = new maplibregl.LngLatBounds();
       var coords = [];
       // 번호형 핀: 배열 순서(1..N) = order_index 정렬 결과. 번호는 UI 파생값(미저장).
       PLACES.forEach(function(p, i){
@@ -171,10 +172,10 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
         var el = document.createElement('div');
         el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:#FF6B81;color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
         el.textContent = String(i + 1);
-        // Mapbox 마커는 click 을 가로채지 않음 → 전파 차단해야 map 'click'(배경 탭)이 따라오지 않는다.
+        // GL 마커는 click 을 가로채지 않음 → 전파 차단해야 map 'click'(배경 탭)이 따라오지 않는다.
         el.addEventListener('click', function(e){ e.stopPropagation(); send({ type:'markerClick', id: p.id }); });
 
-        var marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
+        var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
         markers.push(marker);
       });
 
@@ -211,7 +212,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
         el.textContent = emojis.join('');
         el.addEventListener('click', function(e){ e.stopPropagation(); }); // 배지 탭이 배경 탭(선택 해제)으로 새지 않게.
         // 핀(번호 원) 위에 떠 있도록 anchor 'bottom' + 위로 오프셋.
-        var marker = new mapboxgl.Marker({ element: el, anchor: 'bottom', offset: [0, -22] }).setLngLat([place.longitude, place.latitude]).addTo(map);
+        var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -22] }).setLngLat([place.longitude, place.latitude]).addTo(map);
         reactionMarkers.push(marker);
       }
     }
@@ -219,7 +220,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
     window.renderReactions = function(byPlaceId){ applyReactions(byPlaceId); };
 
     // el 의 데이터/시각(크기·이모지·가시성·선택링)을 객체 상태에 맞춰 갱신. ADD/UPDATE 공용.
-    // dataset.lvl = 생성 당시 Mapbox zoom(zoom_level). 좌표 고정 + world-space 크기.
+    // dataset.lvl = 생성 당시 GL zoom(zoom_level). 좌표 고정 + world-space 크기.
     function styleObjectEl(el, o){
       var scale = (o.payload && o.payload.scale) ? o.payload.scale : 1;
       el.dataset.lvl = (o.zoom_level == null ? map.getZoom() : o.zoom_level);
@@ -290,7 +291,7 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
           var el = document.createElement('div');
           el.style.cssText = 'line-height:1;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
           styleObjectEl(el, o);
-          var marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([o.longitude, o.latitude]).addTo(map);
+          var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([o.longitude, o.latitude]).addTo(map);
           objectMarkerMap[id] = { marker: marker, el: el };
           attachObjectHandlers(el, marker, id);
         }
@@ -302,13 +303,13 @@ export function buildMapHtml(accessToken: string, places: MapPlace[]): string {
     window.selectObject = function(id){ SELECTED_ID = id; applyObjects(OBJECTS); };
 
     var s = document.createElement('script');
-    s.src = 'https://api.mapbox.com/mapbox-gl-js/${MAPBOX_GL_VERSION}/mapbox-gl.js';
-    s.onerror = function(){ send({ type:'error', stage:'script', message:'Mapbox GL JS script load failed' }); };
+    s.src = 'https://unpkg.com/maplibre-gl@${MAPLIBRE_GL_VERSION}/dist/maplibre-gl.js';
+    s.onerror = function(){ send({ type:'error', stage:'script', message:'MapLibre GL JS script load failed' }); };
     s.onload = function(){
-      if(!window.mapboxgl){ send({ type:'error', stage:'sdk', message:'mapboxgl undefined' }); return; }
+      if(!window.maplibregl){ send({ type:'error', stage:'sdk', message:'maplibregl undefined' }); return; }
       try {
-        mapboxgl.accessToken = '${accessToken}';
-        map = new mapboxgl.Map({
+        // MapLibre는 access token이 없다(OpenFreeMap 키리스). 스타일 JSON URL만 지정.
+        map = new maplibregl.Map({
           container: 'map',
           style: '${MAP_STYLE}',
           center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],

@@ -80,7 +80,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 실기기 검증용(테스트 경로): 마지막 저장된 객체의 좌표/레벨 표시.
   const [lastSaved, setLastSaved] = useState<MapObject | null>(null);
 
-  // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/Mapbox 1개). 포커스 시 데이터만 교체.
+  // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/MapLibre 1개). 포커스 시 데이터만 교체.
   const map = useMapHost();
   const isFocused = useIsFocused();
 

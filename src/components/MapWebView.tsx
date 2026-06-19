@@ -6,15 +6,13 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { REACTION_EMOJI } from '../constants/reactions';
-import { colors, spacing, typography } from '../constants/theme';
+import { colors } from '../constants/theme';
 import type { MapObject, Place, PlaceReaction } from '../types/models';
 import { buildMapHtml, safeJson, toMapPlaces, type MapPlace } from './mapWebViewHtml';
-
-const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '';
 
 interface MapWebViewProps {
   places: Place[];
@@ -60,10 +58,19 @@ export interface MapWebViewHandle {
   recenter(): void;
 }
 
-// 프로덕션 지도 컴포넌트: WebView + Mapbox GL JS.
+// 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap positron, 키리스).
 // places 는 order_index 기준으로 정렬되어 마커/폴리라인으로 렌더된다.
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function MapWebView(
-  { places, reactions, objects, onMarkerPress, onMapPress, onObjectPress, onObjectMove, selectedObjectId },
+  {
+    places,
+    reactions,
+    objects,
+    onMarkerPress,
+    onMapPress,
+    onObjectPress,
+    onObjectMove,
+    selectedObjectId,
+  },
   ref
 ) {
   const webRef = useRef<WebView>(null);
@@ -76,7 +83,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   // P1: html 은 마운트 1회만 생성(이후 source 불변 → places 변경 시 WebView 전체 reload 방지).
   // 초기 places 는 베이크되어 첫 페인트에 반영되고, 이후 변경은 injectJavaScript 증분 갱신.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const html = useMemo(() => buildMapHtml(MAPBOX_TOKEN, toMapPlaces(places)), []);
+  const html = useMemo(() => buildMapHtml(toMapPlaces(places)), []);
 
   // places → WebView 증분 반영(마커/폴리라인/카메라만 갱신). ready 이전이면 최신값만 큐에 보관.
   const pushPlaces = useCallback((arr: MapPlace[]) => {
@@ -193,14 +200,6 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     }
   };
 
-  if (!MAPBOX_TOKEN) {
-    return (
-      <View style={styles.fallback}>
-        <Text style={styles.fallbackText}>지도 키가 설정되지 않았어요.</Text>
-      </View>
-    );
-  }
-
   return (
     <WebView
       ref={webRef}
@@ -217,14 +216,4 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
 
 const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: colors.bg },
-  fallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  fallbackText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
 });
