@@ -188,31 +188,30 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const goAdd = () => navigation.navigate('PlaceAdd', { boardId });
 
   // ── 싱글톤 MapHost 구동 ────────────────────────────────────────────────
-  // 보드 진입/이탈 → 토큰 설정(잔상 가드) + 표시 전환. show()는 데이터 주입 이후로 미뤄 빈 지도 깜빡임 방지.
+  // 보드 진입(마운트/보드 변경) → 토큰 설정 + 이전 보드 오버레이 clear(잔상 가드). 보드당 1회.
   useEffect(() => {
-    if (!isFocused) {
-      map.hide();
-      return;
-    }
     map.beginBoard(boardId);
-  }, [isFocused, boardId, map]);
+  }, [boardId, map]);
 
-  // 보드 데이터 → 지도 주입(포커스 중에만). 주입 후 표시. setData가 토큰 가드로 늦은 응답 차단.
+  // 포커스 전환 → 표시/숨김만. 데이터/카메라와 분리 → PlaceAdd 왕복 시 팬/줌 보존.
   useEffect(() => {
-    if (!isFocused) return;
+    if (isFocused) map.show();
+    else map.hide();
+  }, [isFocused, map]);
+
+  // 보드 데이터 → 지도 주입(데이터 변경 시에만, focus 비의존). renderPlaces가 카메라까지 정렬.
+  // 토큰 가드(컨트롤러)가 늦게 도착한 이전 보드 응답을 차단한다.
+  useEffect(() => {
     map.setData(boardId, { places, reactions, objects });
-    map.show();
-  }, [isFocused, boardId, places, reactions, objects, map]);
+  }, [boardId, places, reactions, objects, map]);
 
   // 편집 선택(선택 링) 동기화.
   useEffect(() => {
-    if (!isFocused) return;
     map.setSelectedObjectId(boardId, selectedObjectId);
-  }, [isFocused, boardId, selectedObjectId, map]);
+  }, [boardId, selectedObjectId, map]);
 
   // WebView 메시지 콜백을 현재 보드로 등록. stickerMode/Emoji 최신값 반영 위해 변경 시 재등록.
   useEffect(() => {
-    if (!isFocused) return;
     map.setCallbacks(boardId, {
       onMarkerPress: (id) => {
         // 하단 바 상호배타: 핀 반응 표시 시 스티커 모드/편집 선택 해제.
@@ -259,7 +258,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, boardId, stickerMode, stickerEmoji, map]);
+  }, [boardId, stickerMode, stickerEmoji, map]);
   // ───────────────────────────────────────────────────────────────────────
 
   // 선택 객체 크기 조정(payload.scale 배수). 거대/화면밖 객체도 항상 동작(툴바 방식).
