@@ -19,7 +19,7 @@
 - 0002 solo_workspace … 적용됨(검증: status에 solo 포함)
 - 0003 reaction_types … 적용됨(2026-06-13)
 - 0004 map_objects … 적용됨(2026-06-13, REST 200 + RLS 42501 확인)
-- 0005 couples_rls_hardening … 작성됨, **미적용**(2026-10-25). couples 직접 UPDATE 정책 제거 + is_member_of_couple에 status(solo/active) 조건
+- 0005 couples_rls_hardening … 적용됨(2026-10-25, couples 정책 = couples_select 만 / is_member_of_couple status 필터·SECURITY DEFINER 확인). 적용 시점 couples = solo 3, active/ended 0
 
 ## 다음
 
