@@ -33,7 +33,7 @@ import { useAuth } from '../hooks/useAuthState';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
-import type { MapObject, Place, PlaceSearchResult } from '../types/models';
+import type { Place, PlaceSearchResult } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -53,11 +53,12 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const isTablet = Math.min(width, height) >= TABLET_MIN;
 
   const placesQuery = usePlaces(boardId);
-  const places = placesQuery.data ?? [];
+  // 로딩 중 `?? []`가 매 렌더 새 배열이 되어 지도 주입 effect가 반복되지 않도록 고정한다.
+  const places = useMemo(() => placesQuery.data ?? [], [placesQuery.data]);
 
   // 장소 반응(banter). 핀 위 이모지 배지로 표시. 재진입/앱 복귀 시 상대 반응 반영.
   const reactionsQuery = usePlaceReactions(boardId);
-  const reactions = reactionsQuery.data ?? [];
+  const reactions = useMemo(() => reactionsQuery.data ?? [], [reactionsQuery.data]);
   const addReaction = useAddReaction(boardId);
   const removeReaction = useRemoveReaction(boardId);
   // 반응 토글 판정용 내 uid (이미 누른 반응이면 제거).
@@ -68,7 +69,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // Infinite Geographic Canvas P0: 지리 고정 스티커. 도구 ON 시 지도 탭으로 배치.
   const objectsQuery = useMapObjects(boardId);
-  const objects = objectsQuery.data ?? [];
+  const objects = useMemo(() => objectsQuery.data ?? [], [objectsQuery.data]);
   const addMapObject = useAddMapObject(boardId);
   const updateMapObject = useUpdateMapObject(boardId);
   const removeMapObject = useRemoveMapObject(boardId);
@@ -77,8 +78,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? null;
   const [stickerMode, setStickerMode] = useState(false);
   const [stickerEmoji, setStickerEmoji] = useState('❤️');
-  // 실기기 검증용(테스트 경로): 마지막 저장된 객체의 좌표/레벨 표시.
-  const [lastSaved, setLastSaved] = useState<MapObject | null>(null);
 
   // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/MapLibre 1개). 포커스 시 데이터만 교체.
   const map = useMapHost();
@@ -230,7 +229,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       onObjectMove: (id, lat, lng) =>
         updateMapObject.mutate(
           { id, patch: { latitude: lat, longitude: lng } },
-          { onError: (e) => Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)) }
+          {
+            onError: (e) =>
+              Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)),
+          }
         ),
       onMapPress: (point) => {
         // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
@@ -244,7 +246,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               payload: { emoji: stickerEmoji },
             },
             {
-              onSuccess: (saved) => setLastSaved(saved),
               onError: (e) =>
                 Alert.alert('스티커 저장 실패', e instanceof Error ? e.message : String(e)),
             }
@@ -266,7 +267,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     if (!selectedObject) return;
     const prev = (selectedObject.payload?.scale as number) ?? 1;
     updateMapObject.mutate(
-      { id: selectedObject.id, patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } } },
+      {
+        id: selectedObject.id,
+        patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } },
+      },
       { onError: (e) => Alert.alert('크기 저장 실패', e instanceof Error ? e.message : String(e)) }
     );
   };
@@ -418,7 +422,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* 스티커 도구 바(P0): 이모지 선택 + 종료 + (테스트) 마지막 저장 좌표. */}
+      {/* 스티커 도구 바(P0): 이모지 선택 + 종료. */}
       {stickerMode ? (
         <View
           style={[styles.stickerBar, { bottom: insets.bottom + spacing.lg }]}
@@ -450,12 +454,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
           <Text style={styles.stickerHint}>지도를 탭해 {stickerEmoji} 스티커를 놓으세요</Text>
-          {lastSaved ? (
-            <Text style={styles.stickerDebug}>
-              저장됨 · lat {lastSaved.latitude.toFixed(5)} · lng {lastSaved.longitude.toFixed(5)} ·
-              lv {lastSaved.zoom_level}
-            </Text>
-          ) : null}
         </View>
       ) : null}
 
@@ -834,15 +832,6 @@ const styles = StyleSheet.create({
   stickerHint: {
     ...typography.caption,
     color: colors.textStrong,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.card,
-    overflow: 'hidden',
-  },
-  stickerDebug: {
-    ...typography.caption,
-    color: colors.textMuted,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,

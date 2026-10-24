@@ -51,7 +51,7 @@ export function RootNavigator() {
         </>
       )}
 
-      {/* 솔로: 앱 사용 가능 + 언제든 상대 초대(전환) 가능 */}
+      {/* 솔로: 앱 사용 가능 + 언제든 상대 초대(전환) 또는 받은 코드로 합류 가능 */}
       {status === 'solo' && (
         <>
           <Stack.Screen name="BoardList" component={BoardListScreen} />
@@ -63,6 +63,7 @@ export function RootNavigator() {
           />
           <Stack.Screen name="PlaceAdd" component={PlaceAddScreen} />
           <Stack.Screen name="InviteCreate" component={InviteCreateScreen} />
+          <Stack.Screen name="InviteJoin" component={InviteJoinScreen} />
         </>
       )}
 

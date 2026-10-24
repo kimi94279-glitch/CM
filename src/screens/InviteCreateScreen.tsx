@@ -1,16 +1,20 @@
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
-import { ActivityIndicator, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { createInvite } from '../services/coupleService';
+import type { RootStackParamList } from '../navigation/types';
 import { buildInviteLink, formatInviteCode } from '../utils/invite';
 
-export function InviteCreateScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'InviteCreate'>;
+
+export function InviteCreateScreen({ navigation }: Props) {
   const { refresh } = useAuth();
   const [showNotYet, setShowNotYet] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -83,6 +87,12 @@ export function InviteCreateScreen() {
         <Button title="연결 확인" variant="ghost" onPress={onCheckConnection} loading={checking} />
         {showNotYet ? <Text style={styles.notYet}>아직 상대가 수락하지 않았어요.</Text> : null}
       </View>
+
+      {/* 상대가 먼저 초대한 경우(솔로 포함): 받은 코드로 합류 */}
+      <Pressable onPress={() => navigation.navigate('InviteJoin')} style={styles.linkRow}>
+        <Text style={styles.linkMuted}>상대가 먼저 초대했나요? </Text>
+        <Text style={styles.link}>코드 입력</Text>
+      </Pressable>
     </ScreenContainer>
   );
 }
@@ -137,5 +147,18 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.danger,
     marginVertical: spacing.md,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+  },
+  linkMuted: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  link: {
+    ...typography.label,
+    color: colors.primary,
   },
 });

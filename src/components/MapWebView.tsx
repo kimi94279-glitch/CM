@@ -6,8 +6,8 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
-import { StyleSheet } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { Linking, StyleSheet } from 'react-native';
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import { REACTION_EMOJI } from '../constants/reactions';
 import { colors } from '../constants/theme';
@@ -50,6 +50,18 @@ function toReactionMap(reactions: PlaceReaction[]): Record<string, string[]> {
     if (!arr.includes(emoji)) arr.push(emoji);
   }
   return out;
+}
+
+// 지도 HTML(about:blank) 밖으로 나가는 이동은 막고, http(s)만 시스템 브라우저로 연다.
+// 싱글톤 WebView가 외부 페이지(예: OSM 출처 링크)로 바뀌면 앱 재시작 전까지 지도가 사라진다.
+function openExternally(url: string) {
+  if (/^https?:/i.test(url)) Linking.openURL(url).catch(() => {});
+}
+
+function shouldStartLoad({ url }: WebViewNavigation): boolean {
+  if (url.startsWith('about:') || url.startsWith('data:')) return true;
+  openExternally(url);
+  return false;
 }
 
 // 상위(BoardDetailScreen)가 ref로 호출하는 명령형 API.
@@ -208,6 +220,8 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       domStorageEnabled
       mixedContentMode="always"
       source={{ html }}
+      onShouldStartLoadWithRequest={shouldStartLoad}
+      onOpenWindow={(e) => openExternally(e.nativeEvent.targetUrl)}
       onMessage={handleMessage}
       style={styles.web}
     />

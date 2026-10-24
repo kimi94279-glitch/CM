@@ -240,7 +240,7 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
 
 ### Helper / RPC (SECURITY DEFINER, 예정)
 
-- `is_member_of_couple(c uuid)` — `auth.uid()`가 해당 워크스페이스의 user_a_id 또는 user_b_id인지 판별.
+- `is_member_of_couple(c uuid)` — `auth.uid()`가 해당 워크스페이스의 user_a_id 또는 user_b_id이고, 워크스페이스가 `solo`/`active`인지 판별. `ended` 워크스페이스의 전 멤버는 하위 데이터에 접근할 수 없다(0005).
 - `create_solo_workspace()` — 솔로 워크스페이스 생성 ("먼저 둘러보기").
   1. 이미 solo/active 워크스페이스가 있으면 거부 (단일 워크스페이스 검증)
   2. `couples` INSERT (user_a=본인, user_b=NULL, status='solo')
@@ -255,7 +255,7 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
 | 테이블 | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
 | users | 본인 + 파트너 | 본인(가입) | 본인 | 불가 (계정 삭제로 처리) |
-| couples | 멤버 | RPC 경유 (create_solo_workspace / accept_invite) | 멤버 (ended 전환) | 불가 (ended로 대체) |
+| couples | 멤버 | RPC 경유 (create_solo_workspace / accept_invite) | 불가 (상태 전환은 전용 RPC, 0005에서 직접 UPDATE 정책 제거) | 불가 (ended로 대체) |
 | couple_invites | created_by 본인 | created_by = 본인 | created_by 본인 | created_by 본인 |
 | boards | 커플 멤버 | 커플 멤버 | 커플 멤버 | 커플 멤버 |
 | places | 보드의 커플 멤버 | 커플 멤버 | 커플 멤버 (재정렬 포함) | 커플 멤버 |

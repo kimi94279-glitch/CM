@@ -59,7 +59,8 @@ export function useAddMapObject(boardId: string) {
 export function useUpdateMapObject(boardId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: MapObjectPatch }) => updateMapObject(id, patch),
+    mutationFn: ({ id, patch }: { id: string; patch: MapObjectPatch }) =>
+      updateMapObject(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['map-objects', boardId] });
     },
