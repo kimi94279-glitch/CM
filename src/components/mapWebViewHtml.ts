@@ -1,3 +1,4 @@
+import { colors } from '../constants/theme';
 import type { Place } from '../types/models';
 
 // WebView 에 전달할 최소 장소 정보
@@ -7,9 +8,10 @@ export interface MapPlace {
   latitude: number;
   longitude: number;
   order_index: number;
+  mine: boolean; // 작성자 = 나(핀 색: you / partner)
 }
 
-export function toMapPlaces(places: Place[]): MapPlace[] {
+export function toMapPlaces(places: Place[], myId: string | null): MapPlace[] {
   // 방어적 정렬: DB 가 정렬되어 있어도 order_index 기준으로 한 번 더 정렬
   return [...places]
     .sort((a, b) => a.order_index - b.order_index)
@@ -19,6 +21,7 @@ export function toMapPlaces(places: Place[]): MapPlace[] {
       latitude: p.latitude,
       longitude: p.longitude,
       order_index: p.order_index,
+      mine: p.created_by === myId,
     }));
 }
 
@@ -70,6 +73,8 @@ export function buildMapHtml(places: MapPlace[]): string {
     var PLACES = ${placesJson};
     var DEFAULT_CENTER = ${centerJson};
     var EMPTY_ZOOM = ${EMPTY_ZOOM}, SINGLE_ZOOM = ${SINGLE_ZOOM};
+    // 작성자 색(DESIGN.md Couple Identity): 나=코랄, 상대=틸. 선택 링은 두 색과 겹치지 않게 잉크색.
+    var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
     var map, bounds;
     var markers = [];          // 장소(번호 핀) 마커
     var reactionMarkers = [];  // 반응 배지 마커
@@ -164,13 +169,14 @@ export function buildMapHtml(places: MapPlace[]): string {
       bounds = new maplibregl.LngLatBounds();
       var coords = [];
       // 번호형 핀: 배열 순서(1..N) = order_index 정렬 결과. 번호는 UI 파생값(미저장).
+      // 핀 색 = 장소를 추가한 사람(나/상대). 동선(폴리라인)은 브랜드 코랄 유지.
       PLACES.forEach(function(p, i){
         var lngLat = [p.longitude, p.latitude];
         bounds.extend(lngLat);
         coords.push(lngLat);
 
         var el = document.createElement('div');
-        el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:#FF6B81;color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:' + (p.mine ? YOU_COLOR : PARTNER_COLOR) + ';color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
         el.textContent = String(i + 1);
         // GL 마커는 click 을 가로채지 않음 → 전파 차단해야 map 'click'(배경 탭)이 따라오지 않는다.
         el.addEventListener('click', function(e){ e.stopPropagation(); send({ type:'markerClick', id: p.id }); });
@@ -194,22 +200,32 @@ export function buildMapHtml(places: MapPlace[]): string {
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderPlaces = function(list){ applyPlaces(list); };
 
-    // 장소별 반응 배지 재구성. 입력: { placeId: [이모지, ...] } (RN이 type→이모지 변환·유니크화 후 전달).
-    // 좌표는 현재 PLACES 에서 동일 id 조회(없으면 skip). 핀 위에 작은 이모지 칩으로 표시.
+    // 작성자별 반응 칩(테두리 = 작성자 색).
+    function reactionChip(emojis, color){
+      var chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-block;padding:0 4px;border-radius:10px;background:rgba(255,255,255,0.95);border:2px solid ' + color + ';box-shadow:0 1px 2px rgba(0,0,0,0.25);font-size:13px;line-height:16px;';
+      chip.textContent = emojis.join('');
+      return chip;
+    }
+
+    // 장소별 반응 배지 재구성. 입력: { placeId: { mine: [이모지], partner: [이모지] } }
+    // (RN이 type→이모지 변환·작성자 분리·유니크화 후 전달). 좌표는 현재 PLACES 에서 동일 id 조회(없으면 skip).
+    // 핀 위에 작성자별 칩(내 칩 먼저)을 나란히 표시 → 누가 남긴 반응인지 색으로 구분.
     function applyReactions(byPlaceId){
       if (!map) return;
       clearReactionOverlays();
       if (!byPlaceId) return;
       for (var pid in byPlaceId){
         if (!Object.prototype.hasOwnProperty.call(byPlaceId, pid)) continue;
-        var emojis = byPlaceId[pid];
-        if (!emojis || !emojis.length) continue;
+        var group = byPlaceId[pid];
+        if (!group || (!group.mine.length && !group.partner.length)) continue;
         var place = null;
         for (var i = 0; i < PLACES.length; i++){ if (PLACES[i].id === pid){ place = PLACES[i]; break; } }
         if (!place) continue;
         var el = document.createElement('div');
-        el.style.cssText = 'display:inline-block;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,0.95);box-shadow:0 1px 2px rgba(0,0,0,0.25);font-size:13px;line-height:16px;white-space:nowrap;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
-        el.textContent = emojis.join('');
+        el.style.cssText = 'display:flex;gap:2px;white-space:nowrap;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        if (group.mine.length) el.appendChild(reactionChip(group.mine, YOU_COLOR));
+        if (group.partner.length) el.appendChild(reactionChip(group.partner, PARTNER_COLOR));
         el.addEventListener('click', function(e){ e.stopPropagation(); }); // 배지 탭이 배경 탭(선택 해제)으로 새지 않게.
         // 핀(번호 원) 위에 떠 있도록 anchor 'bottom' + 위로 오프셋.
         var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -22] }).setLngLat([place.longitude, place.latitude]).addTo(map);
@@ -232,8 +248,11 @@ export function buildMapHtml(places: MapPlace[]): string {
       // 가시성 기준선(이후 줌 변경은 resizeObjects 히스테리시스가 관리).
       el.dataset.vis = px >= 6 ? '1' : '0';
       el.style.display = el.dataset.vis === '1' ? '' : 'none';
-      // 선택 링(선택 시 표시, 아니면 해제) — UPDATE 시 토글도 처리.
-      el.style.outline = (o.id === SELECTED_ID) ? '3px solid #FF6B81' : 'none';
+      // 작성자 색 외곽선(다이컷 스티커처럼 글리프 둘레). em 단위라 world-space 크기와 함께 스케일된다.
+      var c = o.mine ? YOU_COLOR : PARTNER_COLOR;
+      el.style.textShadow = '0.05em 0 0 ' + c + ',-0.05em 0 0 ' + c + ',0 0.05em 0 ' + c + ',0 -0.05em 0 ' + c;
+      // 선택 링(선택 시 표시, 아니면 해제) — UPDATE 시 토글도 처리. 작성자 색과 겹치지 않게 잉크색 점선.
+      el.style.outline = (o.id === SELECTED_ID) ? '3px dashed ' + SELECT_COLOR : 'none';
       el.style.outlineOffset = '4px';
       el.style.borderRadius = '6px';
     }

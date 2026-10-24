@@ -42,6 +42,13 @@ export async function getMyProfile(): Promise<UserProfile | null> {
   return data;
 }
 
+// 다른 사용자 프로필 조회 (RLS: 본인 + 같은 워크스페이스 파트너만). 없으면 null
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // 닉네임으로 프로필 생성 (클라이언트 방식 - FLOW_AUTH.md)
 export async function createProfile(nickname: string): Promise<UserProfile> {
   const uid = await requireUserId();

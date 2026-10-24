@@ -8,6 +8,9 @@ import { PlaceCard } from './PlaceCard';
 
 interface CanvasObjectListProps {
   places: Place[];
+  // 작성자 구분: 내 uid 와 상대 표시 이름(솔로면 null → 작성자 표기 생략).
+  myId: string | null;
+  partnerLabel: string | null;
   highlightedId: string | null;
   deletingId: string | null;
   onAdd: () => void;
@@ -20,6 +23,8 @@ interface CanvasObjectListProps {
 // 표시 전용 컴포넌트: 데이터/뮤테이션은 상위(BoardDetailScreen)에서 주입한다.
 export function CanvasObjectList({
   places,
+  myId,
+  partnerLabel,
   highlightedId,
   deletingId,
   onAdd,
@@ -46,15 +51,20 @@ export function CanvasObjectList({
         <FlatList
           data={places}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <PlaceCard
-              place={item}
-              index={index + 1}
-              highlighted={item.id === highlightedId}
-              onDelete={() => onDelete(item)}
-              deleting={deletingId === item.id}
-            />
-          )}
+          renderItem={({ item, index }) => {
+            const mine = item.created_by === myId;
+            return (
+              <PlaceCard
+                place={item}
+                index={index + 1}
+                mine={mine}
+                authorLabel={partnerLabel === null ? null : mine ? '나' : partnerLabel}
+                highlighted={item.id === highlightedId}
+                onDelete={() => onDelete(item)}
+                deleting={deletingId === item.id}
+              />
+            );
+          }}
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}

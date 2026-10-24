@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useAuth } from '../hooks/useAuthState';
 import { MapWebView, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
@@ -18,6 +19,9 @@ export function MapHost({ children }: { children: ReactNode }) {
   const [boardData, setBoardData] = useState<MapBoardData>(EMPTY_DATA);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
+  // 작성자 색 구분 기준(나/상대). MapHost 는 AuthProvider 안쪽에 있다(App.tsx).
+  const { session } = useAuth();
+  const myUserId = session?.user?.id ?? null;
 
   // 현재 보드 토큰(잔상 가드)과 콜백(ref 라우팅 — 재렌더 없이 최신 콜백 호출).
   const boardIdRef = useRef<string | null>(null);
@@ -71,6 +75,7 @@ export function MapHost({ children }: { children: ReactNode }) {
             reactions={boardData.reactions}
             objects={boardData.objects}
             selectedObjectId={selectedObjectId}
+            myUserId={myUserId}
             onMarkerPress={(id) => callbacksRef.current.onMarkerPress?.(id)}
             onMapPress={(p) => callbacksRef.current.onMapPress?.(p)}
             onObjectPress={(id) => callbacksRef.current.onObjectPress?.(id)}

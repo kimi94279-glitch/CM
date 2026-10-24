@@ -30,6 +30,7 @@ import {
   useUpdateMapObject,
 } from '../hooks/useMapObjects';
 import { useAuth } from '../hooks/useAuthState';
+import { usePartnerProfile } from '../hooks/usePartnerProfile';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
@@ -62,10 +63,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const addReaction = useAddReaction(boardId);
   const removeReaction = useRemoveReaction(boardId);
   // 반응 토글 판정용 내 uid (이미 누른 반응이면 제거).
-  const { session } = useAuth();
+  const { session, workspace } = useAuth();
   const myId = session?.user?.id ?? null;
+  // 작성자 표시(범례/목록)용 상대 이름. 솔로면 null → 범례·목록 작성자 표기 숨김(전부 내 것).
+  const partnerQuery = usePartnerProfile();
+  const partnerLabel =
+    workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
+  // 팔레트를 연 핀에서 내가 이미 누른 반응(내 색 강조 + 토글 판정).
+  const myReactionTypes = useMemo(
+    () =>
+      new Set(
+        reactions
+          .filter((r) => r.place_id === reactionPlaceId && r.user_id === myId)
+          .map((r) => r.reaction_type)
+      ),
+    [reactions, reactionPlaceId, myId]
+  );
 
   // Infinite Geographic Canvas P0: 지리 고정 스티커. 도구 ON 시 지도 탭으로 배치.
   const objectsQuery = useMapObjects(boardId);
@@ -329,6 +344,21 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         )}
       </View>
 
+      {/* 작성자 범례(커플일 때만): 핀·반응·스티커 색 = 나(코랄) / 상대(틸). 상단 바(44) 바로 아래. */}
+      {partnerLabel !== null && !searchOpen ? (
+        <View
+          style={[styles.legend, { top: insets.top + spacing.xs + 44 + spacing.xs }]}
+          pointerEvents="none"
+        >
+          <View style={[styles.legendDot, { backgroundColor: colors.you }]} />
+          <Text style={styles.legendText}>나</Text>
+          <View style={[styles.legendDot, styles.legendGap, { backgroundColor: colors.partner }]} />
+          <Text style={styles.legendText} numberOfLines={1}>
+            {partnerLabel}
+          </Text>
+        </View>
+      ) : null}
+
       {/* 모바일 전용 Floating 버튼(목록). 시트가 열려 있으면 숨김.
           향후 Floating Actions 그룹(목록/추가/현재위치)으로 확장 가능한 컨테이너 구조. */}
       {!isTablet && !sheetOpen && !searchOpen ? (
@@ -386,18 +416,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             {REACTION_ORDER.map((type) => (
               <Pressable
                 key={type}
-                style={styles.reactionEmojiBtn}
+                style={[
+                  styles.reactionEmojiBtn,
+                  myReactionTypes.has(type) && styles.reactionEmojiMine,
+                ]}
                 onPress={() => {
                   const onError = (e: unknown) =>
                     Alert.alert('반응 저장 실패', e instanceof Error ? e.message : String(e));
                   // 토글: 내가 이미 누른 반응이면 제거, 아니면 추가.
-                  const mine = reactions.some(
-                    (r) =>
-                      r.place_id === reactionPlaceId &&
-                      r.user_id === myId &&
-                      r.reaction_type === type
-                  );
-                  if (mine) {
+                  if (myReactionTypes.has(type)) {
                     removeReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
                   } else {
                     addReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
@@ -405,6 +432,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={`반응 ${type}`}
+                accessibilityState={{ selected: myReactionTypes.has(type) }}
               >
                 <Text style={styles.reactionEmoji}>{REACTION_EMOJI[type]}</Text>
               </Pressable>
@@ -513,6 +541,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           <View style={[styles.sidePanel, { paddingTop: insets.top + spacing.sm }]}>
             <CanvasObjectList
               places={places}
+              myId={myId}
+              partnerLabel={partnerLabel}
               highlightedId={highlightedId}
               deletingId={deletingId}
               onAdd={goAdd}
@@ -552,6 +582,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             </View>
             <CanvasObjectList
               places={places}
+              myId={myId}
+              partnerLabel={partnerLabel}
               highlightedId={highlightedId}
               deletingId={deletingId}
               onAdd={openSearch}
@@ -647,6 +679,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+
+  // 작성자 범례(상단 바 아래 좌측 작은 칩).
+  legend: {
+    position: 'absolute',
+    left: spacing.md,
+    maxWidth: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.xs },
+  legendGap: { marginLeft: spacing.sm },
+  legendText: { ...typography.caption, color: colors.textStrong, flexShrink: 1 },
 
   // Floating Actions (현재 목록 버튼 1개, 확장 대비 그룹 컨테이너)
   fabGroup: {
@@ -751,6 +804,13 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // 내가 이미 누른 반응: 내 색(코랄) 테두리 + 연한 배경.
+  reactionEmojiMine: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.card,
+    borderWidth: 2,
+    borderColor: colors.you,
   },
   reactionEmoji: { fontSize: 24 },
   reactionClose: {
