@@ -1,0 +1,3 @@
+# 줄바꿈 LF 고정 — Windows 의 core.autocrlf=true 가 체크아웃 시 CRLF 로 바꿔 prettier(endOfLine: lf) 린트가 깨지는 것 방지.
+# 바이너리는 text=auto 가 자동 판별한다.
+* text=auto eol=lf
