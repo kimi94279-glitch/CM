@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react';
 
-import type { MapObject, Place, PlaceReaction } from '../types/models';
+import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models';
 
 // 보드 단위로 지도에 주입할 데이터(렌더 표면 입력). BoardDetail이 fetch해 전달한다.
 export interface MapBoardData {
   places: Place[];
   reactions: PlaceReaction[];
+  memos: PlaceMemo[];
   objects: MapObject[];
 }
 

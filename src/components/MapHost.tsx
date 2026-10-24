@@ -10,7 +10,7 @@ import {
   type MapHostController,
 } from './MapHostContext';
 
-const EMPTY_DATA: MapBoardData = { places: [], reactions: [], objects: [] };
+const EMPTY_DATA: MapBoardData = { places: [], reactions: [], memos: [], objects: [] };
 
 // 싱글톤 지도 호스트: WebView+MapLibre 인스턴스를 앱 수명 동안 1개만 유지한다.
 // 네비게이터 "뒤"(최하단 absoluteFill)에 깔리고, 포커스된 BoardDetail이 컨트롤러로 데이터만 교체한다.
@@ -73,6 +73,7 @@ export function MapHost({ children }: { children: ReactNode }) {
             ref={mapRef}
             places={boardData.places}
             reactions={boardData.reactions}
+            memos={boardData.memos}
             objects={boardData.objects}
             selectedObjectId={selectedObjectId}
             myUserId={myUserId}

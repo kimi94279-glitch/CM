@@ -48,6 +48,16 @@ export interface PlaceReaction {
   created_at: string;
 }
 
+// 장소 한 줄 메모(말풍선). DB place_memos 와 일치. 핀 위 대화 = 장소에 묶인 짧은 텍스트(ADR-014).
+export interface PlaceMemo {
+  id: string;
+  place_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // 검색 결과(저장 전). place-search Edge Function 의 정규화 출력과 일치.
 export interface PlaceSearchResult {
   name: string;

@@ -10,6 +10,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -21,6 +22,7 @@ import { useMapHost } from '../components/MapHostContext';
 import { MapSearchBar } from '../components/MapSearchBar';
 import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
+import { MEMO_MAX_LENGTH } from '../constants/config';
 import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import {
@@ -31,6 +33,7 @@ import {
 } from '../hooks/useMapObjects';
 import { useAuth } from '../hooks/useAuthState';
 import { usePartnerProfile } from '../hooks/usePartnerProfile';
+import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
@@ -81,6 +84,43 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       ),
     [reactions, reactionPlaceId, myId]
   );
+
+  // 한 줄 메모(말풍선). 핀 바의 💬 로 입력창을 열고, 보낸 메모는 핀 위 말풍선으로 남는다(ADR-014).
+  const memosQuery = usePlaceMemos(boardId);
+  const memos = useMemo(() => memosQuery.data ?? [], [memosQuery.data]);
+  const addMemo = useAddMemo(boardId);
+  const removeMemo = useRemoveMemo(boardId);
+  // 입력창이 열린 핀 id. 다른 핀을 탭하거나 바를 닫으면(reactionPlaceId 변경) 자동으로 닫힌 상태가 된다.
+  const [memoPlaceId, setMemoPlaceId] = useState<string | null>(null);
+  const memoOpen = memoPlaceId !== null && memoPlaceId === reactionPlaceId;
+  const [memoText, setMemoText] = useState('');
+  // 입력창 위에 보여줄 이 핀의 최근 대화(최대 3줄, 오래된 → 최근).
+  const placeMemos = useMemo(
+    () => memos.filter((m) => m.place_id === reactionPlaceId).slice(-3),
+    [memos, reactionPlaceId]
+  );
+  const toggleMemo = () => {
+    setMemoText('');
+    if (memoOpen) Keyboard.dismiss();
+    setMemoPlaceId(memoOpen ? null : reactionPlaceId);
+  };
+  const sendMemo = () => {
+    const content = memoText.trim();
+    if (!reactionPlaceId || content.length === 0) return;
+    addMemo.mutate(
+      { placeId: reactionPlaceId, content },
+      {
+        onError: (e) => {
+          setMemoText(content); // 실패 시 입력 복구(낙관 반영은 훅에서 롤백).
+          Alert.alert('메모 저장 실패', e instanceof Error ? e.message : String(e));
+        },
+      }
+    );
+    // 낙관 반영으로 말풍선이 바로 보이므로 입력창을 닫고 지도를 보여준다.
+    setMemoText('');
+    setMemoPlaceId(null);
+    Keyboard.dismiss();
+  };
 
   // Infinite Geographic Canvas P0: 지리 고정 스티커. 도구 ON 시 지도 탭으로 배치.
   const objectsQuery = useMapObjects(boardId);
@@ -216,8 +256,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 보드 데이터 → 지도 주입(데이터 변경 시에만, focus 비의존). renderPlaces가 카메라까지 정렬.
   // 토큰 가드(컨트롤러)가 늦게 도착한 이전 보드 응답을 차단한다.
   useEffect(() => {
-    map.setData(boardId, { places, reactions, objects });
-  }, [boardId, places, reactions, objects, map]);
+    map.setData(boardId, { places, reactions, memos, objects });
+  }, [boardId, places, reactions, memos, objects, map]);
 
   // 편집 선택(선택 링) 동기화.
   useEffect(() => {
@@ -267,7 +307,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           );
           return;
         }
-        // 기본: 배경 탭 → 팔레트/강조/선택 해제.
+        // 기본: 배경 탭 → 팔레트/강조/선택 해제(메모 입력 중이면 키보드도 내림).
+        Keyboard.dismiss();
         setReactionPlaceId(null);
         setHighlightedId(null);
         setSelectedObjectId(null);
@@ -406,12 +447,82 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* 반응 팔레트(핀 탭 시): 하단 중앙 가로 바. (i) 좌표변환 불필요 — 어느 핀인지는 핀 강조로 표시. */}
+      {/* 반응 팔레트(핀 탭 시): 하단 중앙 가로 바. (i) 좌표변환 불필요 — 어느 핀인지는 핀 강조로 표시.
+          💬 로 한 줄 메모 입력창(+ 이 핀의 최근 대화)을 바 위에 연다. 입력 중에는 키보드 위로 올린다. */}
       {reactionPlaceId ? (
         <View
-          style={[styles.reactionBar, { bottom: insets.bottom + spacing.lg }]}
+          style={[
+            styles.reactionBar,
+            {
+              bottom:
+                memoOpen && keyboardHeight > 0
+                  ? keyboardHeight + spacing.sm
+                  : insets.bottom + spacing.lg,
+            },
+          ]}
           pointerEvents="box-none"
         >
+          {memoOpen ? (
+            <View style={styles.memoCard}>
+              {placeMemos.map((m) => {
+                const isTemp = m.id.startsWith('temp-');
+                const mine = isTemp || m.user_id === myId;
+                return (
+                  <View key={m.id} style={styles.memoRow}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        { backgroundColor: mine ? colors.you : colors.partner },
+                      ]}
+                    />
+                    <Text style={styles.memoRowText} numberOfLines={2}>
+                      {m.content}
+                    </Text>
+                    {mine && !isTemp ? (
+                      <Pressable
+                        onPress={() =>
+                          removeMemo.mutate(m.id, {
+                            onError: (e) =>
+                              Alert.alert(
+                                '메모 삭제 실패',
+                                e instanceof Error ? e.message : String(e)
+                              ),
+                          })
+                        }
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="메모 삭제"
+                      >
+                        <Text style={styles.memoDelete}>✕</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+              <View style={styles.memoInputRow}>
+                <TextInput
+                  style={styles.memoInput}
+                  value={memoText}
+                  onChangeText={setMemoText}
+                  placeholder="한 줄 남기기 (예: 여기 웨이팅 있대)"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={MEMO_MAX_LENGTH}
+                  autoFocus
+                  returnKeyType="send"
+                  onSubmitEditing={sendMemo}
+                />
+                <Pressable
+                  style={[styles.memoSend, !memoText.trim() && styles.memoSendDisabled]}
+                  onPress={sendMemo}
+                  disabled={!memoText.trim()}
+                  accessibilityRole="button"
+                  accessibilityLabel="메모 보내기"
+                >
+                  <Text style={styles.memoSendText}>보내기</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
           <View style={styles.reactionBarInner}>
             {REACTION_ORDER.map((type) => (
               <Pressable
@@ -437,9 +548,22 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                 <Text style={styles.reactionEmoji}>{REACTION_EMOJI[type]}</Text>
               </Pressable>
             ))}
+            {/* 한 줄 메모 입력 토글(열림 = 내 색 강조). */}
+            <Pressable
+              style={[styles.reactionEmojiBtn, memoOpen && styles.reactionEmojiMine]}
+              onPress={toggleMemo}
+              accessibilityRole="button"
+              accessibilityLabel="한 줄 메모"
+              accessibilityState={{ selected: memoOpen }}
+            >
+              <Text style={styles.reactionEmoji}>💬</Text>
+            </Pressable>
             <Pressable
               style={styles.reactionClose}
-              onPress={() => setReactionPlaceId(null)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setReactionPlaceId(null);
+              }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="반응 닫기"
@@ -820,6 +944,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reactionCloseText: { ...typography.body, color: colors.textMuted },
+
+  // 한 줄 메모 입력 카드(핀 바 위). 최근 대화 + 입력 줄. 반응 바와 같은 톤.
+  memoCard: {
+    alignSelf: 'stretch',
+    maxWidth: 480,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  memoRow: { flexDirection: 'row', alignItems: 'center' },
+  memoRowText: { ...typography.label, color: colors.textStrong, flex: 1 },
+  memoDelete: { ...typography.caption, color: colors.textMuted, paddingHorizontal: spacing.xs },
+  memoInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  memoInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.textStrong,
+    height: 40,
+    paddingVertical: 0,
+  },
+  memoSend: {
+    height: 32,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memoSendDisabled: { opacity: 0.4 },
+  memoSendText: { ...typography.label, color: colors.surface, fontWeight: '700' },
 
   // 스티커 도구(P0) — 반응 팔레트와 구분되는 별도 바.
   fabActive: {

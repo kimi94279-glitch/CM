@@ -11,12 +11,13 @@ import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react
 
 import { REACTION_EMOJI } from '../constants/reactions';
 import { colors } from '../constants/theme';
-import type { MapObject, Place, PlaceReaction } from '../types/models';
+import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models';
 import { buildMapHtml, safeJson, toMapPlaces, type MapPlace } from './mapWebViewHtml';
 
 interface MapWebViewProps {
   places: Place[];
   reactions?: PlaceReaction[];
+  memos?: PlaceMemo[];
   objects?: MapObject[];
   onMarkerPress?: (placeId: string) => void;
   // 핀 외 빈 지도(배경) 탭. point(좌표/레벨)는 객체 배치용 — 없으면 단순 배경 탭(팔레트 닫기 등).
@@ -60,6 +61,27 @@ function toReactionMap(reactions: PlaceReaction[], myId: string | null): Reactio
   return out;
 }
 
+// 핀 위 말풍선: 장소별 작성자당 최신 1개(최대 2개, 오래된 → 최근 순). 전체 대화는 핀 바에서 본다.
+type MemoBubbles = Record<string, { text: string; mine: boolean }[]>;
+
+// 메모(PlaceMemo[]) → { placeId: [{ text, mine }] }. 낙관적 임시 메모(temp-*)는 내 것.
+function toMemoMap(memos: PlaceMemo[], myId: string | null): MemoBubbles {
+  const latest = new Map<string, { memo: PlaceMemo; mine: boolean }>();
+  for (const m of memos) {
+    const mine = m.user_id === myId || m.id.startsWith('temp-');
+    const key = `${m.place_id}:${mine ? 'me' : 'partner'}`;
+    const prev = latest.get(key);
+    if (!prev || prev.memo.created_at <= m.created_at) latest.set(key, { memo: m, mine });
+  }
+  const out: MemoBubbles = {};
+  [...latest.values()]
+    .sort((a, b) => a.memo.created_at.localeCompare(b.memo.created_at))
+    .forEach(({ memo, mine }) => {
+      (out[memo.place_id] ?? (out[memo.place_id] = [])).push({ text: memo.content, mine });
+    });
+  return out;
+}
+
 // 지도 HTML(about:blank) 밖으로 나가는 이동은 막고, http(s)만 시스템 브라우저로 연다.
 // 싱글톤 WebView가 외부 페이지(예: OSM 출처 링크)로 바뀌면 앱 재시작 전까지 지도가 사라진다.
 function openExternally(url: string) {
@@ -84,6 +106,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   {
     places,
     reactions,
+    memos,
     objects,
     onMarkerPress,
     onMapPress,
@@ -95,10 +118,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   ref
 ) {
   const webRef = useRef<WebView>(null);
-  // 'ready' 수신 여부와, ready 이전에 들어온 최신 places/reactions/objects(큐). ready 시 1회 flush.
+  // 'ready' 수신 여부와, ready 이전에 들어온 최신 places/reactions/memos/objects(큐). ready 시 1회 flush.
   const readyRef = useRef(false);
   const pendingRef = useRef<MapPlace[] | null>(null);
   const reactionPendingRef = useRef<ReactionGroups | null>(null);
+  const memoPendingRef = useRef<MemoBubbles | null>(null);
   const objectPendingRef = useRef<ReturnType<typeof toRenderObjects> | null>(null);
 
   // P1: html 은 마운트 1회만 생성(이후 source 불변 → places 변경 시 WebView 전체 reload 방지).
@@ -137,6 +161,22 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       reactionPendingRef.current = m;
     }
   }, [reactions, myUserId, pushReactions]);
+
+  // memos → WebView 증분 반영(핀 위 말풍선만 갱신). ready 이전이면 최신값만 큐에 보관.
+  const pushMemos = useCallback((m: MemoBubbles) => {
+    webRef.current?.injectJavaScript(
+      `window.renderMemos && window.renderMemos(${safeJson(m)}); true;`
+    );
+  }, []);
+
+  useEffect(() => {
+    const m = toMemoMap(memos ?? [], myUserId);
+    if (readyRef.current) {
+      pushMemos(m);
+    } else {
+      memoPendingRef.current = m;
+    }
+  }, [memos, myUserId, pushMemos]);
 
   // objects → WebView 증분 반영(P0: sticker만 렌더). ready 이전이면 최신값만 큐에 보관.
   const pushObjects = useCallback((arr: ReturnType<typeof toRenderObjects>) => {
@@ -185,6 +225,10 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         if (reactionPendingRef.current) {
           pushReactions(reactionPendingRef.current);
           reactionPendingRef.current = null;
+        }
+        if (memoPendingRef.current) {
+          pushMemos(memoPendingRef.current);
+          memoPendingRef.current = null;
         }
         if (objectPendingRef.current) {
           pushObjects(objectPendingRef.current);

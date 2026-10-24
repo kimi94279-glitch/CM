@@ -8,3 +8,6 @@ export const INVITE_EXPIRY_HOURS = 48;
 
 // 초대 코드 길이
 export const INVITE_TOKEN_LENGTH = 8;
+
+// 장소 한 줄 메모(말풍선) 최대 길이. DB 는 길이 제약이 없고 입력에서만 제한한다.
+export const MEMO_MAX_LENGTH = 40;

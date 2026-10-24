@@ -77,7 +77,9 @@ export function buildMapHtml(places: MapPlace[]): string {
     var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
     var map, bounds;
     var markers = [];          // 장소(번호 핀) 마커
-    var reactionMarkers = [];  // 반응 배지 마커
+    var annotationMarkers = []; // 핀 위 주석(말풍선 + 반응 칩) 마커 — 장소당 1개
+    var REACTIONS = {};        // 마지막 반응 입력 { placeId: { mine:[], partner:[] } }
+    var MEMOS = {};            // 마지막 메모 입력 { placeId: [{ text, mine }] }
     var routeReady = false;    // 경로 source/layer 1회 생성 여부
     var objectMarkerMap = {};  // id -> { marker, el } (증분 렌더: clear+rebuild 대신 id diff)
     var OBJECTS = [];          // 마지막 렌더된 객체 목록(선택 갱신 시 재사용)
@@ -110,10 +112,10 @@ export function buildMapHtml(places: MapPlace[]): string {
       }
     }
 
-    // 반응 배지 전용 정리(장소 마커와 분리 — 서로 지우지 않는다).
-    function clearReactionOverlays(){
-      for (var i = 0; i < reactionMarkers.length; i++){ reactionMarkers[i].remove(); }
-      reactionMarkers = [];
+    // 핀 위 주석 전용 정리(장소 마커와 분리 — 서로 지우지 않는다).
+    function clearAnnotationOverlays(){
+      for (var i = 0; i < annotationMarkers.length; i++){ annotationMarkers[i].remove(); }
+      annotationMarkers = [];
     }
 
     // 지리 객체(스티커 등) 전체 정리(full reset 용). 증분 갱신은 applyObjects diff가 담당.
@@ -196,6 +198,8 @@ export function buildMapHtml(places: MapPlace[]): string {
 
       // 카메라: applyCamera()로 위임 — 초기/Recenter/증분 갱신 모두 동일 0/1/2+ 로직.
       applyCamera();
+      // 주석은 PLACES 좌표에 매달리므로 장소가 바뀌면 다시 붙인다(삭제된 장소의 잔상 제거).
+      applyAnnotations();
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderPlaces = function(list){ applyPlaces(list); };
@@ -208,32 +212,44 @@ export function buildMapHtml(places: MapPlace[]): string {
       return chip;
     }
 
-    // 장소별 반응 배지 재구성. 입력: { placeId: { mine: [이모지], partner: [이모지] } }
-    // (RN이 type→이모지 변환·작성자 분리·유니크화 후 전달). 좌표는 현재 PLACES 에서 동일 id 조회(없으면 skip).
-    // 핀 위에 작성자별 칩(내 칩 먼저)을 나란히 표시 → 누가 남긴 반응인지 색으로 구분.
-    function applyReactions(byPlaceId){
+    // 한 줄 메모 말풍선(테두리 = 작성자 색). 길면 말줄임.
+    function memoBubble(text, color){
+      var b = document.createElement('div');
+      b.style.cssText = 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:12px;background:#fff;border:2px solid ' + color + ';box-shadow:0 1px 2px rgba(0,0,0,0.25);font-size:12px;line-height:16px;color:' + SELECT_COLOR + ';';
+      b.textContent = text;
+      return b;
+    }
+
+    // 장소별 주석 재구성: 위에서부터 메모 말풍선(오래된 → 최근) + 반응 칩 줄(내 칩 먼저).
+    // 입력은 REACTIONS / MEMOS(RN이 작성자 분리·정리 후 전달). 좌표는 현재 PLACES 에서 동일 id 조회(없으면 skip).
+    function applyAnnotations(){
       if (!map) return;
-      clearReactionOverlays();
-      if (!byPlaceId) return;
-      for (var pid in byPlaceId){
-        if (!Object.prototype.hasOwnProperty.call(byPlaceId, pid)) continue;
-        var group = byPlaceId[pid];
-        if (!group || (!group.mine.length && !group.partner.length)) continue;
-        var place = null;
-        for (var i = 0; i < PLACES.length; i++){ if (PLACES[i].id === pid){ place = PLACES[i]; break; } }
-        if (!place) continue;
+      clearAnnotationOverlays();
+      PLACES.forEach(function(place){
+        var group = REACTIONS[place.id];
+        var memos = MEMOS[place.id] || [];
+        var hasReactions = !!group && (group.mine.length > 0 || group.partner.length > 0);
+        if (!hasReactions && !memos.length) return;
         var el = document.createElement('div');
-        el.style.cssText = 'display:flex;gap:2px;white-space:nowrap;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
-        if (group.mine.length) el.appendChild(reactionChip(group.mine, YOU_COLOR));
-        if (group.partner.length) el.appendChild(reactionChip(group.partner, PARTNER_COLOR));
-        el.addEventListener('click', function(e){ e.stopPropagation(); }); // 배지 탭이 배경 탭(선택 해제)으로 새지 않게.
+        el.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        memos.forEach(function(m){ el.appendChild(memoBubble(m.text, m.mine ? YOU_COLOR : PARTNER_COLOR)); });
+        if (hasReactions){
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:2px;white-space:nowrap;';
+          if (group.mine.length) row.appendChild(reactionChip(group.mine, YOU_COLOR));
+          if (group.partner.length) row.appendChild(reactionChip(group.partner, PARTNER_COLOR));
+          el.appendChild(row);
+        }
+        // 주석 탭 = 그 핀 탭(반응/메모 바 열기). 배경 탭(선택 해제)으로 새지 않게 전파 차단.
+        el.addEventListener('click', function(e){ e.stopPropagation(); send({ type:'markerClick', id: place.id }); });
         // 핀(번호 원) 위에 떠 있도록 anchor 'bottom' + 위로 오프셋.
         var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -22] }).setLngLat([place.longitude, place.latitude]).addTo(map);
-        reactionMarkers.push(marker);
-      }
+        annotationMarkers.push(marker);
+      });
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
-    window.renderReactions = function(byPlaceId){ applyReactions(byPlaceId); };
+    window.renderReactions = function(byPlaceId){ REACTIONS = byPlaceId || {}; applyAnnotations(); };
+    window.renderMemos = function(byPlaceId){ MEMOS = byPlaceId || {}; applyAnnotations(); };
 
     // el 의 데이터/시각(크기·이모지·가시성·선택링)을 객체 상태에 맞춰 갱신. ADD/UPDATE 공용.
     // dataset.lvl = 생성 당시 GL zoom(zoom_level). 좌표 고정 + world-space 크기.
