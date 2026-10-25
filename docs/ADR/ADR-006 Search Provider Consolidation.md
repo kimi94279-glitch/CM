@@ -22,6 +22,8 @@ Date: 2026-06-03
 
 Status: Accepted (미구현 — 코드 미반영, 전환 예정)
 
+> ⚠️ 재검토(2026-10-25): 지도가 MapLibre 로 옮겨져(ADR-013) 카카오 통합의 전제가 사라졌고, 카카오 로컬 API 도 결과 영구 저장을 허용하지 않는다. [[ADR-016 Place Search Data Licensing]](Proposed)이 Accepted 되면 이 ADR 은 Superseded 로 바뀐다.
+>
 > ⚠️ 구현 상태: 이 결정은 채택되었으나 **아직 코드에 반영되지 않았다**. 현재 `supabase/functions/place-search`는 여전히 Naver 지역검색 API를 사용하며, `models.ts`·migration의 `provider`도 `'naver'`이다. 전환 시 Edge Function / 데이터 모델 / migration을 함께 갱신해야 한다.
 
 ---

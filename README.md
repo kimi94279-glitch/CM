@@ -55,6 +55,7 @@ related:
 - [ADR-010 Floating Actions Architecture](docs/ADR/ADR-010%20Floating%20Actions%20Architecture.md)
 - [ADR-011 Half Sheet Dismiss UX](docs/ADR/ADR-011%20Half%20Sheet%20Dismiss%20UX.md)
 - [ADR-012 Recenter Action](docs/ADR/ADR-012%20Recenter%20Action.md)
+- [ADR-016 Place Search Data Licensing](docs/ADR/ADR-016%20Place%20Search%20Data%20Licensing.md) — Proposed(검색 결과 영구 저장 중단, 공공데이터·사용자 핀으로 전환)
 - ADR-004(Search Architecture)는 ADR-006으로 대체됨(deprecated).
 
 ## 현재 개발 상태

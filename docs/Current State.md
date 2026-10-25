@@ -29,6 +29,7 @@
 
 - ~~Sticker 버그 수정~~ → C1 완료
 - 외부 탭 닫기 B/D 판별(실기기 로그)
+- 장소 검색 데이터 라이선스(ADR-016, Proposed): 네이버·카카오 공식 질의 → 공공데이터(상가정보) 검색 스파이크 → 사용자 핀 경로. 출시 전 필수(네이버 기존 방식 2027-06-30 종료)
 - 푸시 자격 증명: Android FCM V1(google-services.json + EAS 서비스 계정 키), iOS APNs 키(EAS) → 개발 빌드 재생성(expo-notifications 네이티브 모듈 추가)
 - Text Object
 - Arrow Object
