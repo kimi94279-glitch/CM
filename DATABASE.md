@@ -245,6 +245,7 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
   1. 이미 solo/active 워크스페이스가 있으면 거부 (단일 워크스페이스 검증)
   2. `couples` INSERT (user_a=본인, user_b=NULL, status='solo')
 - `accept_invite(token text)` — 초대 수락 = 솔로 워크스페이스 승격. 트랜잭션 처리:
+  0. 비로그인(`auth.uid()` null) 거부 — anon 실행 권한도 회수(0008)
   1. 토큰 유효성 검증 (`used_at IS NULL AND expires_at > now()`), 수락자 ≠ 초대자
   2. 수락자가 active면 거부
   3. 초대자가 active면 거부 / solo면 그 행을 `active`로 승격(user_b 채움, **데이터 유지**) / 워크스페이스 없으면 새 active 커플 INSERT

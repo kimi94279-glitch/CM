@@ -2,6 +2,7 @@
 -- 초대 흐름 보강.
 --  1) accept_invite: 수락자가 혼자 그리던(솔로) 지도가 있어도 합류한다 — 보드를 함께 쓰는 공간으로 옮긴 뒤 솔로 공간을 지운다.
 --     (0002 에서는 'acceptor has solo data' 로 거부했다.)
+--     비로그인 호출 차단(auth.uid() null 거부 + anon 실행 권한 회수).
 --  2) invite_preview: 수락 전에 "누가 보낸 초대인지 / 아직 쓸 수 있는지"를 보여준다. 로그인한 사용자만 호출.
 -- 주의: 초안. 실제 DB 적용은 별도 절차(SUPABASE_SETUP.md §3 방식)로 수행한다. 재실행 안전(or replace).
 
@@ -26,6 +27,11 @@ declare
   inviter_ws  public.couples;
   result_ws   public.couples;
 begin
+  -- 비로그인(auth.uid() = null) 호출이면 초대자 공간이 상대 없이 active 가 될 수 있었다
+  if acceptor is null then
+    raise exception 'not authenticated';
+  end if;
+
   select * into inv
   from public.couple_invites
   where invite_token = token
@@ -100,6 +106,7 @@ begin
 end;
 $$;
 
+revoke execute on function public.accept_invite(text) from public, anon;
 grant execute on function public.accept_invite(text) to authenticated;
 
 -- ============================================================
