@@ -10,12 +10,20 @@ export interface MapBoardData {
   objects: MapObject[];
 }
 
+// 펜으로 그린 한 획: 단순화된 지도 좌표 [lng, lat][], 그린 줌(소수), 그린 줌에서의 굵기(px).
+export interface DrawStroke {
+  points: [number, number][];
+  zoom: number;
+  width: number;
+}
+
 // WebView 메시지가 현재 포커스된 보드로 라우팅될 콜백 집합.
 export interface MapCallbacks {
   onMarkerPress?: (id: string) => void;
   onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
   onObjectPress?: (id: string) => void;
   onObjectMove?: (id: string, lat: number, lng: number) => void;
+  onDrawEnd?: (stroke: DrawStroke) => void;
 }
 
 // 싱글톤 지도(MapHost)를 제어하는 명령형 컨트롤러.
@@ -33,6 +41,8 @@ export interface MapHostController {
   recenter(): void;
   // 카메라를 좌표에 고정(알림 탭 진입, 토큰 일치 시에만). 사용자가 지도를 움직이면 풀린다.
   focus(boardId: string, lat: number, lng: number): void;
+  // 펜 모드(토큰 일치 시에만): 켜면 지도 이동·확대가 잠기고 손가락이 선을 그린다.
+  setPenMode(boardId: string, on: boolean): void;
   // 지도 표시/숨김(포커스 전환 시).
   show(): void;
   hide(): void;

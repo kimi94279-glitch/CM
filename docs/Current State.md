@@ -6,9 +6,10 @@
 - reaction overlay
 - map_objects 도입
 - Sticker P0 구현
-- 작성자 구분(나=코랄/상대=틸: 핀·반응 칩·스티커 외곽선·목록·범례)
+- 작성자 구분(사람마다 잉크 — B+ 디자인: 핀·반응 칩·스티커 외곽선·목록·범례)
 - 한 줄 메모(핀 말풍선, place_memos 사용)
 - 푸시 알림(0006 트리거 → Expo Push, 탭 시 그 핀으로 이동) — DB 적용 완료, 자격 증명·개발 빌드 대기
+- 펜 그리기(Draw): 펜 모드(지도 잠금) → 손가락 선 → 단순화·지도 좌표 → map_objects(draw), 내 잉크 soft 색·world-space 굵기, 선 탭 선택·굵기·삭제, 되돌리기
 
 ## 현재 버그
 
@@ -24,6 +25,7 @@
 - 0004 map_objects … 적용됨(2026-06-13, REST 200 + RLS 42501 확인)
 - 0005 couples_rls_hardening … 적용됨(2026-10-25, couples 정책 = couples_select 만 / is_member_of_couple status 필터·SECURITY DEFINER 확인). 적용 시점 couples = solo 3, active/ended 0
 - 0006 push_notifications … 적용됨(2026-10-25). pg_net 0.20.3 + push_tokens/push_throttle(RLS on, 정책 0) + 장소·반응·메모·스티커 AFTER INSERT 트리거 4개. notify_partner 는 anon/authenticated 실행 불가 확인. 롤백 테스트(임시 커플 연결 + 테스트 토큰 + 메모)에서 Expo Push 요청 1건 큐잉 확인 후 전부 롤백
+- 0007 push_draw_text … 작성됨, **미적용**(2026-10-25). 그림 알림 문구("✏️ 지도에 낙서")·종류 draw 분리
 
 ## 다음
 
@@ -36,5 +38,5 @@
 
 ## 보류
 
-- Draw
+- ~~Draw~~ → 구현(2026-10-25)
 - 줌 레이어 정책

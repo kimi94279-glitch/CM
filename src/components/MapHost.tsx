@@ -19,6 +19,7 @@ export function MapHost({ children }: { children: ReactNode }) {
   const [boardData, setBoardData] = useState<MapBoardData>(EMPTY_DATA);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
+  const [penMode, setPenMode] = useState(false);
   // 작성자 색 구분 기준(나/상대). MapHost 는 AuthProvider 안쪽에 있다(App.tsx).
   const { session } = useAuth();
   const myUserId = session?.user?.id ?? null;
@@ -34,6 +35,7 @@ export function MapHost({ children }: { children: ReactNode }) {
         boardIdRef.current = boardId;
         callbacksRef.current = {};
         setSelectedObjectId(null);
+        setPenMode(false); // 이전 보드의 펜 모드 해제.
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         setBoardData(EMPTY_DATA); // 데이터 도착 전 공백 — 이전 보드 마커 제거(잔상 1차 방어).
       },
@@ -55,6 +57,10 @@ export function MapHost({ children }: { children: ReactNode }) {
       focus(boardId, lat, lng) {
         if (boardIdRef.current !== boardId) return;
         mapRef.current?.setFocus({ lat, lng });
+      },
+      setPenMode(boardId, on) {
+        if (boardIdRef.current !== boardId) return;
+        setPenMode(on);
       },
       show() {
         setVisible(true);
@@ -82,10 +88,12 @@ export function MapHost({ children }: { children: ReactNode }) {
             objects={boardData.objects}
             selectedObjectId={selectedObjectId}
             myUserId={myUserId}
+            penMode={penMode}
             onMarkerPress={(id) => callbacksRef.current.onMarkerPress?.(id)}
             onMapPress={(p) => callbacksRef.current.onMapPress?.(p)}
             onObjectPress={(id) => callbacksRef.current.onObjectPress?.(id)}
             onObjectMove={(id, lat, lng) => callbacksRef.current.onObjectMove?.(id, lat, lng)}
+            onDrawEnd={(stroke) => callbacksRef.current.onDrawEnd?.(stroke)}
           />
         </View>
         {/* 네비게이터(위층). BoardDetail은 투명+box-none으로 지도를 노출/통과시킨다. */}

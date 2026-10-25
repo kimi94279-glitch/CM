@@ -133,6 +133,30 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? null;
   const [stickerMode, setStickerMode] = useState(false);
   const [stickerEmoji, setStickerEmoji] = useState('❤️');
+  // 펜 모드: 지도 위에 손가락으로 선을 그린다(내 잉크 soft 색). 켜 있는 동안 지도 이동은 잠긴다.
+  const [penMode, setPenMode] = useState(false);
+  // 이번 펜 모드에서 저장된 내 선(되돌리기용, 최근 것이 끝).
+  const [drawnIds, setDrawnIds] = useState<string[]>([]);
+  const togglePen = () => {
+    const next = !penMode;
+    setPenMode(next);
+    setDrawnIds([]);
+    if (next) {
+      // 하단 바 상호배타: 펜을 켜면 스티커·반응·편집 선택을 닫는다.
+      Keyboard.dismiss();
+      setStickerMode(false);
+      setReactionPlaceId(null);
+      setSelectedObjectId(null);
+    }
+  };
+  const undoDraw = () => {
+    const last = drawnIds[drawnIds.length - 1];
+    if (!last) return;
+    setDrawnIds((ids) => ids.slice(0, -1));
+    removeMapObject.mutate(last, {
+      onError: (e) => Alert.alert('되돌리기 실패', e instanceof Error ? e.message : String(e)),
+    });
+  };
 
   // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/MapLibre 1개). 포커스 시 데이터만 교체.
   const map = useMapHost();
@@ -294,6 +318,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     map.setSelectedObjectId(boardId, selectedObjectId);
   }, [boardId, selectedObjectId, map]);
 
+  // 펜 모드 → 지도 제스처 잠금. 다른 화면으로 가면(포커스 해제) 지도를 풀어 둔다.
+  useEffect(() => {
+    map.setPenMode(boardId, penMode && isFocused);
+  }, [boardId, penMode, isFocused, map]);
+
   // WebView 메시지 콜백을 현재 보드로 등록. stickerMode/Emoji 최신값 반영 위해 변경 시 재등록.
   useEffect(() => {
     map.setCallbacks(boardId, {
@@ -342,6 +371,23 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         setReactionPlaceId(null);
         setHighlightedId(null);
         setSelectedObjectId(null);
+      },
+      // 펜 한 획 → map_objects(draw) 저장. 앵커 = 첫 점, 굵기 스케일 기준 = 그린 줌(payload.z).
+      onDrawEnd: ({ points, zoom, width }) => {
+        addMapObject.mutate(
+          {
+            type: 'draw',
+            latitude: points[0][1],
+            longitude: points[0][0],
+            zoomLevel: Math.round(zoom),
+            payload: { points, z: zoom, w: width },
+          },
+          {
+            onSuccess: (saved) => setDrawnIds((ids) => [...ids, saved.id]),
+            onError: (e) =>
+              Alert.alert('그림 저장 실패', e instanceof Error ? e.message : String(e)),
+          }
+        );
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -437,14 +483,25 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           style={[styles.fabGroup, { bottom: insets.bottom + spacing.lg }]}
           pointerEvents="box-none"
         >
+          {/* 펜: ON 시 지도 이동이 잠기고 손가락으로 선을 그린다(내 잉크 soft 색). */}
+          <Pressable
+            style={[styles.fab, penMode && styles.fabActive]}
+            onPress={togglePen}
+            accessibilityRole="button"
+            accessibilityLabel="펜으로 그리기"
+            accessibilityState={{ selected: penMode }}
+          >
+            <Text style={[styles.fabIcon, penMode && styles.fabIconActive]}>✎</Text>
+          </Pressable>
           {/* 스티커 도구(P0): ON 시 지도 탭으로 지리 고정 스티커 배치. */}
           <Pressable
             style={[styles.fab, stickerMode && styles.fabActive]}
             onPress={() =>
               setStickerMode((v) => {
                 const next = !v;
-                // 하단 바 상호배타: 스티커 모드 켤 때 반응/편집 해제.
+                // 하단 바 상호배타: 스티커 모드 켤 때 펜/반응/편집 해제.
                 if (next) {
+                  setPenMode(false);
                   setReactionPlaceId(null);
                   setSelectedObjectId(null);
                 }
@@ -639,6 +696,37 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
+      {/* 펜 바: 내 잉크 표시 + 되돌리기(이번 펜 모드에서 그린 선) + 종료. */}
+      {penMode ? (
+        <View
+          style={[styles.stickerBar, { bottom: insets.bottom + spacing.lg }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.stickerBarInner}>
+            <View style={[styles.penInk, { backgroundColor: colors.youSoft }]} />
+            <Pressable
+              style={[styles.editBtn, drawnIds.length === 0 && styles.penUndoEmpty]}
+              onPress={undoDraw}
+              disabled={drawnIds.length === 0}
+              accessibilityRole="button"
+              accessibilityLabel="마지막 선 지우기"
+            >
+              <Text style={styles.editIcon}>↶</Text>
+            </Pressable>
+            <Pressable
+              style={styles.reactionClose}
+              onPress={togglePen}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="펜 끄기"
+            >
+              <Text style={styles.reactionCloseText}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.stickerHint}>손가락으로 그려요 · 지도를 움직이려면 펜을 꺼요</Text>
+        </View>
+      ) : null}
+
       {/* 편집 툴바(객체 선택 시): 크기 −/＋ · 삭제. 이동은 지도에서 객체를 드래그. */}
       {selectedObject ? (
         <View
@@ -680,7 +768,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               <Text style={styles.reactionCloseText}>✕</Text>
             </Pressable>
           </View>
-          <Text style={styles.stickerHint}>드래그로 이동 · 크기 조정은 자동 저장</Text>
+          <Text style={styles.stickerHint}>
+            {selectedObject.type === 'draw'
+              ? '굵기 조정은 자동 저장'
+              : '드래그로 이동 · 크기 조정은 자동 저장'}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -881,6 +973,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   fabIcon: { fontSize: 16, color: colors.textStrong, marginRight: spacing.xs },
+  fabIconActive: { color: colors.onPrimary },
   fabCount: { ...typography.label, color: colors.textStrong, fontWeight: '700' },
 
   // Half Sheet (모바일, on-demand) — backdrop 없음(지도 가리지 않음)
@@ -1057,6 +1150,17 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   stickerEmoji: { fontSize: 22 },
+
+  // 펜 바: 내 잉크 견본(soft 채움 + solid 테두리), 되돌릴 선이 없으면 흐리게.
+  penInk: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.you,
+    marginHorizontal: spacing.xs,
+  },
+  penUndoEmpty: { opacity: 0.3 },
 
   // 편집 툴바(객체 선택 시) — 반응/스티커 바와 동일 톤.
   editBar: {

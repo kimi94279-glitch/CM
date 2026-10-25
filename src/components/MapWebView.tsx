@@ -12,6 +12,7 @@ import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react
 import { REACTION_EMOJI } from '../constants/reactions';
 import { colors } from '../constants/theme';
 import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models';
+import type { DrawStroke } from './MapHostContext';
 import { buildMapHtml, safeJson, toMapPlaces, type MapPlace } from './mapWebViewHtml';
 
 interface MapWebViewProps {
@@ -29,6 +30,25 @@ interface MapWebViewProps {
   selectedObjectId?: string | null;
   // 내 uid — 핀/반응/스티커를 작성자 색(나/상대)으로 구분하는 기준.
   myUserId?: string | null;
+  // 펜 모드: 켜면 지도 제스처가 잠기고 손가락 선이 onDrawEnd 로 올라온다.
+  penMode?: boolean;
+  onDrawEnd?: (stroke: DrawStroke) => void;
+}
+
+// WebView 'drawEnd' 메시지 검증 → DrawStroke. 형식이 어긋나면 null.
+function toDrawStroke(msg: {
+  points?: unknown;
+  zoom?: unknown;
+  width?: unknown;
+}): DrawStroke | null {
+  if (!Array.isArray(msg.points) || typeof msg.zoom !== 'number' || typeof msg.width !== 'number') {
+    return null;
+  }
+  const points = msg.points.filter(
+    (p): p is [number, number] =>
+      Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && typeof p[1] === 'number'
+  );
+  return points.length >= 2 ? { points, zoom: msg.zoom, width: msg.width } : null;
 }
 
 // 지리 객체 → WebView 렌더용 슬림 형태(필요 필드만).
@@ -116,6 +136,8 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     onObjectMove,
     selectedObjectId,
     myUserId = null,
+    penMode = false,
+    onDrawEnd,
   },
   ref
 ) {
@@ -204,6 +226,15 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     }
   }, [objects, myUserId, pushObjects]);
 
+  // 펜 모드 → WebView 제스처 잠금/캔버스 표시. ready 이전 값은 ready 때 penMode 로 다시 맞춘다.
+  const penModeRef = useRef(penMode);
+  useEffect(() => {
+    penModeRef.current = penMode;
+    webRef.current?.injectJavaScript(
+      `window.setPenMode && window.setPenMode(${penMode ? 'true' : 'false'}); true;`
+    );
+  }, [penMode]);
+
   // 편집 선택 변경 → WebView 선택 링 갱신. (선택은 ready 이후 사용자 상호작용이라 단순 주입)
   useEffect(() => {
     webRef.current?.injectJavaScript(
@@ -256,6 +287,14 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           pushFocus(focusPendingRef.current);
           focusPendingRef.current = undefined;
         }
+        if (penModeRef.current) {
+          webRef.current?.injectJavaScript('window.setPenMode && window.setPenMode(true); true;');
+        }
+        return;
+      }
+      if (msg.type === 'drawEnd') {
+        const stroke = toDrawStroke(msg);
+        if (stroke) onDrawEnd?.(stroke);
         return;
       }
       if (msg.type === 'mapTap') {

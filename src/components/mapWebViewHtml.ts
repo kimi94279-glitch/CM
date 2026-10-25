@@ -42,6 +42,9 @@ const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 const EMPTY_ZOOM = 11; // 핀 0개: 도시 레벨
 const SINGLE_ZOOM = 14; // 핀 1개: 동네 레벨
 const FOCUS_ZOOM = 16; // 알림 탭 등으로 특정 핀/좌표에 맞출 때: 골목 레벨
+// 펜: 그린 줌에서의 선 굵기(px)와 줌인 시 굵기 상한(px). 상한이 없으면 크게 확대할 때 선이 화면을 덮는다.
+const PEN_WIDTH = 4;
+const DRAW_CAP = 40;
 
 export function buildMapHtml(places: MapPlace[]): string {
   const placesJson = safeJson(places);
@@ -55,6 +58,8 @@ export function buildMapHtml(places: MapPlace[]): string {
   <link href="https://unpkg.com/maplibre-gl@${MAPLIBRE_GL_VERSION}/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     html,body,#map{margin:0;padding:0;width:100%;height:100%;}
+    /* 펜 모드 전용 투명 캔버스: 지도 위를 덮고 손가락 선을 받는다(평소 숨김). */
+    #pen{position:absolute;left:0;top:0;width:100%;height:100%;display:none;touch-action:none;z-index:5;}
     /* 지도를 앱처럼: 텍스트/번호 핀 선택 및 long-press 콜아웃/하이라이트 차단 (지도 제스처에는 영향 없음) */
     *{
       -webkit-user-select:none;
@@ -66,6 +71,7 @@ export function buildMapHtml(places: MapPlace[]): string {
 </head>
 <body>
   <div id="map"></div>
+  <canvas id="pen"></canvas>
   <script>
     function send(o){ try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }catch(e){} }
     // 보강: long-press 텍스트 선택/컨텍스트 메뉴 차단 (CSS user-select가 놓치는 잔여 케이스 대비)
@@ -79,7 +85,14 @@ export function buildMapHtml(places: MapPlace[]): string {
     var FOCUS = null;
     // 작성자 잉크(DESIGN.md 사람마다 잉크): 지금은 나=라일락, 상대=스카이. 선택 링은 잉크와 겹치지 않게 검정.
     var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
+    // 펜 선은 잉크 soft(파스텔) 톤.
+    var YOU_SOFT = '${colors.youSoft}', PARTNER_SOFT = '${colors.partnerSoft}';
+    var PEN_WIDTH = ${PEN_WIDTH}, DRAW_CAP = ${DRAW_CAP};
     var map, bounds;
+    var styleLoaded = false;   // 'load' 이후에만 source/layer 추가 가능
+    var drawReady = false;     // 그림 source/layer 1회 생성 여부
+    var PEN_MODE = false;      // 펜 모드: 지도 제스처 잠금 + 캔버스로 선 입력
+    var PENDING = [];          // 방금 그려 RN 저장 응답을 기다리는 선(다음 renderObjects 때 비움)
     var markers = [];          // 장소(번호 핀) 마커
     var annotationMarkers = []; // 핀 위 주석(말풍선 + 반응 칩) 마커 — 장소당 1개
     var REACTIONS = {};        // 마지막 반응 입력 { placeId: { mine:[], partner:[] } }
@@ -308,10 +321,139 @@ export function buildMapHtml(places: MapPlace[]): string {
         if (el.dataset.dragging === '1'){ var p = marker.getLngLat(); send({ type:'objectMove', id:id, lat:p.lat, lng:p.lng }); }
       }, { passive:false });
     }
+    // ── 펜 그림(draw) ─────────────────────────────────────────────
+    // 그린 선 = 지도 좌표 LineString(GeoJSON 레이어) → 지도와 함께 움직인다.
+    // 굵기는 스티커와 같은 world-space 규칙: 그린 줌(z)에서 w px, 줌 차이 2^Δ 배, DRAW_CAP 상한.
+    // 'zoom' 은 최상위 interpolate 입력으로만 쓸 수 있어 상한을 줌 레벨마다 정지점으로 넣는다.
+    function drawWidthExpr(extra){
+      var e = ['interpolate', ['exponential', 2], ['zoom']];
+      for (var z = 0; z <= 22; z++){
+        e.push(z, ['+', extra, ['min', DRAW_CAP, ['*', ['get', 'w'], ['get', 's'], ['^', 2, ['-', z, ['get', 'z']]]]]]);
+      }
+      return e;
+    }
+    function ensureDrawLayers(){
+      if (drawReady) return;
+      map.addSource('draw', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      // 선택 표시: 선 아래 잉크색(검정) 반투명 테두리.
+      map.addLayer({
+        id:'draw-selected', type:'line', source:'draw', filter:['==', ['get', 'id'], ''],
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{ 'line-color': SELECT_COLOR, 'line-opacity':0.35, 'line-width': drawWidthExpr(6) }
+      });
+      map.addLayer({
+        id:'draw-line', type:'line', source:'draw',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{ 'line-color':['case', ['get', 'mine'], YOU_SOFT, PARTNER_SOFT], 'line-opacity':0.95, 'line-width': drawWidthExpr(0) }
+      });
+      drawReady = true;
+    }
+    function drawFeature(id, payload, mine, zoomLevel){
+      var pts = payload && payload.points;
+      if (!pts || pts.length < 2) return null;
+      return {
+        type:'Feature',
+        properties:{ id: id, mine: !!mine, w: payload.w || PEN_WIDTH, s: payload.scale || 1, z: payload.z != null ? payload.z : zoomLevel },
+        geometry:{ type:'LineString', coordinates: pts }
+      };
+    }
+    function applyDrawings(){
+      if (!map || !styleLoaded) return;
+      ensureDrawLayers();
+      var feats = [];
+      OBJECTS.forEach(function(o){
+        if (o && o.type === 'draw'){ var f = drawFeature(o.id, o.payload, o.mine, o.zoom_level); if (f) feats.push(f); }
+      });
+      PENDING.forEach(function(p){ var f = drawFeature(p.id, p.payload, true, p.payload.z); if (f) feats.push(f); });
+      map.getSource('draw').setData({ type:'FeatureCollection', features: feats });
+      map.setFilter('draw-selected', ['==', ['get', 'id'], SELECTED_ID || '']);
+    }
+
+    // 펜 입력: 화면 좌표로 받아 단순화(Douglas–Peucker) 후 map.unproject 로 지도 좌표로 바꿔 RN 에 보낸다.
+    var pen = document.getElementById('pen');
+    var penCtx = pen.getContext('2d');
+    var stroke = null;
+    function sizePen(){
+      var r = window.devicePixelRatio || 1;
+      pen.width = pen.clientWidth * r;
+      pen.height = pen.clientHeight * r;
+      penCtx.setTransform(r, 0, 0, r, 0, 0);
+    }
+    function clearPen(){ penCtx.clearRect(0, 0, pen.clientWidth, pen.clientHeight); }
+    function segDist(p, a, b){
+      var dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy;
+      if (!l) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+      var t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l));
+      return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+    }
+    function simplify(pts, eps){
+      if (pts.length < 3) return pts;
+      var keep = new Array(pts.length);
+      keep[0] = keep[pts.length - 1] = true;
+      var stack = [[0, pts.length - 1]];
+      while (stack.length){
+        var seg = stack.pop(), a = seg[0], b = seg[1], maxD = 0, idx = -1;
+        for (var i = a + 1; i < b; i++){ var d = segDist(pts[i], pts[a], pts[b]); if (d > maxD){ maxD = d; idx = i; } }
+        if (maxD > eps && idx > 0){ keep[idx] = true; stack.push([a, idx], [idx, b]); }
+      }
+      return pts.filter(function(_, i){ return keep[i]; });
+    }
+    function localPt(e){ var r = pen.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+    function round6(v){ return Math.round(v * 1e6) / 1e6; }
+    pen.addEventListener('pointerdown', function(e){
+      if (!PEN_MODE || !map) return;
+      e.preventDefault();
+      try { pen.setPointerCapture(e.pointerId); } catch (_){}
+      stroke = [localPt(e)];
+      clearPen();
+      penCtx.strokeStyle = YOU_SOFT; penCtx.lineWidth = PEN_WIDTH; penCtx.lineCap = 'round'; penCtx.lineJoin = 'round';
+    });
+    pen.addEventListener('pointermove', function(e){
+      if (!stroke) return;
+      e.preventDefault();
+      var p = localPt(e), last = stroke[stroke.length - 1];
+      if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 2) return; // 손떨림 점 줄이기
+      stroke.push(p);
+      penCtx.beginPath(); penCtx.moveTo(last[0], last[1]); penCtx.lineTo(p[0], p[1]); penCtx.stroke();
+    });
+    function endStroke(){
+      if (!stroke) return;
+      var eps = 1.2, pts = simplify(stroke, eps);
+      while (pts.length > 400){ eps *= 1.5; pts = simplify(stroke, eps); } // 한 획 최대 400점
+      stroke = null;
+      if (pts.length < 2){ clearPen(); return; } // 점 하나(탭)는 선이 아니다
+      var ll = pts.map(function(p){ var q = map.unproject(p); return [round6(q.lng), round6(q.lat)]; });
+      var z = Math.round(map.getZoom() * 100) / 100;
+      // 저장 응답 전에도 선이 남도록 레이어에 먼저 그린 뒤 캔버스를 비운다.
+      PENDING.push({ id: 'pending-' + Date.now(), payload: { points: ll, z: z, w: PEN_WIDTH } });
+      applyDrawings();
+      clearPen();
+      send({ type:'drawEnd', points: ll, zoom: z, width: PEN_WIDTH });
+    }
+    pen.addEventListener('pointerup', endStroke);
+    pen.addEventListener('pointercancel', endStroke);
+    window.addEventListener('resize', function(){ if (PEN_MODE) sizePen(); });
+
+    // RN → WebView 진입점: 펜 모드 켜기/끄기. 켜면 지도 이동·확대를 잠그고 캔버스가 터치를 받는다.
+    window.setPenMode = function(on){
+      PEN_MODE = !!on;
+      stroke = null;
+      pen.style.display = PEN_MODE ? 'block' : 'none';
+      if (PEN_MODE) sizePen(); else clearPen();
+      if (!map) return;
+      [map.dragPan, map.scrollZoom, map.touchZoomRotate, map.doubleClickZoom, map.boxZoom, map.keyboard].forEach(function(h){
+        if (h) { if (PEN_MODE) h.disable(); else h.enable(); }
+      });
+      if (!PEN_MODE) map.touchZoomRotate.disableRotation(); // enable() 이 회전까지 켜므로 다시 끈다
+    };
+
     // 증분 렌더: id 기반 diff(REMOVE/UPDATE/ADD). 전체 clear 없음 → 미변경 객체 DOM 유지(깜빡임 제거).
     function applyObjects(list){
       if (!map) return;
       OBJECTS = list || [];
+      // RN 데이터가 갱신되면(낙관 반영 포함) 방금 그린 선도 그 안에 있으므로 임시 선은 비운다.
+      PENDING = [];
+      applyDrawings();
       // incoming: 유효한 sticker 만 id 맵으로.
       var incoming = {};
       OBJECTS.forEach(function(o){
@@ -370,6 +512,13 @@ export function buildMapHtml(places: MapPlace[]): string {
         // 빈 지도(핀 외 배경) 탭 → RN에 알림(반응 팔레트 닫기 등).
         // 마커는 캔버스 밖 DOM이라 map 'click'을 발화시키지 않는다(핀이 가로채는 효과).
         map.on('click', function(e){
+          // 그린 선 위 탭 → 그 선을 편집 선택(손가락 오차 ±8px). 저장 전 임시 선(temp-/pending-)은 제외.
+          if (drawReady){
+            var b = 8, pt = e.point;
+            var hit = map.queryRenderedFeatures([[pt.x - b, pt.y - b], [pt.x + b, pt.y + b]], { layers:['draw-line'] })
+              .filter(function(f){ var id = String(f.properties.id); return id.indexOf('temp-') !== 0 && id.indexOf('pending-') !== 0; })[0];
+            if (hit){ send({ type:'objectTap', id: hit.properties.id }); return; }
+          }
           // level = 생성 줌(world-space 스케일 기준). zoom_level 컬럼이 integer 라 반올림해 전달.
           send({ type:'mapTap', lat: e.lngLat.lat, lng: e.lngLat.lng, level: Math.round(map.getZoom()) });
         });
@@ -382,8 +531,10 @@ export function buildMapHtml(places: MapPlace[]): string {
         map.on('zoomstart', function(e){ if (e && e.originalEvent) FOCUS = null; });
 
         map.on('load', function(){
+          styleLoaded = true;
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
           applyPlaces(PLACES);
+          applyDrawings();
           send({ type:'ready', count: PLACES.length });
         });
         map.on('error', function(ev){ send({ type:'error', stage:'map', message: ev && ev.error ? String(ev.error.message || ev.error) : 'map error' }); });
