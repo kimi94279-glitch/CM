@@ -1,0 +1,882 @@
+{
+  "_comment": "ADR-016 파일럿: 성수·연남·익선(+북촌·삼청 인접) 데이트 장소 후보 100곳. 웹 리서치(2026-10-25)에서 사실만 추출 — 이름, 동네, 종류, 출처 URL. 리뷰·사진·평점·설명은 저장하지 않는다. match=상호 매칭 키워드, kind=shop|venue(팝업·전시 공간)|landmark(공원·길·유적).",
+  "areas": {
+    "성수": { "gu": "성동구", "dong": ["성수동1가", "성수동2가"] },
+    "연남": { "gu": "마포구", "dong": ["연남동", "동교동", "서교동", "성산동"] },
+    "익선": {
+      "gu": "종로구",
+      "dong": [
+        "익선동",
+        "돈의동",
+        "낙원동",
+        "와룡동",
+        "묘동",
+        "봉익동",
+        "권농동",
+        "훈정동",
+        "인의동",
+        "종로3가",
+        "종로2가",
+        "관철동",
+        "운니동",
+        "경운동",
+        "관수동",
+        "장사동"
+      ]
+    },
+    "북촌": {
+      "gu": "종로구",
+      "dong": [
+        "삼청동",
+        "소격동",
+        "원서동",
+        "계동",
+        "가회동",
+        "안국동",
+        "재동",
+        "사직동",
+        "팔판동",
+        "화동",
+        "송현동",
+        "관훈동",
+        "인사동",
+        "견지동",
+        "수송동",
+        "내자동",
+        "적선동",
+        "통인동",
+        "신문로1가",
+        "신문로2가",
+        "당주동",
+        "내수동",
+        "도렴동"
+      ]
+    }
+  },
+  "sources": {
+    "siksin_seongsu": "https://www.siksinhot.com/toplists/best/042051_dong",
+    "siksin_yeonnam": "https://www.siksinhot.com/toplists/best/102622_Yeonnam",
+    "siksin_yeonnambest": "https://www.siksinhot.com/toplists/best/042085_yeonnambest",
+    "siksin_yeonssul": "https://www.siksinhot.com/toplists/best/042023_yeonssul",
+    "siksin_ikseon": "https://www.siksinhot.com/toplists/best/ahnnews75",
+    "siksin_daelim": "https://www.siksinhot.com/toplists/best/ahnnews64",
+    "wikitree_omil": "https://www.wikitree.co.kr/articles/1133184",
+    "insight_tomntoms": "https://www.insight.co.kr/news/269087",
+    "popga_popup": "https://popga.co.kr/content/magazine/87",
+    "khan_popup": "https://lady.khan.co.kr/travel/article/202511281020001",
+    "dategom_yeonnam": "https://dategom.com/?p=22208",
+    "polle_crafthans": "https://polle.com/place/3H6fKC/%ED%81%AC%EB%9E%98%ED%94%84%ED%8A%B8%20%ED%95%9C%EC%8A%A4",
+    "esquire_jongno": "https://www.esquirekorea.co.kr/article/45306",
+    "esquire_ikseon": "https://www.esquirekorea.co.kr/article/68811",
+    "polle_ikseonjapbang": "https://polle.com/place/4PIsjB/%EC%9D%B5%EC%84%A0%EC%9E%A1%EB%B0%A9",
+    "theedit_ikdong": "https://the-edit.co.kr/54084",
+    "stayfolio_cheongsudang": "https://www.stayfolio.com/findstay/cheongsudang-stay-bukchon",
+    "polle_jongno3": "https://polle.com/posts/tag/%EC%A2%85%EB%A1%9C3%EA%B0%80",
+    "fanmaum_ikseon": "https://fanmaum.com/community/Seoul-Gyeonggi/109902023",
+    "mommom_ikseon": "https://mom-mom.net/travel/places/6524a6327151927d2f95ff9d"
+  },
+  "places": [
+    {
+      "name": "다로베",
+      "match": ["다로베"],
+      "area": "성수",
+      "type": "피자",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "소소하게",
+      "match": ["소소하게"],
+      "area": "성수",
+      "type": "베이커리",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "체다앤올리",
+      "match": ["체다앤올리"],
+      "area": "성수",
+      "type": "브런치",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "제스티살룬",
+      "match": ["제스티살룬"],
+      "area": "성수",
+      "type": "버거",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "난포",
+      "match": ["난포"],
+      "area": "성수",
+      "type": "한식",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "만학",
+      "match": ["만학"],
+      "area": "성수",
+      "type": "유러피언",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "플디",
+      "match": ["플디"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "카츠성수",
+      "match": ["카츠성수"],
+      "area": "성수",
+      "type": "일식",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "앤드밀",
+      "match": ["앤드밀", "&meal"],
+      "area": "성수",
+      "type": "샌드위치",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "어니언 성수",
+      "match": ["어니언"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "마를리",
+      "match": ["마를리"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "베통 성수",
+      "match": ["베통"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "바이산코리아",
+      "match": ["바이산"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "카페 할아버지공장",
+      "match": ["할아버지공장"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "팩피",
+      "match": ["팩피"],
+      "area": "성수",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "보이어",
+      "match": ["보이어"],
+      "area": "성수",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "오스테리아 쟌니",
+      "match": ["쟌니"],
+      "area": "성수",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "누메로도스",
+      "match": ["누메로도스"],
+      "area": "성수",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "할머니의 레시피",
+      "match": ["할머니의레시피"],
+      "area": "성수",
+      "type": "한식",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "밀본",
+      "match": ["밀본"],
+      "area": "성수",
+      "type": "칼국수",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "성수아구찜",
+      "match": ["성수아구찜"],
+      "area": "성수",
+      "type": "해물찜",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "버섯집",
+      "match": ["버섯집"],
+      "area": "성수",
+      "type": "전골",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "훼미리손칼국수보쌈",
+      "match": ["훼미리손칼국수", "훼미리"],
+      "area": "성수",
+      "type": "칼국수",
+      "kind": "shop",
+      "src": "siksin_seongsu"
+    },
+    {
+      "name": "대림창고",
+      "match": ["대림창고"],
+      "area": "성수",
+      "type": "갤러리 카페",
+      "kind": "shop",
+      "src": "siksin_daelim"
+    },
+    {
+      "name": "오밀 성수",
+      "match": ["오밀"],
+      "area": "성수",
+      "type": "양식",
+      "kind": "shop",
+      "src": "wikitree_omil"
+    },
+    {
+      "name": "펠른",
+      "match": ["펠른"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "탐앤탐스 성수",
+      "match": ["탐앤탐스"],
+      "area": "성수",
+      "type": "카페",
+      "kind": "shop",
+      "src": "insight_tomntoms"
+    },
+    {
+      "name": "올리브영N 성수",
+      "match": ["올리브영"],
+      "area": "성수",
+      "type": "팝업·체험 매장",
+      "kind": "venue",
+      "src": "popga_popup"
+    },
+    {
+      "name": "라인프렌즈 스퀘어 성수",
+      "match": ["라인프렌즈"],
+      "area": "성수",
+      "type": "캐릭터 매장·팝업",
+      "kind": "venue",
+      "src": "khan_popup"
+    },
+    {
+      "name": "무신사 뷰티 스페이스",
+      "match": ["무신사"],
+      "area": "성수",
+      "type": "팝업 공간",
+      "kind": "venue",
+      "src": "popga_popup"
+    },
+    {
+      "name": "더서울라이티움",
+      "match": ["라이티움"],
+      "area": "성수",
+      "type": "전시장",
+      "kind": "venue",
+      "src": "popga_popup"
+    },
+    {
+      "name": "서울숲",
+      "match": ["서울숲"],
+      "area": "성수",
+      "type": "공원",
+      "kind": "landmark",
+      "src": "popga_popup"
+    },
+
+    {
+      "name": "툭툭누들타이",
+      "match": ["툭툭"],
+      "area": "연남",
+      "type": "태국",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "하하",
+      "match": ["하하"],
+      "area": "연남",
+      "type": "중식",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "소이연남",
+      "match": ["소이연남"],
+      "area": "연남",
+      "type": "태국",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "야키토리 묵",
+      "match": ["야키토리묵", "묵"],
+      "area": "연남",
+      "type": "야키토리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "몽중식",
+      "match": ["몽중식"],
+      "area": "연남",
+      "type": "중식",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "미자씨",
+      "match": ["미자씨"],
+      "area": "연남",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "연술집",
+      "match": ["연술집"],
+      "area": "연남",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "두루미",
+      "match": ["두루미"],
+      "area": "연남",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "덕자도요",
+      "match": ["덕자도요"],
+      "area": "연남",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "엽전식당",
+      "match": ["엽전식당"],
+      "area": "연남",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "감칠",
+      "match": ["감칠"],
+      "area": "연남",
+      "type": "퓨전",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "랑빠스81",
+      "match": ["랑빠스"],
+      "area": "연남",
+      "type": "프렌치",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "윤성용레스토랑",
+      "match": ["윤성용"],
+      "area": "연남",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "바다파스타",
+      "match": ["바다파스타"],
+      "area": "연남",
+      "type": "퓨전",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "산동꾸냥수제만두",
+      "match": ["산동꾸냥"],
+      "area": "연남",
+      "type": "만두",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "연남MAFIA",
+      "match": ["연남마피아", "mafia"],
+      "area": "연남",
+      "type": "주점",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "등불서양주점",
+      "match": ["등불"],
+      "area": "연남",
+      "type": "주점",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "귀",
+      "match": ["귀"],
+      "area": "연남",
+      "type": "주점",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "카시",
+      "match": ["카시"],
+      "area": "연남",
+      "type": "주점",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "연남701호",
+      "match": ["701호"],
+      "area": "연남",
+      "type": "주점",
+      "kind": "shop",
+      "src": "siksin_yeonnam"
+    },
+    {
+      "name": "땡스오트 연남",
+      "match": ["땡스오트"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "연남살롱",
+      "match": ["연남살롱"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "커피리브레",
+      "match": ["커피리브레", "리브레"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "플러피도넛",
+      "match": ["플러피"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "데일리라운드",
+      "match": ["데일리라운드"],
+      "area": "연남",
+      "type": "브런치",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "플랩잭팬트리 연남점",
+      "match": ["플랩잭"],
+      "area": "연남",
+      "type": "브런치",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "그레인",
+      "match": ["그레인"],
+      "area": "연남",
+      "type": "브런치",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "규자카야 모토",
+      "match": ["규자카야", "모토"],
+      "area": "연남",
+      "type": "이자카야",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "시실리",
+      "match": ["시실리"],
+      "area": "연남",
+      "type": "포장마차",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "아필립",
+      "match": ["아필립"],
+      "area": "연남",
+      "type": "포장마차",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "운광해물포차",
+      "match": ["운광"],
+      "area": "연남",
+      "type": "포장마차",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "달빛부엌",
+      "match": ["달빛부엌"],
+      "area": "연남",
+      "type": "포장마차",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "알척",
+      "match": ["알척"],
+      "area": "연남",
+      "type": "이탈리안",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "이노시시",
+      "match": ["이노시시"],
+      "area": "연남",
+      "type": "일식",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "윤씨그릴방",
+      "match": ["윤씨그릴방"],
+      "area": "연남",
+      "type": "퓨전",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "산왕반점",
+      "match": ["산왕반점"],
+      "area": "연남",
+      "type": "중식",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "향미",
+      "match": ["향미"],
+      "area": "연남",
+      "type": "중식",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "홍복",
+      "match": ["홍복"],
+      "area": "연남",
+      "type": "중식",
+      "kind": "shop",
+      "src": "siksin_yeonnambest"
+    },
+    {
+      "name": "옥타",
+      "match": ["옥타"],
+      "area": "연남",
+      "type": "이자카야",
+      "kind": "shop",
+      "src": "siksin_yeonssul"
+    },
+    {
+      "name": "허니홀",
+      "match": ["허니홀"],
+      "area": "연남",
+      "type": "칵테일 바",
+      "kind": "shop",
+      "src": "siksin_yeonssul"
+    },
+    {
+      "name": "올드패션드",
+      "match": ["올드패션드"],
+      "area": "연남",
+      "type": "칵테일 바",
+      "kind": "shop",
+      "src": "siksin_yeonssul"
+    },
+    {
+      "name": "마가렛 연남",
+      "match": ["마가렛"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "dategom_yeonnam"
+    },
+    {
+      "name": "맥코이",
+      "match": ["맥코이"],
+      "area": "연남",
+      "type": "카페",
+      "kind": "shop",
+      "src": "dategom_yeonnam"
+    },
+    {
+      "name": "크래프트 한스",
+      "match": ["크래프트한스"],
+      "area": "연남",
+      "type": "펍",
+      "kind": "shop",
+      "src": "polle_crafthans"
+    },
+    {
+      "name": "연트럴파크(경의선숲길)",
+      "match": ["연트럴파크", "경의선숲길"],
+      "area": "연남",
+      "type": "공원",
+      "kind": "landmark",
+      "src": "dategom_yeonnam"
+    },
+
+    {
+      "name": "옳은",
+      "match": ["옳은"],
+      "area": "익선",
+      "type": "바",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "식물",
+      "match": ["식물"],
+      "area": "익선",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "거북이슈퍼",
+      "match": ["거북이슈퍼"],
+      "area": "익선",
+      "type": "맥주",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "에일당 익선본점",
+      "match": ["에일당"],
+      "area": "익선",
+      "type": "맥주",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "익선반주",
+      "match": ["반주"],
+      "area": "익선",
+      "type": "막걸리",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "익선잡방",
+      "match": ["익선잡방"],
+      "area": "익선",
+      "type": "양식",
+      "kind": "shop",
+      "src": "polle_ikseonjapbang"
+    },
+    {
+      "name": "익동다방",
+      "match": ["익동다방"],
+      "area": "익선",
+      "type": "카페",
+      "kind": "shop",
+      "src": "theedit_ikdong"
+    },
+    {
+      "name": "청수당",
+      "match": ["청수당"],
+      "area": "익선",
+      "type": "카페",
+      "kind": "shop",
+      "src": "stayfolio_cheongsudang"
+    },
+    {
+      "name": "끼룩하우스",
+      "match": ["끼룩"],
+      "area": "익선",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "배키욘방",
+      "match": ["배키욘방"],
+      "area": "익선",
+      "type": "덮밥",
+      "kind": "shop",
+      "src": "esquire_ikseon"
+    },
+    {
+      "name": "행복한 돼지",
+      "match": ["행복한돼지"],
+      "area": "익선",
+      "type": "고기·와인",
+      "kind": "shop",
+      "src": "polle_jongno3"
+    },
+    {
+      "name": "르블란서",
+      "match": ["르블란서"],
+      "area": "북촌",
+      "type": "프렌치",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "프앙디",
+      "match": ["프앙디"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "siksin_ikseon"
+    },
+    {
+      "name": "병과점 합",
+      "match": ["병과점합", "합"],
+      "area": "북촌",
+      "type": "디저트 카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "회화나무",
+      "match": ["회화나무"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "그린마일커피",
+      "match": ["그린마일"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "호아드",
+      "match": ["호아드", "hoard"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "카페 아르크",
+      "match": ["아르크"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_jongno"
+    },
+    {
+      "name": "이니미니마니모",
+      "match": ["이니미니"],
+      "area": "북촌",
+      "type": "카페",
+      "kind": "shop",
+      "src": "esquire_ikseon"
+    },
+    {
+      "name": "트마리",
+      "match": ["트마리"],
+      "area": "북촌",
+      "type": "루프탑 카페",
+      "kind": "shop",
+      "src": "esquire_ikseon"
+    },
+    {
+      "name": "익선동 한옥거리",
+      "match": ["익선동한옥"],
+      "area": "익선",
+      "type": "골목",
+      "kind": "landmark",
+      "src": "mommom_ikseon"
+    },
+    {
+      "name": "서순라길",
+      "match": ["서순라길"],
+      "area": "익선",
+      "type": "산책길",
+      "kind": "landmark",
+      "src": "fanmaum_ikseon"
+    },
+    {
+      "name": "종묘",
+      "match": ["종묘"],
+      "area": "익선",
+      "type": "유적·공원",
+      "kind": "landmark",
+      "src": "fanmaum_ikseon"
+    }
+  ]
+}

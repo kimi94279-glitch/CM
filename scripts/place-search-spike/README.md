@@ -22,4 +22,14 @@ python -I scripts/place-search-spike/spike.py --csv <서울 CSV> --queries scrip
   카카오 응답에는 업종이 없어 카카오 쪽은 시군구 일치 건수만 센다.
 - `v1` = 데이터 필드만, `v2` = 동네 별칭표(홍대→서교동 등) 추가.
 
+## 시드 파일럿
+
+`pilot_seed.json` = 웹 리서치로 뽑은 성수·연남·익선 데이트 장소 100곳(이름·동네·종류·출처 URL — 사실만).
+
+```bash
+python -I scripts/place-search-spike/pilot_match.py --csv <서울 CSV> --seed scripts/place-search-spike/pilot_seed.json --out <결과 폴더>
+```
+
+자동 매칭엔 오매칭(짧은 상호, 랜드마크 이름을 딴 가게)이 섞이므로 결과의 `examples` 를 사람이 확인한다. 결과 요약은 ADR-016 "시드 파일럿 결과".
+
 데이터 파일은 레포에 넣지 않는다.
