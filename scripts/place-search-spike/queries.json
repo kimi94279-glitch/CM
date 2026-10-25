@@ -1,0 +1,40 @@
+{
+  "_comment": "ADR-016 스파이크용 서울 데이트 검색어 30개. kind=named: 상위 5건에 name 키워드 + gu(시군구)가 맞는 장소가 있으면 성공. kind=landmark: 같은 규칙(상가업소가 아닌 장소 — 공백 예상). kind=category: 상위 5건 중 category 키워드(업종명 또는 상호) + gu 가 맞는 결과가 3건 이상이면 성공.",
+  "queries": [
+    { "q": "블루보틀 성수", "kind": "named", "name": ["블루보틀", "bluebottle"], "gu": "성동구" },
+    { "q": "어니언 성수", "kind": "named", "name": ["어니언", "onion"], "gu": "성동구" },
+    { "q": "대림창고", "kind": "named", "name": ["대림창고"], "gu": "성동구" },
+    { "q": "런던베이글뮤지엄 안국", "kind": "named", "name": ["런던베이글"], "gu": "종로구" },
+    { "q": "카페 레이어드 안국", "kind": "named", "name": ["레이어드", "layered"], "gu": "종로구" },
+    { "q": "누데이크 신사", "kind": "named", "name": ["누데이크", "nudake"], "gu": "강남구" },
+    { "q": "노티드 청담", "kind": "named", "name": ["노티드", "knotted"], "gu": "강남구" },
+    { "q": "우래옥", "kind": "named", "name": ["우래옥"], "gu": "중구" },
+    { "q": "을밀대 염리동", "kind": "named", "name": ["을밀대"], "gu": "마포구" },
+    { "q": "진주집 여의도", "kind": "named", "name": ["진주집"], "gu": "영등포구" },
+    { "q": "육회자매집 광장시장", "kind": "named", "name": ["육회자매"], "gu": "종로구" },
+    { "q": "만선호프 을지로", "kind": "named", "name": ["만선호프"], "gu": "중구" },
+    { "q": "커피한약방 을지로", "kind": "named", "name": ["커피한약방"], "gu": "중구" },
+    { "q": "교보문고 광화문", "kind": "named", "name": ["교보문고"], "gu": "종로구" },
+    { "q": "CGV 용산아이파크몰", "kind": "named", "name": ["cgv", "씨지브이"], "gu": "용산구" },
+    { "q": "메가박스 코엑스", "kind": "named", "name": ["메가박스"], "gu": "강남구" },
+    { "q": "툭툭누들타이 연남", "kind": "named", "name": ["툭툭"], "gu": "마포구" },
+    { "q": "할아버지공장 성수", "kind": "named", "name": ["할아버지공장"], "gu": "성동구" },
+    { "q": "미도인 가로수길", "kind": "named", "name": ["미도인"], "gu": "강남구" },
+    { "q": "다운타우너 한남", "kind": "named", "name": ["다운타우너"], "gu": "용산구" },
+    { "q": "서울숲", "kind": "landmark", "name": ["서울숲"], "gu": "성동구" },
+    { "q": "뚝섬한강공원", "kind": "landmark", "name": ["뚝섬"], "gu": "광진구" },
+    { "q": "남산서울타워", "kind": "landmark", "name": ["서울타워", "n서울타워"], "gu": "용산구" },
+    { "q": "롯데월드", "kind": "landmark", "name": ["롯데월드"], "gu": "송파구" },
+    { "q": "성수 카페", "kind": "category", "category": ["카페", "커피"], "gu": "성동구" },
+    {
+      "q": "연남동 파스타",
+      "kind": "category",
+      "category": ["파스타", "이탈리", "양식"],
+      "gu": "마포구"
+    },
+    { "q": "합정 와인바", "kind": "category", "category": ["와인"], "gu": "마포구" },
+    { "q": "홍대 방탈출", "kind": "category", "category": ["방탈출"], "gu": "마포구" },
+    { "q": "강남 보드게임카페", "kind": "category", "category": ["보드게임"], "gu": "강남구" },
+    { "q": "익선동 한옥카페", "kind": "category", "category": ["카페", "커피"], "gu": "종로구" }
+  ]
+}
