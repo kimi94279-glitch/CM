@@ -23,10 +23,12 @@ export function PlaceCard({
   onDelete,
   deleting = false,
 }: PlaceCardProps) {
-  const authorColor = mine ? colors.you : colors.partner;
+  // 배지 = 잉크 solid(흰 숫자), 작성자 글자 = 잉크 text(흰 바탕 가독성).
+  const badgeColor = mine ? colors.you : colors.partner;
+  const authorTextColor = mine ? colors.youText : colors.partnerText;
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
-      <View style={[styles.badge, { backgroundColor: authorColor }]}>
+      <View style={[styles.badge, { backgroundColor: badgeColor }]}>
         <Text style={styles.badgeText}>{index}</Text>
       </View>
       <View style={styles.body}>
@@ -34,7 +36,7 @@ export function PlaceCard({
           {place.name}
         </Text>
         {authorLabel ? (
-          <Text style={[styles.author, { color: authorColor }]} numberOfLines={1}>
+          <Text style={[styles.author, { color: authorTextColor }]} numberOfLines={1}>
             {authorLabel}
           </Text>
         ) : null}
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
   badgeText: {
     ...typography.label,
     fontWeight: '700',
-    color: colors.surface,
+    color: colors.onPrimary,
   },
   body: {
     flex: 1,

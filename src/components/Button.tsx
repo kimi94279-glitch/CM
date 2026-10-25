@@ -37,7 +37,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : colors.primary} />
+        <ActivityIndicator color={variant === 'primary' ? colors.onPrimary : colors.primary} />
       ) : (
         <Text style={[styles.text, textStyles[variant]]}>{title}</Text>
       )}
@@ -65,14 +65,15 @@ const styles = StyleSheet.create({
   },
 });
 
+// Primary = 검정 채움, Secondary = 연회색 채움(테두리 없음), Ghost = 글자만 (DESIGN.md B+).
 const variantStyles: Record<ButtonVariant, ViewStyle> = {
   primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
+  secondary: { backgroundColor: colors.surfaceMuted },
   ghost: { backgroundColor: 'transparent' },
 };
 
 const textStyles: Record<ButtonVariant, { color: string }> = {
-  primary: { color: '#FFFFFF' },
-  secondary: { color: colors.primary },
-  ghost: { color: colors.primary },
+  primary: { color: colors.onPrimary },
+  secondary: { color: colors.textStrong },
+  ghost: { color: colors.textStrong },
 };

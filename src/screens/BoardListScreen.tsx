@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   fabText: {
-    color: '#FFFFFF',
+    color: colors.onPrimary,
     fontSize: 28,
     lineHeight: 32,
   },

@@ -415,7 +415,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         )}
       </View>
 
-      {/* 작성자 범례(커플일 때만): 핀·반응·스티커 색 = 나(코랄) / 상대(틸). 상단 바(44) 바로 아래. */}
+      {/* 작성자 범례(커플일 때만): 핀·반응·스티커 색 = 각자의 잉크. 상단 바(44) 바로 아래. */}
       {partnerLabel !== null && !searchOpen ? (
         <View
           style={[styles.legend, { top: insets.top + spacing.xs + 44 + spacing.xs }]}
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.sm,
   },
-  // A-1+A-3: 중립색(흰 배경+보더) + 44 축소 + 약한 그림자. 코랄은 지도 핀/동선 전용으로 보존.
+  // A-1+A-3: 중립색(흰 배경+보더) + 44 축소 + 약한 그림자. 색은 지도 위 잉크(사람) 전용으로 보존.
   fab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -959,9 +959,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // 내가 이미 누른 반응: 내 색(코랄) 테두리 + 연한 배경.
+  // 내가 이미 누른 반응: 내 잉크 테두리 + 잉크 tint 배경.
   reactionEmojiMine: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.youTint,
     borderRadius: radius.card,
     borderWidth: 2,
     borderColor: colors.you,

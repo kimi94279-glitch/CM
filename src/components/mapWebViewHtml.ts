@@ -77,7 +77,7 @@ export function buildMapHtml(places: MapPlace[]): string {
     // 카메라 고정 대상 { lat, lng } (알림 탭 진입). 사용자가 지도를 움직이거나 Recenter 하기 전까지
     // 장소 갱신(renderPlaces → applyCamera)이 와도 이 위치를 유지한다 — 데이터 도착 순서와 무관하게 동작.
     var FOCUS = null;
-    // 작성자 색(DESIGN.md Couple Identity): 나=코랄, 상대=틸. 선택 링은 두 색과 겹치지 않게 잉크색.
+    // 작성자 잉크(DESIGN.md 사람마다 잉크): 지금은 나=라일락, 상대=스카이. 선택 링은 잉크와 겹치지 않게 검정.
     var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
     var map, bounds;
     var markers = [];          // 장소(번호 핀) 마커
@@ -169,7 +169,7 @@ export function buildMapHtml(places: MapPlace[]): string {
       map.addLayer({
         id:'route-line', type:'line', source:'route',
         layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{ 'line-color':'#FF6B81', 'line-width':4, 'line-opacity':0.9 }
+        paint:{ 'line-color':'${colors.route}', 'line-width':3, 'line-opacity':0.85 }
       });
       routeReady = true;
     }
@@ -182,7 +182,7 @@ export function buildMapHtml(places: MapPlace[]): string {
       bounds = new maplibregl.LngLatBounds();
       var coords = [];
       // 번호형 핀: 배열 순서(1..N) = order_index 정렬 결과. 번호는 UI 파생값(미저장).
-      // 핀 색 = 장소를 추가한 사람(나/상대). 동선(폴리라인)은 브랜드 코랄 유지.
+      // 핀 색 = 장소를 추가한 사람의 잉크. 동선(폴리라인)은 잉크와 겹치지 않는 중립 회색.
       PLACES.forEach(function(p, i){
         var lngLat = [p.longitude, p.latitude];
         bounds.extend(lngLat);
