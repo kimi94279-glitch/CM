@@ -98,6 +98,8 @@ function shouldStartLoad({ url }: WebViewNavigation): boolean {
 export interface MapWebViewHandle {
   // 카메라를 의미 있는 기준으로 되돌린다(R1: 0개=기본 중심 / 1개=센터 / 2+=fitBounds).
   recenter(): void;
+  // 카메라를 특정 좌표에 고정(알림 탭 진입). 사용자가 지도를 움직이면 풀린다. null = 해제.
+  setFocus(point: { lat: number; lng: number } | null): void;
 }
 
 // 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap positron, 키리스).
@@ -124,6 +126,14 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   const reactionPendingRef = useRef<ReactionGroups | null>(null);
   const memoPendingRef = useRef<MemoBubbles | null>(null);
   const objectPendingRef = useRef<ReturnType<typeof toRenderObjects> | null>(null);
+  // 카메라 고정 큐: undefined = 대기 없음, null = 해제 대기, 좌표 = 고정 대기(앱을 알림으로 연 직후 등).
+  const focusPendingRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined);
+
+  const pushFocus = useCallback((point: { lat: number; lng: number } | null) => {
+    webRef.current?.injectJavaScript(
+      `window.setFocus && window.setFocus(${safeJson(point)}); true;`
+    );
+  }, []);
 
   // P1: html 은 마운트 1회만 생성(이후 source 불변 → places 변경 시 WebView 전체 reload 방지).
   // 초기 places 는 베이크되어 첫 페인트에 반영되고, 이후 변경은 injectJavaScript 증분 갱신.
@@ -208,8 +218,15 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         // ready 이전 호출 대비 가드 + injectJavaScript 마지막 표현식 true; 관례.
         webRef.current?.injectJavaScript('window.recenter && window.recenter(); true;');
       },
+      setFocus(point) {
+        if (readyRef.current) {
+          pushFocus(point);
+        } else {
+          focusPendingRef.current = point;
+        }
+      },
     }),
-    []
+    [pushFocus]
   );
 
   const handleMessage = (e: WebViewMessageEvent) => {
@@ -233,6 +250,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         if (objectPendingRef.current) {
           pushObjects(objectPendingRef.current);
           objectPendingRef.current = null;
+        }
+        // 고정은 장소 반영 뒤에 적용해야 카메라가 그 위치에 머문다.
+        if (focusPendingRef.current !== undefined) {
+          pushFocus(focusPendingRef.current);
+          focusPendingRef.current = undefined;
         }
         return;
       }

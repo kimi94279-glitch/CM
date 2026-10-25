@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 
 import type { UserProfile } from '../types/models';
+import { unregisterCurrentPushToken } from './pushService';
 import { supabase } from './supabase';
 
 // 모든 데이터 접근은 service 계층을 통해서만 수행한다. (ARCHITECTURE.md)
@@ -16,6 +17,8 @@ export async function signInWithEmail(email: string, password: string): Promise<
 }
 
 export async function signOut(): Promise<void> {
+  // 이 기기 푸시 토큰부터 해제(다른 계정으로 로그인해도 이전 계정 알림이 오지 않게). 실패해도 로그아웃은 진행.
+  await unregisterCurrentPushToken().catch(() => {});
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }

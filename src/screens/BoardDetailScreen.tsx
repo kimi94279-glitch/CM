@@ -1,6 +1,6 @@
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -140,6 +140,28 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 지도 마커 클릭 → 강조 ID만 설정(시트 자동 오픈 안 함, Surface First 우선).
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  // 알림 탭 진입(route.params.focus): 장소면 그 핀, 스티커처럼 장소가 없으면 좌표가 대상.
+  // 장소 목록이 아직 없으면 대상이 null 이고, 목록이 도착하면 그때 적용된다.
+  const focus = route.params.focus;
+  const focusTarget = useMemo(() => {
+    if (!focus) return null;
+    if (focus.placeId) {
+      const p = places.find((x) => x.id === focus.placeId);
+      return p ? { placeId: p.id, lat: p.latitude, lng: p.longitude } : null;
+    }
+    if (focus.lat !== undefined && focus.lng !== undefined) {
+      return { placeId: null, lat: focus.lat, lng: focus.lng };
+    }
+    return null;
+  }, [focus, places]);
+  // 그 핀의 바(반응·메모)를 연다 — 렌더 중 상태 조정(nonce 당 1회, effect 안 setState 회피).
+  const [selectedFocusNonce, setSelectedFocusNonce] = useState<number | null>(null);
+  if (focus && focusTarget?.placeId && selectedFocusNonce !== focus.nonce) {
+    setSelectedFocusNonce(focus.nonce);
+    setHighlightedId(focusTarget.placeId);
+    setReactionPlaceId(focusTarget.placeId);
+  }
   // 모바일 Half Sheet 표시 여부 (기본 닫힘 → 기본 화면은 지도만)
   const [sheetOpen, setSheetOpen] = useState(false);
   const deletePlace = useDeletePlace(boardId);
@@ -258,6 +280,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   useEffect(() => {
     map.setData(boardId, { places, reactions, memos, objects });
   }, [boardId, places, reactions, memos, objects, map]);
+
+  // 알림 탭 진입: 대상 좌표에 카메라 고정(지도 = 외부 시스템이라 effect). nonce 당 1회.
+  const handledFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (!focus || !focusTarget || handledFocus.current === focus.nonce) return;
+    handledFocus.current = focus.nonce;
+    map.focus(boardId, focusTarget.lat, focusTarget.lng);
+  }, [focus, focusTarget, boardId, map]);
 
   // 편집 선택(선택 링) 동기화.
   useEffect(() => {
