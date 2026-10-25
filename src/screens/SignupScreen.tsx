@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { PendingInviteNote } from '../components/PendingInviteNote';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, spacing, typography } from '../constants/theme';
@@ -34,6 +35,7 @@ export function SignupScreen({ navigation }: Props) {
   return (
     <ScreenContainer>
       <Text style={styles.title}>회원가입</Text>
+      <PendingInviteNote />
 
       <View style={styles.form}>
         <TextField

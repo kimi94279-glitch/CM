@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0006)
+## 3.5 추가 마이그레이션 (0002 ~ 0008)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -94,6 +94,8 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0004_map_objects.sql` | `map_objects` 테이블(스티커/노트 등) + RLS | 필수(스티커 P0) |
 | `0005_couples_rls_hardening.sql` | `couples_update` 정책 제거 + `is_member_of_couple`에 status(`solo`/`active`) 조건 | 필수(보안). 재실행 안전(`if exists` / `or replace`) |
 | `0006_push_notifications.sql` | `pg_net` + `push_tokens`/`push_throttle` + 장소·반응·메모·스티커 INSERT 트리거 → Expo Push API | 필수(푸시 알림). 재실행 안전 |
+| `0007_push_draw_text.sql` | 그림(`draw`) 알림 문구 분리 | 필수(그림 알림). 재실행 안전 |
+| `0008_invite_merge.sql` | `accept_invite` 솔로 보드 합치기 + `invite_preview` RPC(authenticated 전용) | 필수(초대 흐름 v2). 재실행 안전 |
 
 ### 적용 전 상태 점검 (읽기 전용)
 

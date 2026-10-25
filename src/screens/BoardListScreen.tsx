@@ -30,7 +30,7 @@ export function BoardListScreen({ navigation }: Props) {
         <View style={styles.headerActions}>
           {isSolo ? (
             <Pressable onPress={() => navigation.navigate('InviteCreate')} hitSlop={8}>
-              <Text style={styles.headerLink}>상대 초대</Text>
+              <Text style={styles.headerLink}>같이 그릴 사람 초대</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => logout.mutate()} hitSlop={8}>

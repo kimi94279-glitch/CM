@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { PendingInviteNote } from '../components/PendingInviteNote';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, spacing, typography } from '../constants/theme';
@@ -29,6 +30,8 @@ export function LoginScreen({ navigation }: Props) {
         <Text style={styles.title}>Couple Map</Text>
         <Text style={styles.subtitle}>둘이 함께 시작해요</Text>
       </View>
+
+      <PendingInviteNote />
 
       <TextField
         label="이메일"

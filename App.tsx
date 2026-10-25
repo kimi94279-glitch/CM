@@ -12,12 +12,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MapHost } from './src/components/MapHost';
 import { AuthProvider } from './src/hooks/useAuthState';
+import { PendingInviteProvider, usePendingInviteRouting } from './src/hooks/usePendingInvite';
 import {
   usePushNavigation,
   usePushRefresh,
   usePushRegistration,
 } from './src/hooks/usePushNotifications';
-import { linking } from './src/navigation/linking';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import type { RootStackParamList } from './src/navigation/types';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -32,6 +32,12 @@ function PushNotifications({ navReady }: { navReady: boolean }) {
   usePushRegistration();
   usePushRefresh();
   usePushNavigation(navigationRef, navReady);
+  return null;
+}
+
+// 초대 링크 배선: 받은 코드를 기억했다가 초대 화면으로 이어 준다.
+function PendingInviteLinks({ navReady }: { navReady: boolean }) {
+  usePendingInviteRouting(navigationRef, navReady);
   return null;
 }
 
@@ -61,19 +67,21 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <AuthProvider>
-          <PushNotifications navReady={navReady} />
-          <MapHost>
-            <NavigationContainer
-              ref={navigationRef}
-              theme={navTheme}
-              linking={linking}
-              fallback={<SplashScreen />}
-              onReady={() => setNavReady(true)}
-            >
-              <RootNavigator />
-            </NavigationContainer>
-          </MapHost>
-          <StatusBar style="auto" />
+          <PendingInviteProvider>
+            <PushNotifications navReady={navReady} />
+            <PendingInviteLinks navReady={navReady} />
+            <MapHost>
+              <NavigationContainer
+                ref={navigationRef}
+                theme={navTheme}
+                fallback={<SplashScreen />}
+                onReady={() => setNavReady(true)}
+              >
+                <RootNavigator />
+              </NavigationContainer>
+            </MapHost>
+            <StatusBar style="auto" />
+          </PendingInviteProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </QueryClientProvider>

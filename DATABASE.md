@@ -246,9 +246,11 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
   2. `couples` INSERT (user_a=본인, user_b=NULL, status='solo')
 - `accept_invite(token text)` — 초대 수락 = 솔로 워크스페이스 승격. 트랜잭션 처리:
   1. 토큰 유효성 검증 (`used_at IS NULL AND expires_at > now()`), 수락자 ≠ 초대자
-  2. 수락자가 active면 거부 / solo면: 보드가 있으면 거부(향후 병합), 비어있으면 제거 후 합류
+  2. 수락자가 active면 거부
   3. 초대자가 active면 거부 / solo면 그 행을 `active`로 승격(user_b 채움, **데이터 유지**) / 워크스페이스 없으면 새 active 커플 INSERT
-  4. `couple_invites.used_at` 기록
+  4. 수락자가 solo면 그 보드를 3의 공간으로 옮기고(`boards.couple_id` UPDATE) 솔로 행 삭제 — 하위 데이터는 board_id 로 따라오고 작성자는 유지(0008. 이전에는 보드가 있으면 거부)
+  5. `couple_invites.used_at` 기록
+- `invite_preview(token text) → jsonb` — 수락 전 미리보기(0008, authenticated 전용). `{state: ok|invalid|used|expired|own|taken, inviter_name}`. 비멤버가 `couple_invites`를 직접 읽지 않고도 "누가 보낸 초대인지"만 알 수 있다.
 
 ### Policy Matrix
 

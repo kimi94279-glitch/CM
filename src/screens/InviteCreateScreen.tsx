@@ -1,14 +1,14 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
-import { createInvite } from '../services/coupleService';
+import { createInvite, getMyWorkspace } from '../services/coupleService';
 import type { RootStackParamList } from '../navigation/types';
 import { buildInviteLink, formatInviteCode } from '../utils/invite';
 
@@ -31,12 +31,29 @@ export function InviteCreateScreen({ navigation }: Props) {
   const token = inviteQuery.data?.invite_token ?? '';
   const link = token ? buildInviteLink(token) : '';
 
+  // 이 화면에 있는 동안 상대가 받아들였는지 가볍게 확인한다 → 연결되면 바로 목록으로
+  const connectedQuery = useQuery({
+    queryKey: ['invite-connected'],
+    queryFn: getMyWorkspace,
+    enabled: !!token,
+    refetchInterval: 5000,
+    gcTime: 0,
+  });
+  const connected = connectedQuery.data?.status === 'active';
+  useEffect(() => {
+    if (connected) refresh();
+  }, [connected, refresh]);
+
   const onCopy = async () => {
     if (token) await Clipboard.setStringAsync(token);
   };
 
+  // 링크는 웹 페이지라 앱이 없어도 열린다. 링크가 막히는 곳을 위해 코드도 같이 보낸다.
   const onShare = async () => {
-    if (link) await Share.share({ message: `Couple Map 초대: ${link}` });
+    if (!link) return;
+    await Share.share({
+      message: `나랑 지도에 같이 그릴래? ✏️\n${link}\n\n앱에서 코드 입력: ${formatInviteCode(token)}`,
+    });
   };
 
   // 상대가 수락하면 active 커플이 생겨 게이팅이 Home 으로 전환된다.
@@ -63,7 +80,7 @@ export function InviteCreateScreen({ navigation }: Props) {
   if (inviteQuery.isError) {
     return (
       <ScreenContainer>
-        <Text style={styles.error}>초대 생성에 실패했어요.</Text>
+        <Text style={styles.error}>초대를 만들지 못했어요.</Text>
         <Button title="다시 시도" onPress={() => inviteQuery.refetch()} />
       </ScreenContainer>
     );
@@ -71,26 +88,26 @@ export function InviteCreateScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer>
-      <Text style={styles.title}>상대 초대하기</Text>
-      <Text style={styles.desc}>이 코드를 상대에게 보내주세요</Text>
+      <Text style={styles.title}>같이 그릴 사람 초대</Text>
+      <Text style={styles.desc}>링크를 보내면 앱이 없는 사람도 열 수 있어요</Text>
 
       <View style={styles.codeBox}>
         <Text style={styles.code}>{formatInviteCode(token)}</Text>
       </View>
 
-      <Button title="링크 공유하기" onPress={onShare} />
+      <Button title="초대 링크 보내기" onPress={onShare} />
       <Button title="코드 복사" variant="secondary" onPress={onCopy} style={styles.gap} />
 
-      <Text style={styles.waiting}>⏳ 상대가 수락하면 연결돼요</Text>
+      <Text style={styles.waiting}>⏳ 상대가 초대를 받으면 여기서 바로 이어져요</Text>
 
       <View style={styles.checkArea}>
         <Button title="연결 확인" variant="ghost" onPress={onCheckConnection} loading={checking} />
-        {showNotYet ? <Text style={styles.notYet}>아직 상대가 수락하지 않았어요.</Text> : null}
+        {showNotYet ? <Text style={styles.notYet}>아직 연결되지 않았어요.</Text> : null}
       </View>
 
       {/* 상대가 먼저 초대한 경우(솔로 포함): 받은 코드로 합류 */}
       <Pressable onPress={() => navigation.navigate('InviteJoin')} style={styles.linkRow}>
-        <Text style={styles.linkMuted}>상대가 먼저 초대했나요? </Text>
+        <Text style={styles.linkMuted}>먼저 초대를 받았나요? </Text>
         <Text style={styles.link}>코드 입력</Text>
       </Pressable>
     </ScreenContainer>

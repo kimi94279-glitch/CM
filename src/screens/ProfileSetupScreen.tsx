@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import { Button } from '../components/Button';
+import { PendingInviteNote } from '../components/PendingInviteNote';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, spacing, typography } from '../constants/theme';
@@ -28,6 +29,7 @@ export function ProfileSetupScreen() {
   return (
     <ScreenContainer>
       <Text style={styles.title}>어떻게 불러드릴까요?</Text>
+      <PendingInviteNote />
 
       <TextField
         label="닉네임"
@@ -49,7 +51,7 @@ export function ProfileSetupScreen() {
         disabled={!canSubmit}
         loading={mutation.isPending}
       />
-      <Text style={styles.hint}>상대에게 표시되는 이름이에요</Text>
+      <Text style={styles.hint}>같이 그리는 사람에게 보이는 이름이에요</Text>
     </ScreenContainer>
   );
 }

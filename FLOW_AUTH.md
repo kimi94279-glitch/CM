@@ -76,8 +76,8 @@ CoupleConnect 화면 (active 커플 없음)
   → "초대하기"
   → invite_token 생성 (클라이언트 난수)
   → couple_invites INSERT (created_by = 나, expires_at 설정)
-  → 산출물 2가지:
-        1) 딥링크  couplemap://invite?token=...
+  → 산출물 2가지 (2026-10-26 개정: 공유 링크는 웹 페이지 — 아래 Amendment)
+        1) 초대 링크  https://…/invite/?code=...  (웹 페이지가 couplemap://invite?token=... 로 앱을 연다)
         2) 초대 코드 (token 기반 사람이 읽기 쉬운 코드)
   → OS 공유 시트로 전달 / 코드 복사
   → "상대가 수락하면 연결돼요" 대기 안내
@@ -102,7 +102,7 @@ CoupleConnect 화면 (active 커플 없음)
   → Home (BoardList)
 ```
 
-- 인증/프로필이 먼저 필요한 경우 토큰을 보류했다가 완료 후 `accept_invite`를 자동 실행한다.
+- 인증/프로필이 먼저 필요한 경우 토큰을 보류했다가 완료 후 InviteJoin 으로 이어 준다. ~~`accept_invite`를 자동 실행한다.~~ → 개정(2026-10-26): 솔로 데이터가 합쳐지므로 자동 수락하지 않고 미리보기 후 한 번 확인받는다.
 
 ---
 
@@ -128,7 +128,7 @@ CoupleConnect 화면 (active 커플 없음)
 ```
 
 - **게이팅:** 각 관문(세션 → 프로필 → 커플)을 통과해야 다음 화면으로 진행한다.
-- **딥링크 진입:** 보류된 초대 토큰은 인증·프로필 완료 직후 자동으로 수락 처리된다.
+- **딥링크 진입:** 보류된 초대 토큰은 인증·프로필 완료 직후 InviteJoin(코드 채움 + 미리보기)으로 이어진다. 수락은 사용자가 누른다(2026-10-26 개정).
 
 ---
 
@@ -194,7 +194,7 @@ created ──(시간 경과)──> expired (expires_at 초과, used_at = NULL)
 | 초대 수락 | 양측 중 누군가 active 커플 보유 | "이미 연결된 계정이 있어요" |
 | 코드 입력 | 형식 오류 / 없는 코드 | "초대 코드를 다시 확인해주세요" |
 | 딥링크 | 토큰 없는/깨진 링크 | 일반 진입으로 폴백 |
-| 딥링크 | 앱 미설치 | 스토어 이동 → 설치 후 토큰 복원하여 수락 |
+| 딥링크 | 앱 미설치 | 웹 페이지에서 코드 복사 → 설치 후 InviteJoin "붙여넣기" (2026-10-26 개정) |
 | 공통 | 네트워크 실패 | 재시도 가능한 에러 안내 |
 
 - 초대 수락 실패 사유(invalid / expired / used / self / already-in-couple)는 `accept_invite` RPC가 던지는 예외를 위 메시지로 매핑한다.
@@ -226,7 +226,8 @@ created ──(시간 경과)──> expired (expires_at 초과, used_at = NULL)
 - 스킴: `couplemap://`
 - 초대 딥링크: `couplemap://invite?token=...`
 - OAuth 리다이렉트 URL을 Supabase 및 Google 콘솔에 등록한다.
-- 미인증 상태에서 초대 딥링크로 진입하면 토큰을 보류했다가 인증·프로필 완료 후 `accept_invite`를 실행한다.
+- 미인증 상태에서 초대 딥링크로 진입하면 토큰을 보류했다가(AsyncStorage, 48시간) 인증·프로필 완료 후 InviteJoin 으로 이어 준다(`src/hooks/usePendingInvite.tsx`).
+- React Navigation `linking` 설정은 쓰지 않는다 — 초대 링크는 게이팅 단계와 상관없이 받아야 해서 위 훅이 직접 처리한다.
 
 ### 5-5. 초대 코드 (백업 수단)
 
@@ -292,5 +293,32 @@ Login → ProfileSetup → CoupleConnect
 
 ### 한계 (MVP)
 
-- 수락자가 이미 데이터(보드)가 있는 솔로 워크스페이스면 합류 불가(`acceptor has solo data`) → 두 솔로 데이터 병합은 향후 기능.
+- ~~수락자가 이미 데이터(보드)가 있는 솔로 워크스페이스면 합류 불가(`acceptor has solo data`) → 두 솔로 데이터 병합은 향후 기능.~~ → 0008 에서 해소: 수락자의 보드를 함께 쓰는 공간으로 옮긴 뒤 솔로 행을 지운다.
 - 비어있는 솔로 워크스페이스는 수락 시 자동 정리 후 합류.
+
+---
+
+## Amendment (2026-10-26): 초대 흐름 v2 — 웹 링크 · 코드 보존 · 솔로 합치기
+
+**배경:** 앱이 없는 상대는 `couplemap://` 링크를 열 수 없고, 로그인 전에 받은 초대는 사라졌으며, 혼자 먼저 그리던 사람은 초대를 받을 수 없었다(`acceptor has solo data`). 문구도 커플 전용이라 "같이 그릴 사람" 톤으로 바꿨다(DESIGN.md 포지셔닝).
+
+**1. 웹 링크 (앱이 없어도 열림)**
+- 공유 링크 = `INVITE_WEB_URL?code=XXXXXXXX` (`src/constants/config.ts`). 정적 페이지 `web/invite/index.html` 를 GitHub Pages 로 배포(`.github/workflows/invite-page.yml`).
+- 페이지: 초대 코드 + "코드 복사" + "앱에서 열기". Android 는 `intent://…;package=com.couplemap.mobile;S.browser_fallback_url=…#noapp`, 그 외는 `couplemap://invite?token=…`. 앱이 안 열리면 설치 안내를 강조한다.
+- 공유 메시지에는 링크와 코드를 같이 넣는다(링크가 막힌 메신저 대비).
+- 유니버설 링크/App Links(https 링크가 바로 앱을 여는 것)는 자체 도메인이 생기면 도입한다.
+
+**2. 코드 보존**
+- 앱을 연 링크(`couplemap://invite?token=…`, `…/invite/?code=…`)의 코드를 AsyncStorage 에 48시간 보관한다. 앱을 껐다 켜도 남는다.
+- Login · Signup · ProfileSetup 에 "받은 초대를 기억해 둘게요" 안내를 띄운다.
+- no_workspace / solo 가 되면 InviteJoin 으로 이동(코드 채움). active 면 "이미 같이 그리는 사람이 있어요" 안내 후 버린다.
+- 앱 설치 직후처럼 링크가 앱에 전달되지 않은 경우: 웹 페이지에서 코드를 복사 → InviteJoin "붙여넣기"(공유 메시지 전체를 붙여넣어도 링크·코드를 찾는다).
+
+**3. 솔로 데이터 합치기 (0008)**
+- `accept_invite`: 결과 공간 = 초대자 솔로 승격 또는 새 active. 수락자 솔로가 있으면 그 보드를 결과 공간으로 옮기고 솔로 행 삭제. 장소·메모·반응·스티커·그림은 board_id 로 따라오고 작성자는 그대로라 색 구분이 유지된다.
+- `invite_preview(token)` (authenticated 전용): `{state: ok|invalid|used|expired|own|taken, inviter_name}`. InviteJoin 이 "○○님이 같이 그리자고 해요"와 "혼자 그리던 지도 N개도 함께 보게 돼요"를 수락 전에 보여준다.
+- 자동 수락 없음 — 데이터가 합쳐지므로 사용자가 "같이 그리기"를 누른다.
+
+**4. 초대한 쪽 갱신**
+- InviteCreate 화면에 있는 동안 5초마다 공간 상태를 확인해, 상대가 받으면 바로 목록으로 넘어간다.
+- 솔로 상태에서 앱으로 돌아올 때(AppState active) 공간을 다시 확인한다.

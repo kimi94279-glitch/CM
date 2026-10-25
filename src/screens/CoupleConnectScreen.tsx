@@ -24,16 +24,20 @@ export function CoupleConnectScreen({ navigation }: Props) {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>데이트를 준비해볼까요?</Text>
+        <Text style={styles.title}>누구랑 같이 그릴까요?</Text>
         <Text style={styles.subtitle}>
-          혼자 먼저 계획을 만들어도 괜찮아요.{'\n'}상대는 언제든 나중에 초대할 수 있어요.
+          지도 위에 같이 그릴 사람을 불러 보세요.{'\n'}혼자 먼저 그려도 괜찮아요. 초대는 언제든 할
+          수 있어요.
         </Text>
       </View>
 
       <View style={styles.actions}>
-        <Button title="💌  상대 초대하기" onPress={() => navigation.navigate('InviteCreate')} />
         <Button
-          title="🧭  먼저 둘러보기"
+          title="✏️  같이 그릴 사람 초대하기"
+          onPress={() => navigation.navigate('InviteCreate')}
+        />
+        <Button
+          title="🧭  혼자 먼저 그려 보기"
           variant="secondary"
           onPress={() => soloMutation.mutate()}
           loading={soloMutation.isPending}

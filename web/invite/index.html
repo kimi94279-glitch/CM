@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="light" />
+    <title>같이 그릴래요?</title>
+    <meta name="description" content="초대 링크를 열면 같은 지도에 같이 그릴 수 있어요." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="지도에 같이 그릴래요? ✏️" />
+    <meta property="og:description" content="초대 링크를 열면 같은 지도에 같이 그릴 수 있어요." />
+    <!--
+      초대 웹 페이지 (앱이 없는 상대도 여는 링크)
+      - 주소: <INVITE_WEB_URL>?code=ABCDEFGH  (src/constants/config.ts)
+      - "앱에서 열기" → couplemap://invite?token=… (Android 는 intent:// 로 열고, 앱이 없으면 #noapp 으로 돌아온다)
+      - 앱이 없으면 코드를 복사해 두고, 설치 후 "초대 코드를 받았나요?"에 붙여넣는다.
+      - 색은 앱 B+ 토큰(src/constants/theme.ts)과 같게: 무채색 틀 + 사람별 파스텔 잉크.
+    -->
+    <style>
+      :root {
+        --bg: #ffffff;
+        --surface-muted: #f2f2f7;
+        --text-strong: #1d1d1f;
+        --text-muted: #6e6e73;
+        --border: #e5e5ea;
+        --primary: #1d1d1f;
+        --on-primary: #ffffff;
+        --warning: #a15c00;
+        --lilac-soft: #b9aaf5;
+        --lilac-solid: #6f5dd8;
+        --sky-soft: #9ccbf2;
+        --sky-solid: #2f78bc;
+        --map-street: #e9e9ee;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text-strong);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        word-break: keep-all;
+      }
+      main {
+        max-width: 420px;
+        margin: 0 auto;
+        padding: 24px 16px calc(32px + env(safe-area-inset-bottom));
+      }
+      .brand {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+      }
+      .art {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 16px 0 20px;
+        border-radius: 20px;
+        background: var(--surface-muted);
+      }
+      h1 {
+        font-size: 24px;
+        line-height: 1.35;
+        margin: 0;
+        font-weight: 700;
+      }
+      .lead {
+        margin: 8px 0 24px;
+        font-size: 15px;
+        line-height: 1.55;
+        color: var(--text-muted);
+      }
+      .code-box {
+        background: var(--surface-muted);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .code-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+      }
+      .code {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        font-variant-numeric: tabular-nums;
+        -webkit-user-select: all;
+        user-select: all;
+      }
+      button,
+      .btn {
+        appearance: none;
+        border: 0;
+        font: inherit;
+        cursor: pointer;
+        text-decoration: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .copy {
+        flex: none;
+        background: var(--bg);
+        color: var(--text-strong);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        background: var(--primary);
+        color: var(--on-primary);
+        border-radius: 12px;
+        padding: 15px 16px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .btn:active,
+      .copy:active {
+        opacity: 0.75;
+      }
+      .note {
+        font-size: 13px;
+        color: var(--text-muted);
+        text-align: center;
+        margin: 12px 0 0;
+      }
+      .install {
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .install h2 {
+        font-size: 16px;
+        margin: 0 0 10px;
+      }
+      .install.highlight h2 {
+        color: var(--warning);
+      }
+      .install ol {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--text-strong);
+      }
+      .install .stores {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .install .stores a {
+        flex: 1;
+        background: var(--surface-muted);
+        color: var(--text-strong);
+        padding: 12px;
+        font-size: 14px;
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(24px + env(safe-area-inset-bottom));
+        transform: translateX(-50%) translateY(12px);
+        background: var(--primary);
+        color: var(--on-primary);
+        font-size: 14px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        opacity: 0;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+        pointer-events: none;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">Couple Map</div>
+
+      <!-- 두 사람의 잉크가 한 지도에서 만나는 그림 -->
+      <svg
+        class="art"
+        viewBox="0 0 360 200"
+        role="img"
+        aria-label="두 사람이 지도 위에 같이 그린 선"
+      >
+        <g stroke="var(--map-street)" stroke-width="10" stroke-linecap="round" fill="none">
+          <path d="M-10 60 H370" />
+          <path d="M-10 140 C80 130 140 160 370 120" />
+          <path d="M90 -10 V210" />
+          <path d="M250 -10 C240 70 270 130 255 210" />
+        </g>
+        <path
+          d="M40 160 C60 110 95 95 120 110 S165 150 185 100"
+          stroke="var(--lilac-soft)"
+          stroke-width="7"
+          stroke-linecap="round"
+          fill="none"
+        />
+        <path
+          d="M320 40 C290 60 300 95 270 100 S215 80 192 96"
+          stroke="var(--sky-soft)"
+          stroke-width="7"
+          stroke-linecap="round"
+          fill="none"
+        />
+        <circle cx="188" cy="98" r="9" fill="var(--bg)" />
+        <text x="188" y="104" font-size="15" text-anchor="middle">✏️</text>
+        <circle cx="40" cy="160" r="6" fill="var(--lilac-solid)" />
+        <circle cx="320" cy="40" r="6" fill="var(--sky-solid)" />
+      </svg>
+
+      <section id="ok" hidden>
+        <h1>지도에 같이 그리자는<br />초대가 왔어요</h1>
+        <p class="lead">
+          같은 지도에 가고 싶은 곳을 모으고, 손으로 그리고, 서로의 흔적에 반응을 남길 수 있어요.
+        </p>
+
+        <div class="code-box">
+          <div>
+            <div class="code-label">초대 코드</div>
+            <div class="code" id="code"></div>
+          </div>
+          <button class="copy" id="copy" type="button">코드 복사</button>
+        </div>
+
+        <a class="btn" id="open" href="#">앱에서 열기</a>
+        <p class="note">초대는 받은 때부터 48시간 동안 열 수 있어요.</p>
+
+        <section class="install" id="install">
+          <h2 id="install-title">아직 앱이 없나요?</h2>
+          <ol>
+            <li>앱을 설치해요.</li>
+            <li>가입한 뒤 <b>초대 코드를 받았나요?</b>를 눌러요.</li>
+            <li>위 코드를 붙여넣으면 바로 같이 그릴 수 있어요.</li>
+          </ol>
+          <div class="stores" id="stores" hidden>
+            <a class="btn" id="store-ios" href="#" hidden>App Store</a>
+            <a class="btn" id="store-android" href="#" hidden>Google Play</a>
+          </div>
+          <p class="note" id="stores-soon">
+            지금은 베타 중이라, 설치 링크는 초대한 사람에게 받아 주세요.
+          </p>
+        </section>
+      </section>
+
+      <section id="bad" hidden>
+        <h1>초대 코드가 없는 링크예요</h1>
+        <p class="lead">
+          받은 메시지의 링크를 다시 눌러 보거나, 앱에서 초대 코드를 직접 넣어 주세요.
+        </p>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      (function () {
+        // 앱과 같은 규칙 (src/utils/invite.ts, src/constants/config.ts)
+        var SCHEME = 'couplemap';
+        var ANDROID_PACKAGE = 'com.couplemap.mobile';
+        var CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
+        // 스토어에 올라가면 채운다. 비어 있으면 "베타 중" 안내를 보여준다.
+        var STORE_IOS = '';
+        var STORE_ANDROID = '';
+
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        var params = new URLSearchParams(location.search);
+        var code = (params.get('code') || params.get('token') || '')
+          .replace(/\s+/g, '')
+          .toUpperCase();
+
+        if (!CODE_RE.test(code)) {
+          $('bad').hidden = false;
+          return;
+        }
+        $('ok').hidden = false;
+        $('code').textContent = code.slice(0, 4) + ' ' + code.slice(4);
+
+        var appUrl = SCHEME + '://invite?token=' + code;
+        var isAndroid = /Android/i.test(navigator.userAgent);
+        if (isAndroid) {
+          // 앱이 없으면 이 페이지(#noapp)로 돌아와 설치 안내를 강조한다
+          var back = location.href.split('#')[0] + '#noapp';
+          appUrl =
+            'intent://invite?token=' +
+            code +
+            '#Intent;scheme=' +
+            SCHEME +
+            ';package=' +
+            ANDROID_PACKAGE +
+            ';S.browser_fallback_url=' +
+            encodeURIComponent(back) +
+            ';end';
+        }
+        $('open').href = appUrl;
+
+        function toast(text) {
+          var el = $('toast');
+          el.textContent = text;
+          el.classList.add('show');
+          clearTimeout(toast.t);
+          toast.t = setTimeout(function () {
+            el.classList.remove('show');
+          }, 1800);
+        }
+
+        function noApp() {
+          var box = $('install');
+          box.classList.add('highlight');
+          $('install-title').textContent = '앱이 없는 것 같아요';
+          box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (location.hash === '#noapp') noApp();
+
+        // iOS 등: 앱이 열리면 페이지가 가려진다. 잠시 뒤에도 그대로면 설치 안내를 보여준다.
+        $('open').addEventListener('click', function () {
+          if (isAndroid) return;
+          var hidden = false;
+          var onVis = function () {
+            if (document.hidden) hidden = true;
+          };
+          document.addEventListener('visibilitychange', onVis);
+          setTimeout(function () {
+            document.removeEventListener('visibilitychange', onVis);
+            if (!hidden) noApp();
+          }, 1600);
+        });
+
+        function copyText(text) {
+          if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text).catch(function () {
+              return legacyCopy(text);
+            });
+          }
+          return legacyCopy(text);
+        }
+        // 인앱 브라우저 등 clipboard API 가 없거나 막힌 곳
+        function legacyCopy(text) {
+          return new Promise(function (resolve, reject) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? resolve() : reject();
+          });
+        }
+        $('copy').addEventListener('click', function () {
+          copyText(code).then(
+            function () {
+              toast('코드를 복사했어요');
+            },
+            function () {
+              toast('복사가 안 돼요. 코드를 길게 눌러 복사해 주세요');
+            }
+          );
+        });
+
+        if (STORE_IOS || STORE_ANDROID) {
+          $('stores').hidden = false;
+          $('stores-soon').hidden = true;
+          if (STORE_IOS) {
+            $('store-ios').href = STORE_IOS;
+            $('store-ios').hidden = false;
+          }
+          if (STORE_ANDROID) {
+            $('store-android').href = STORE_ANDROID;
+            $('store-android').hidden = false;
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

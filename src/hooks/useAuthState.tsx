@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { getMyProfile } from '../services/authService';
 import { getMyWorkspace } from '../services/coupleService';
@@ -77,6 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, [apply]);
+
+  // 혼자 쓰는 중이면 상대가 내 초대를 받아들였을 수 있다 → 앱으로 돌아올 때 공간을 다시 확인한다.
+  useEffect(() => {
+    if (status !== 'solo') return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') refresh();
+    });
+    return () => sub.remove();
+  }, [status, refresh]);
 
   return (
     <AuthContext.Provider value={{ status, session, workspace, refresh }}>
