@@ -41,6 +41,7 @@ const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 // 카메라 줌(GL zoom, 높을수록 확대). Kakao level 대체값 — 디바이스에서 미세조정 가능.
 const EMPTY_ZOOM = 11; // 핀 0개: 도시 레벨
 const SINGLE_ZOOM = 14; // 핀 1개: 동네 레벨
+const FOCUS_ZOOM = 16; // 알림 탭 등으로 특정 핀/좌표에 맞출 때: 골목 레벨
 
 export function buildMapHtml(places: MapPlace[]): string {
   const placesJson = safeJson(places);
@@ -72,7 +73,10 @@ export function buildMapHtml(places: MapPlace[]): string {
     document.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive:false });
     var PLACES = ${placesJson};
     var DEFAULT_CENTER = ${centerJson};
-    var EMPTY_ZOOM = ${EMPTY_ZOOM}, SINGLE_ZOOM = ${SINGLE_ZOOM};
+    var EMPTY_ZOOM = ${EMPTY_ZOOM}, SINGLE_ZOOM = ${SINGLE_ZOOM}, FOCUS_ZOOM = ${FOCUS_ZOOM};
+    // 카메라 고정 대상 { lat, lng } (알림 탭 진입). 사용자가 지도를 움직이거나 Recenter 하기 전까지
+    // 장소 갱신(renderPlaces → applyCamera)이 와도 이 위치를 유지한다 — 데이터 도착 순서와 무관하게 동작.
+    var FOCUS = null;
     // 작성자 색(DESIGN.md Couple Identity): 나=코랄, 상대=틸. 선택 링은 두 색과 겹치지 않게 잉크색.
     var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
     var map, bounds;
@@ -91,6 +95,10 @@ export function buildMapHtml(places: MapPlace[]): string {
     // 0/1/2+ 카메라 단일 진입점 — 초기 로드와 window.recenter()가 공용 사용(분기 중복 제거).
     function applyCamera(){
       if (!map) return;
+      if (FOCUS) {
+        map.jumpTo({ center: [FOCUS.lng, FOCUS.lat], zoom: FOCUS_ZOOM });
+        return;
+      }
       if (PLACES.length === 0) {
         map.jumpTo({ center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat], zoom: EMPTY_ZOOM });
       } else if (PLACES.length === 1) {
@@ -100,7 +108,10 @@ export function buildMapHtml(places: MapPlace[]): string {
       }
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
-    window.recenter = function(){ applyCamera(); };
+    // Recenter 는 고정을 풀고 전체 장소 기준으로 돌아간다.
+    window.recenter = function(){ FOCUS = null; applyCamera(); };
+    // 카메라 고정 설정(null = 해제). 보드 전환 시 RN 이 null 로 이전 보드 고정을 지운다.
+    window.setFocus = function(p){ FOCUS = p; if (p) applyCamera(); };
 
     // 기존 마커/폴리라인 정리(WebView는 유지). 증분 갱신 시 ghost/메모리 누수 방지.
     function clearOverlays(){
@@ -365,6 +376,10 @@ export function buildMapHtml(places: MapPlace[]): string {
 
         // 줌 변경 시 객체 크기를 world-space 기준으로 재계산(GL JS는 줌 중 연속 발화 → 부드러움).
         map.on('zoom', resizeObjects);
+
+        // 사용자가 직접 지도를 움직이면 카메라 고정 해제(코드의 jumpTo/fitBounds 는 originalEvent 없음).
+        map.on('dragstart', function(){ FOCUS = null; });
+        map.on('zoomstart', function(e){ if (e && e.originalEvent) FOCUS = null; });
 
         map.on('load', function(){
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.

@@ -34,6 +34,7 @@ export function MapHost({ children }: { children: ReactNode }) {
         boardIdRef.current = boardId;
         callbacksRef.current = {};
         setSelectedObjectId(null);
+        mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         setBoardData(EMPTY_DATA); // 데이터 도착 전 공백 — 이전 보드 마커 제거(잔상 1차 방어).
       },
       setData(boardId, data) {
@@ -50,6 +51,10 @@ export function MapHost({ children }: { children: ReactNode }) {
       },
       recenter() {
         mapRef.current?.recenter();
+      },
+      focus(boardId, lat, lng) {
+        if (boardIdRef.current !== boardId) return;
+        mapRef.current?.setFocus({ lat, lng });
       },
       show() {
         setVisible(true);

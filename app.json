@@ -29,7 +29,14 @@
       }
     },
     "plugins": [
-      "expo-build-properties"
+      "expo-build-properties",
+      [
+        "expo-notifications",
+        {
+          "color": "#FF6B81",
+          "defaultChannel": "default"
+        }
+      ]
     ]
   }
 }

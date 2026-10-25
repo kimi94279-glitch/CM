@@ -29,8 +29,10 @@ export interface MapHostController {
   setSelectedObjectId(boardId: string, id: string | null): void;
   // 현재 보드의 WebView 메시지 콜백 등록(토큰 일치 시에만).
   setCallbacks(boardId: string, cb: MapCallbacks): void;
-  // 카메라 재정렬(0/1/2+ 단일 로직).
+  // 카메라 재정렬(0/1/2+ 단일 로직). 고정(focus)도 해제한다.
   recenter(): void;
+  // 카메라를 좌표에 고정(알림 탭 진입, 토큰 일치 시에만). 사용자가 지도를 움직이면 풀린다.
+  focus(boardId: string, lat: number, lng: number): void;
   // 지도 표시/숨김(포커스 전환 시).
   show(): void;
   hide(): void;
