@@ -32,6 +32,8 @@ Status: Proposed (권고만 — 실제 SDK 메이저 업그레이드는 하지 �
    - `expo` 56.0.8→56.0.24, `expo-build-properties` 56.0.16→56.0.27, `expo-clipboard` 56.0.3→56.0.4,
      `expo-crypto` 56.0.4→56.0.5, `expo-dev-client` 56.0.18→56.0.28, `expo-linking` 56.0.13→56.0.19,
      `react-native-screens` 4.25.2→~4.26.0(설치 4.26.2). `react-native` 0.85.3·`react-native-webview` 13.16.1 은 그대로.
+   - 푸시 알림 커밋(f87f301)이 추가한 `expo-constants` ~56.0.27·`expo-notifications` ~56.0.26 은 이미 SDK 56 권장 버전이라
+     그대로 유지(main 병합 후 `expo install --check` 범위에 포함해 확인).
    - `--fix` 직후 npm 이 `expo-constants` 를 `expo/` 와 `expo-linking/` 아래 두 벌로 중첩 설치해 doctor 의
      중복 네이티브 모듈 체크가 새로 실패 → `npm dedupe` 로 루트 1벌로 정리.
    - `@expo/metro`(metro 0.84.5)와 RN CLI(metro 0.84.4)가 metro 를 따로 갖는 건 expo 56.0.24 의 정상 구성(네이티브 모듈 아님).
@@ -148,8 +150,10 @@ Status: Proposed (권고만 — 실제 SDK 메이저 업그레이드는 하지 �
 
 ## Recommendation
 
-**Option B — 출시 일정에 여유가 생기는 시점(푸시 알림 작업이 main 에 커밋된 뒤)에 SDK 57 로 올린다.**
+**Option B — 다음 개발 빌드(dev client)를 새로 만들기 전에 SDK 57 로 올린다.**
 급하지 않다: 지금 앱 구성으로는 회귀가 실제로 발생하지 않는다. 그 전까지는 Option A 로 두고 이 문서를 근거로 doctor 경고를 알려진 예외로 취급한다.
+다만 푸시 알림(f87f301) 실수신에는 어차피 FCM/APNs 설정과 **새 개발 빌드**가 필요하다. 그 빌드 직전에 SDK 57 로 올리면
+네이티브 리빌드·실기기 검증을 한 번으로 합칠 수 있어 가장 싸다.
 Reanimated(또는 그것에 의존하는 라이브러리)를 넣기로 하면 **그 전에** SDK 57 업그레이드를 먼저 한다.
 
 ### 업그레이드 절차 (실행 시)
@@ -167,7 +171,7 @@ eas build --profile development --platform android
 
 - 지도 WebView 로드·제스처·핀/스티커/메모 표시, 외부 이동 차단(onShouldStartLoadWithRequest)
 - 초대 딥링크(`couplemap://invite?token=...`) → InviteJoin 진입(expo-linking)
-- 푸시 알림 토큰 발급·수신(expo-notifications — 푸시 작업이 main 에 들어간 뒤)
+- 푸시 알림 토큰 등록·수신·알림 탭 → 해당 핀 이동(expo-notifications config plugin, expo-constants projectId)
 - 네이티브 스택 화면 헤더/하단 인셋(edge-to-edge)
 
 ---
