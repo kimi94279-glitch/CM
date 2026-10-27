@@ -8,13 +8,20 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
-import { createProfile } from '../services/authService';
+import { createProfile, suggestedNickname } from '../services/authService';
 
 const NICKNAME_MAX = 20;
 
 export function ProfileSetupScreen() {
-  const { refresh } = useAuth();
-  const [nickname, setNickname] = useState('');
+  const { refresh, session } = useAuth();
+  const [nickname, setNickname] = useState(() => suggestedNickname(session));
+  // 소셜 로그인 이름(카카오 닉네임·Apple 이름)이 늦게 도착하면, 아직 직접 입력하지 않았을 때만 채운다.
+  const suggestion = suggestedNickname(session);
+  const [seenSuggestion, setSeenSuggestion] = useState(suggestion);
+  if (suggestion !== seenSuggestion) {
+    setSeenSuggestion(suggestion);
+    if (!nickname) setNickname(suggestion);
+  }
 
   // 프로필 생성 후 게이팅 재계산 → no_couple(CoupleConnect) 로 전환
   const mutation = useMutation({

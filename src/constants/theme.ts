@@ -49,6 +49,12 @@ export const colors = {
   danger: '#D93025',
 } as const;
 
+// 소셜 로그인 버튼 — 각 서비스 디자인 가이드가 정한 색(B+ 무채색 원칙의 예외). Apple 은 시스템 버튼을 쓴다.
+export const providerColors = {
+  kakao: '#FEE500',
+  kakaoText: 'rgba(0, 0, 0, 0.85)',
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,

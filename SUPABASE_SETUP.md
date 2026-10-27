@@ -143,6 +143,45 @@ FLOW_AUTH.md 정책: MVP는 verify email을 사용하지 않는다(가입 즉시
 
 ---
 
+## 4.5 소셜 로그인 (카카오 · Apple) — 2026-10-27
+
+앱 코드: `src/services/authService.ts` (`signInWithKakao` / `signInWithApple`), 로그인 화면 `LoginScreen`.
+키·시크릿 입력은 **직접** 한다(콘솔 계정 필요). 설정 전에는 버튼을 눌러도 "아직 준비 중이에요" 안내가 뜬다.
+
+### 공통 — 앱으로 돌아올 주소
+
+1. 대시보드 → **Authentication → URL Configuration → Redirect URLs**
+2. `couplemap://auth/callback` 추가 (카카오 로그인 후 앱으로 돌아오는 주소. `Linking.createURL('auth/callback')`)
+
+### 카카오 (Android · iOS 모두)
+
+1. [Kakao Developers](https://developers.kakao.com) → 내 애플리케이션 → 앱 만들기
+2. **앱 설정 → 앱 → 플랫폼 키 → REST API 키** = Client ID
+   - 같은 화면 **카카오 로그인 Redirect URI** 에 Supabase 콜백 `https://nmptqotnakbcorfkemvw.supabase.co/auth/v1/callback` 등록
+   - **카카오 로그인 Client Secret** 코드 = Client Secret, **활성화** 켜기
+3. **제품 설정 → 카카오 로그인 → 일반** 상태 **ON**
+4. **동의항목**: `profile_nickname`(닉네임 → 프로필 이름 기본값), `profile_image`
+   - `account_email` 은 비즈 앱만 가능 → 비즈 앱이 아니면 빼고, 아래 5에서 "이메일 없는 사용자 허용"을 켠다
+5. Supabase → **Authentication → Sign In / Providers → Kakao** 켜기 → Client ID / Secret 입력
+   → (이메일 동의항목이 없으면) **Allow users without an email** 켜기 → 저장
+6. 확인: 개발 빌드에서 "카카오로 시작하기" → 카카오 동의 → 앱으로 돌아와 프로필 화면(닉네임이 채워짐)
+
+> 카카오 디자인 가이드: 노란 버튼(#FEE500) + 말풍선 심볼. 지금은 글자만 — 심볼 이미지는 로고·아이콘 작업 때 공식 리소스로 넣는다.
+
+### Apple (iOS 전용 — 카카오 같은 서드파티 로그인을 두면 App Store 심사 필수)
+
+1. Apple Developer(유료) → Identifiers → App ID `com.couplemap.mobile` 에 **Sign in with Apple** 체크
+   (app.json `ios.bundleIdentifier` · `ios.usesAppleSignIn: true` · 플러그인 `expo-apple-authentication` 반영됨 → EAS 빌드가 capability 를 맞춘다)
+2. Supabase → **Authentication → Sign In / Providers → Apple** 켜기
+   → **Client IDs** 에 `com.couplemap.mobile` (개발 빌드 변형 번들 ID 가 있으면 함께)
+   → 네이티브 로그인만 쓰므로 Secret Key(.p8)·Services ID 는 필요 없다(웹 OAuth 용, 6개월마다 교체)
+3. 확인: iPhone 개발 빌드에서 "Apple로 계속하기" → 프로필 화면(첫 로그인이면 이름이 채워짐)
+
+> ⚠️ 번들 ID `com.couplemap.mobile` 은 가칭 기반이다. App Store 에 올린 뒤에는 바꿀 수 없으니 이름을 정하면 함께 확정한다(Android `package` 도 같음).
+> ⚠️ 출시 전 남은 것: Apple 로그인 계정을 삭제할 때 Apple 토큰 해지(REST `auth/revoke`) — 서버(Edge Function)에서 해야 한다. 심사 요구사항.
+
+---
+
 ## 5. accept_invite RPC 실행 권한 확인
 
 커플 생성은 `accept_invite` RPC를 통해서만 이루어진다. `authenticated` 역할이 실행 가능한지 확인한다.

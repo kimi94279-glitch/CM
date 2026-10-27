@@ -206,8 +206,9 @@ created ──(시간 경과)──> expired (expires_at 초과, used_at = NULL)
 
 ### 5-1. 인증 수단
 
-- Google OAuth
-- 이메일 / 비밀번호
+- ~~Google OAuth~~ → 개정(2026-10-27): **카카오**(모든 기기, 브라우저 인증 세션 + PKCE code 교환) · **Apple**(iOS, 네이티브 ID 토큰 + nonce — 서드파티 로그인이 있으면 App Store 필수). 설정은 SUPABASE_SETUP.md §4.5
+- 이메일 / 비밀번호 (로그인 화면에서 "이메일로 로그인"으로 접어 둠)
+- 소셜 로그인 이름(카카오 닉네임 · Apple 첫 로그인 이름)은 ProfileSetup 닉네임 기본값으로 채운다. Apple 은 이름을 첫 로그인에만 주므로 `updateUser({ data: { full_name } })` 로 저장
 - **이메일 확인(verify email)은 MVP에서 비활성화** (초기 이탈 감소 · 구현 단순화 · 검증 속도)
 
 ### 5-2. 세션 관리

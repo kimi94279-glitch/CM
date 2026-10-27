@@ -17,5 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // 소셜 로그인(카카오)은 브라우저에서 돌아온 code 를 앱이 직접 세션으로 바꾼다(authService.signInWithKakao).
+    flowType: 'pkce',
   },
 });

@@ -8,7 +8,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.couplemap.mobile",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.couplemap.mobile",
@@ -36,7 +38,9 @@
           "color": "#1D1D1F",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-apple-authentication"
     ]
   }
 }
