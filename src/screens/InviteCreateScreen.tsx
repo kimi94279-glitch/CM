@@ -5,16 +5,31 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { LoginRequired } from '../components/LoginRequired';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { createInvite, getMyWorkspace } from '../services/coupleService';
+import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import { buildInviteLink, formatInviteCode } from '../utils/invite';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteCreate'>;
 
-export function InviteCreateScreen({ navigation }: Props) {
+// 같이 그리기는 로그인한 사람만 — 게스트면 로그인 안내. 로그인하면 지도가 그대로 이어진 채 이 화면이 열린다.
+export function InviteCreateScreen(props: Props) {
+  const { session } = useAuth();
+  if (isGuest(session)) {
+    return (
+      <ScreenContainer>
+        <LoginRequired />
+      </ScreenContainer>
+    );
+  }
+  return <InviteCreateContent {...props} />;
+}
+
+function InviteCreateContent({ navigation }: Props) {
   const { refresh } = useAuth();
   const [showNotYet, setShowNotYet] = useState(false);
   const [checking, setChecking] = useState(false);

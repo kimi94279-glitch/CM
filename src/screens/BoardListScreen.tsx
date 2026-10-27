@@ -13,17 +13,19 @@ import {
 import { BoardCard } from '../components/BoardCard';
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useBoardActivity, useBoards, useDeleteBoard } from '../hooks/useBoards';
+import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import type { Board } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardList'>;
 
 export function BoardListScreen({ navigation }: Props) {
-  const { workspace } = useAuth();
+  const { workspace, session } = useAuth();
   const isSolo = workspace?.status === 'solo';
+  const guest = isGuest(session);
   const boardsQuery = useBoards(workspace?.id);
   const activityQuery = useBoardActivity(workspace?.id);
   const deleteMutation = useDeleteBoard(workspace?.id);
@@ -86,6 +88,14 @@ export function BoardListScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {/* 로그인 없이 쓰는 중: 지도를 지키려면 로그인하라는 작은 안내(설정에서 로그인 → 지도 그대로) */}
+      {guest ? (
+        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.guestBanner}>
+          <Text style={styles.guestText}>🔒 로그인해 두면 폰을 바꿔도 지도가 남아요</Text>
+          <Text style={styles.guestLink}>로그인</Text>
+        </Pressable>
+      ) : null}
+
       {/* 본문 */}
       {boardsQuery.isLoading ? (
         <View style={styles.fill}>
@@ -141,6 +151,26 @@ export function BoardListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     paddingBottom: 0,
+  },
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.field,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  guestText: {
+    ...typography.caption,
+    color: colors.textStrong,
+    flexShrink: 1,
+  },
+  guestLink: {
+    ...typography.label,
+    color: colors.textStrong,
+    marginLeft: spacing.sm,
   },
   header: {
     flexDirection: 'row',

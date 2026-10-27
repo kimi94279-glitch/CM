@@ -18,15 +18,21 @@ export type SocialSignInResult = 'ok' | 'cancel';
 // Supabase Auth → URL Configuration → Redirect URLs 에 등록해야 한다(SUPABASE_SETUP.md §4.5).
 const AUTH_REDIRECT = Linking.createURL('auth/callback');
 
-// 카카오 로그인 — 브라우저(인앱 인증 세션)로 카카오 동의 → 돌아온 code 를 세션으로 교환(PKCE).
-export async function signInWithKakao(): Promise<SocialSignInResult> {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'kakao',
-    options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: true },
-  });
-  if (error) throw error;
+// 로그인 없이 쓰는 중(게스트)인지 — 내부적으로는 Supabase 익명 세션이다.
+// 기본 기능(지도·그리기·메모)은 다 쓰고, 같이 그리기(초대 보내기·받기)만 로그인이 필요하다.
+export function isGuest(session: Session | null): boolean {
+  return session?.user?.is_anonymous === true;
+}
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, AUTH_REDIRECT);
+// 로그인 없이 바로 시작 — 계정 화면 없이 이 기기용 임시 ID 로 지도를 저장한다.
+export async function startAsGuest(): Promise<void> {
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) throw error;
+}
+
+// 브라우저(인앱 인증 세션)로 카카오 동의 → 돌아온 code 를 세션으로 교환(PKCE).
+async function finishBrowserAuth(url: string): Promise<SocialSignInResult> {
+  const result = await WebBrowser.openAuthSessionAsync(url, AUTH_REDIRECT);
   if (result.type !== 'success') return 'cancel';
 
   const { queryParams } = Linking.parse(result.url);
@@ -35,9 +41,30 @@ export async function signInWithKakao(): Promise<SocialSignInResult> {
   const code = queryParams?.code;
   if (typeof code !== 'string') throw new Error('missing auth code');
 
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) throw exchangeError;
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw error;
   return 'ok';
+}
+
+// 카카오 로그인(새로 시작하거나 기존 계정으로)
+export async function signInWithKakao(): Promise<SocialSignInResult> {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'kakao',
+    options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: true },
+  });
+  if (error) throw error;
+  return finishBrowserAuth(data.url);
+}
+
+// 게스트 → 카카오 연결: 같은 사용자에 카카오를 붙인다(지금까지 그린 지도가 그대로 이어진다).
+// Supabase 에서 Manual linking 을 켜야 한다.
+export async function linkKakao(): Promise<SocialSignInResult> {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'kakao',
+    options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: true },
+  });
+  if (error) throw error;
+  return finishBrowserAuth(data.url);
 }
 
 // Apple 로그인은 iOS 에서만 (Android 는 버튼을 숨긴다)
@@ -46,49 +73,80 @@ export async function isAppleSignInAvailable(): Promise<boolean> {
   return AppleAuthentication.isAvailableAsync();
 }
 
-// Apple 로그인 — iOS 기본 창으로 ID 토큰을 받아 Supabase 세션으로 바꾼다.
-// nonce: Apple 에는 해시를, Supabase 에는 원본을 넘겨 토큰 재사용을 막는다.
-export async function signInWithApple(): Promise<SocialSignInResult> {
+// iOS 기본 Apple 창 → ID 토큰. nonce: Apple 에는 해시를, Supabase 에는 원본을 넘겨 토큰 재사용을 막는다.
+async function requestAppleCredential(): Promise<
+  { credential: AppleAuthentication.AppleAuthenticationCredential; rawNonce: string } | 'cancel'
+> {
   const rawNonce = Crypto.randomUUID();
   const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
-
-  let credential: AppleAuthentication.AppleAuthenticationCredential;
   try {
-    credential = await AppleAuthentication.signInAsync({
+    const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
         AppleAuthentication.AppleAuthenticationScope.EMAIL,
       ],
       nonce: hashedNonce,
     });
+    if (!credential.identityToken) throw new Error('missing identity token');
+    return { credential, rawNonce };
   } catch (e) {
     if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return 'cancel';
     throw e;
   }
-  if (!credential.identityToken) throw new Error('missing identity token');
+}
 
-  const { error } = await supabase.auth.signInWithIdToken({
-    provider: 'apple',
-    token: credential.identityToken,
-    nonce: rawNonce,
-  });
-  if (error) throw error;
-
-  // Apple 은 이름을 처음 로그인할 때만 준다 → 프로필 이름 칸을 채우도록 저장(실패해도 로그인은 유지)
+// Apple 은 이름을 처음 로그인할 때만 준다 → 프로필 이름 칸을 채우도록 저장(실패해도 로그인은 유지)
+async function saveAppleName(credential: AppleAuthentication.AppleAuthenticationCredential) {
   const fullName = credential.fullName
     ? AppleAuthentication.formatFullName(credential.fullName).trim()
     : '';
   if (fullName) {
     await supabase.auth.updateUser({ data: { full_name: fullName } }).catch(() => {});
   }
+}
+
+// Apple 로그인(새로 시작하거나 기존 계정으로)
+export async function signInWithApple(): Promise<SocialSignInResult> {
+  const got = await requestAppleCredential();
+  if (got === 'cancel') return 'cancel';
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: got.credential.identityToken as string,
+    nonce: got.rawNonce,
+  });
+  if (error) throw error;
+  await saveAppleName(got.credential);
   return 'ok';
 }
 
-// 소셜 로그인 실패 안내
+// 게스트 → Apple 연결 (지금까지 그린 지도가 그대로 이어진다)
+export async function linkApple(): Promise<SocialSignInResult> {
+  const got = await requestAppleCredential();
+  if (got === 'cancel') return 'cancel';
+  const { error } = await supabase.auth.linkIdentity({
+    provider: 'apple',
+    token: got.credential.identityToken as string,
+    nonce: got.rawNonce,
+  });
+  if (error) throw error;
+  await saveAppleName(got.credential);
+  return 'ok';
+}
+
+// 로그인·연결 실패 안내
 export function mapSocialSignInError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/provider is not enabled|Unsupported provider/i.test(message)) {
-    return '이 로그인 방법은 아직 준비 중이에요. 이메일로 로그인해 주세요.';
+    return '이 로그인 방법은 아직 준비 중이에요.';
+  }
+  if (/anonymous sign-ins are disabled/i.test(message)) {
+    return '로그인 없이 시작하기가 아직 준비 중이에요. 로그인해서 시작해 주세요.';
+  }
+  if (/manual linking is disabled/i.test(message)) {
+    return '계정 연결이 아직 준비 중이에요. 잠시 후 다시 시도해 주세요.';
+  }
+  if (/identity is already linked|already exists|already been registered/i.test(message)) {
+    return '이미 이 계정으로 쓰던 기록이 있어요. 설정에서 "기존 계정으로 로그인"을 눌러 주세요.';
   }
   return '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.';
 }

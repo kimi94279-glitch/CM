@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { LoginRequired } from '../components/LoginRequired';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { INVITE_TOKEN_LENGTH } from '../constants/config';
@@ -17,12 +18,26 @@ import {
   getInvitePreview,
   mapAcceptInviteError,
 } from '../services/coupleService';
+import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import { extractInviteCode, formatInviteCode, normalizeInviteCode } from '../utils/invite';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteJoin'>;
 
-export function InviteJoinScreen({ route }: Props) {
+// 같이 그리기는 로그인한 사람만 — 게스트면 로그인 안내. 로그인하면 지도가 그대로 이어진 채 이 화면이 열린다.
+export function InviteJoinScreen(props: Props) {
+  const { session } = useAuth();
+  if (isGuest(session)) {
+    return (
+      <ScreenContainer>
+        <LoginRequired />
+      </ScreenContainer>
+    );
+  }
+  return <InviteJoinContent {...props} />;
+}
+
+function InviteJoinContent({ route }: Props) {
   const { refresh, workspace } = useAuth();
   const queryClient = useQueryClient();
 

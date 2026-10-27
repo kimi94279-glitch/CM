@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AppState } from 'react-native';
 
 import { getMyProfile } from '../services/authService';
-import { getMyWorkspace } from '../services/coupleService';
+import { createSoloWorkspace, getMyWorkspace } from '../services/coupleService';
 import { setMonitoringUser } from '../services/monitoring';
 import { supabase } from '../services/supabase';
 import type { Couple } from '../types/models';
@@ -35,7 +35,9 @@ async function resolveState(
   if (!session) return { status: 'unauthenticated', workspace: null };
   const profile = await getMyProfile();
   if (!profile) return { status: 'no_profile', workspace: null };
-  const workspace = await getMyWorkspace();
+  let workspace = await getMyWorkspace();
+  // 로그인 없이 쓰는 사람(게스트)은 초대를 못 하므로 "누구랑 그릴까요" 단계 없이 바로 혼자 쓰는 공간을 만든다.
+  if (!workspace && session.user.is_anonymous) workspace = await createSoloWorkspace();
   if (!workspace) return { status: 'no_workspace', workspace: null };
   return { status: workspace.status === 'active' ? 'active' : 'solo', workspace };
 }

@@ -5,18 +5,21 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { SocialButtons } from '../components/SocialButtons';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { usePartnerProfile } from '../hooks/usePartnerProfile';
-import { deleteMyAccount, getMyProfile, signOut } from '../services/authService';
+import { deleteMyAccount, getMyProfile, isGuest, signOut } from '../services/authService';
 import { leaveWorkspace } from '../services/coupleService';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 // 계정·연결 설정: 같이 그리는 사람 / 연결 끊기 / 로그아웃 / 계정 삭제 (0010)
+// 로그인 없이 쓰는 중(게스트)이면: 로그인해서 지도 지키기 · 기존 계정으로 로그인 · 기록 지우기 (로그아웃은 없음 — 지도를 잃는다)
 export function SettingsScreen({ navigation }: Props) {
   const { session, workspace, refresh } = useAuth();
+  const guest = isGuest(session);
   const profileQuery = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
   const partnerQuery = usePartnerProfile();
 
@@ -34,8 +37,10 @@ export function SettingsScreen({ navigation }: Props) {
   // 계정 삭제 → 세션 정리(onAuthStateChange)로 로그인 화면으로 전환
   const remove = useMutation({
     mutationFn: deleteMyAccount,
-    onSuccess: () => Alert.alert('계정을 삭제했어요', '그동안 함께해 줘서 고마워요.'),
-    onError: () => Alert.alert('계정을 삭제하지 못했어요', '잠시 후 다시 시도해 주세요.'),
+    onSuccess: () => {
+      if (!guest) Alert.alert('계정을 삭제했어요', '그동안 함께해 줘서 고마워요.');
+    },
+    onError: () => Alert.alert('지우지 못했어요', '잠시 후 다시 시도해 주세요.'),
   });
 
   const logout = useMutation({ mutationFn: signOut });
@@ -51,7 +56,30 @@ export function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  // 게스트가 기존 계정으로 들어가려면 지금 기기의 지도를 정리하고 로그인 화면으로 간다(두 기록을 합치지는 않는다).
+  const confirmSwitchAccount = () => {
+    Alert.alert(
+      '기존 계정으로 로그인할까요?',
+      '로그인하지 않고 그린 지금 지도는 지워지고, 로그인 화면으로 가요. 지금 지도를 지키려면 위에서 로그인해 주세요.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '지우고 로그인하기', style: 'destructive', onPress: () => remove.mutate() },
+      ]
+    );
+  };
+
   const confirmDelete = () => {
+    if (guest) {
+      Alert.alert(
+        '기록을 지우고 처음으로 갈까요?',
+        '지금까지 그린 지도와 흔적이 모두 지워져요. 되돌릴 수 없어요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '지우기', style: 'destructive', onPress: () => remove.mutate() },
+        ]
+      );
+      return;
+    }
     const what = isActive
       ? `같이 그린 지도는 ${partnerName}님에게 남아요. 내가 쓴 메모와 반응은 지워지고, 내가 찍은 장소와 그림은 이름 없이 남아요.`
       : isSolo
@@ -72,8 +100,25 @@ export function SettingsScreen({ navigation }: Props) {
         <View style={styles.card}>
           <Row label="이름" value={profileQuery.data?.nickname ?? ''} />
           <View style={styles.divider} />
-          <Row label="이메일" value={session?.user?.email ?? ''} />
+          {guest ? (
+            <Row label="로그인" value="안 함" />
+          ) : (
+            <Row label="이메일" value={session?.user?.email ?? ''} />
+          )}
         </View>
+
+        {guest ? (
+          <View style={styles.guestBox}>
+            <Text style={styles.guestText}>
+              로그인하지 않으면 앱을 지우거나 폰을 바꿀 때 지도가 사라져요. 로그인하면 지금 지도가
+              그대로 이어지고, 같이 그릴 사람도 초대할 수 있어요.
+            </Text>
+            <SocialButtons mode="link" onSuccess={() => refresh()} />
+            <Pressable onPress={confirmSwitchAccount} hitSlop={8} style={styles.switchRow}>
+              <Text style={styles.switchText}>기존 계정으로 로그인</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {isActive || isSolo ? (
           <>
@@ -103,13 +148,15 @@ export function SettingsScreen({ navigation }: Props) {
           </>
         ) : null}
 
-        <Button
-          title="로그아웃"
-          variant="secondary"
-          onPress={() => logout.mutate()}
-          loading={logout.isPending}
-          style={styles.logout}
-        />
+        {guest ? null : (
+          <Button
+            title="로그아웃"
+            variant="secondary"
+            onPress={() => logout.mutate()}
+            loading={logout.isPending}
+            style={styles.logout}
+          />
+        )}
 
         <Pressable
           onPress={confirmDelete}
@@ -117,7 +164,9 @@ export function SettingsScreen({ navigation }: Props) {
           hitSlop={8}
           style={styles.deleteRow}
         >
-          <Text style={styles.delete}>{remove.isPending ? '삭제하는 중…' : '계정 삭제'}</Text>
+          <Text style={styles.delete}>
+            {remove.isPending ? '지우는 중…' : guest ? '기록 지우고 처음으로' : '계정 삭제'}
+          </Text>
         </Pressable>
       </ScrollView>
     </ScreenContainer>
@@ -181,6 +230,24 @@ const styles = StyleSheet.create({
   },
   logout: {
     marginTop: spacing.xl,
+  },
+  guestBox: {
+    marginTop: spacing.md,
+  },
+  guestText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  switchRow: {
+    alignSelf: 'center',
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  switchText: {
+    ...typography.label,
+    color: colors.textMuted,
   },
   deleteRow: {
     alignSelf: 'center',

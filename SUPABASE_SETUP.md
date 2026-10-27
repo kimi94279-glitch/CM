@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0010)
+## 3.5 추가 마이그레이션 (0002 ~ 0011)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -98,6 +98,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0008_invite_merge.sql` | `accept_invite` 솔로 보드 합치기 + `invite_preview` RPC(authenticated 전용) | 필수(초대 흐름 v2). 재실행 안전 |
 | `0009_board_activity.sql` | `board_reads` + `mark_board_read` / `board_activity` RPC (보드 목록 새 흔적 표시) | 필수(새 흔적). 미적용이어도 목록은 동작(표시만 빠짐). 재실행 안전 |
 | `0010_account_deletion.sql` | `leave_workspace` / `delete_my_account` RPC + `places`·`map_objects.created_by` NULL 허용 | 필수(출시: 앱 내 계정 삭제). 재실행 안전 |
+| `0011_guest_invite_block.sql` | `is_permanent_user()` + 게스트(익명 세션) 초대 만들기 RLS 차단 + `accept_invite`·`invite_preview` 로그인 확인 | 필수(로그인 없이 시작). 재실행 안전 |
 
 ### 적용 전 상태 점검 (읽기 전용)
 
@@ -142,6 +143,18 @@ FLOW_AUTH.md 정책: MVP는 verify email을 사용하지 않는다(가입 즉시
 > 이 설정을 끄지 않으면 `signUp` 후 세션이 생성되지 않아 ProfileSetup으로 진행되지 않는다.
 
 ---
+
+## 4.4 로그인 없이 시작 (게스트) — 2026-10-27
+
+앱은 "바로 시작하기"에서 Supabase **익명 로그인**을 쓴다(화면에는 계정 단계가 없다). 같이 그리기(초대)는 그때 카카오·Apple 을 **연결**(`linkIdentity`)해 같은 사용자를 정식 계정으로 바꾼다 — 지도가 그대로 이어진다.
+
+1. 대시보드 → **Authentication → Sign In / Providers** → **Allow anonymous sign-ins** 켜기
+2. 같은 화면 → **Allow manual linking** 켜기 (게스트 → 카카오·Apple 연결에 필요)
+3. 남용 대비: **Authentication → Rate Limits** 의 익명 로그인(기본 IP당 시간당 30) 확인, 출시 전 CAPTCHA(Turnstile/hCaptcha) 검토
+4. `0011_guest_invite_block.sql` 적용 — 서버에서도 게스트 초대를 막는다
+5. 이메일 연결(게스트 → 이메일·비밀번호)은 이메일 인증이 필요해 **커스텀 SMTP**(비즈니스 메일) 설정 뒤에 붙인다
+
+> 정리: 익명 사용자는 자동 삭제되지 않는다. 오래 안 쓴 게스트 정리는 `delete_my_account` 와 같은 순서로 지우는 예약 작업이 필요하다(외래 키가 RESTRICT 라 auth.users 만 지우면 실패).
 
 ## 4.5 소셜 로그인 (카카오 · Apple) — 2026-10-27
 

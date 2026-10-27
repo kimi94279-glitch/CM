@@ -274,6 +274,7 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
   3. 초대자가 active면 거부 / solo면 그 행을 `active`로 승격(user_b 채움, **데이터 유지**) / 워크스페이스 없으면 새 active 커플 INSERT
   4. 수락자가 solo면 그 보드를 3의 공간으로 옮기고(`boards.couple_id` UPDATE) 솔로 행 삭제 — 하위 데이터는 board_id 로 따라오고 작성자는 유지(0008. 이전에는 보드가 있으면 거부)
   5. `couple_invites.used_at` 기록
+- `is_permanent_user() → boolean` — JWT `is_anonymous` 가 아닌 사용자(0011). 게스트(익명 세션)는 `couple_invites` INSERT(제한 정책 `couple_invites_insert_permanent`)·`accept_invite`·`invite_preview` 불가(`login required`). 기본 데이터(보드·장소·메모·반응·지도 객체)는 게스트도 RLS 그대로 사용.
 - `invite_preview(token text) → jsonb` — 수락 전 미리보기(0008, authenticated 전용). `{state: ok|invalid|used|expired|own|taken, inviter_name}`. 비멤버가 `couple_invites`를 직접 읽지 않고도 "누가 보낸 초대인지"만 알 수 있다.
 
 ### Policy Matrix

@@ -89,6 +89,7 @@ export function describeInvitePreview(preview: InvitePreview): string | null {
 // accept_invite RPC 가 던지는 예외 메시지를 사용자 메시지로 매핑 (FLOW_AUTH.md)
 export function mapAcceptInviteError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('login required')) return '같이 그리려면 로그인이 필요해요.';
   if (message.includes('invalid invite')) return '없는 초대 코드예요. 한 번 더 확인해 주세요.';
   if (message.includes('already used')) return '이미 쓰인 초대예요. 새 초대를 받아 주세요.';
   if (message.includes('expired')) return '만료된 초대예요. 새 초대를 받아 주세요.';
