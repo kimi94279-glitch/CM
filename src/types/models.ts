@@ -93,6 +93,13 @@ export interface Board {
   updated_at: string;
 }
 
+// 보드별 새 흔적 (board_activity RPC, 0009)
+// unread: 내가 마지막으로 본 뒤 상대가 남긴 흔적 수 / lastActivityAt: 마지막 흔적 시각(없으면 null)
+export interface BoardActivity {
+  unread: number;
+  lastActivityAt: string | null;
+}
+
 export interface CoupleInvite {
   id: string;
   invite_token: string;

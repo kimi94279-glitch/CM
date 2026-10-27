@@ -32,6 +32,7 @@ import {
   useUpdateMapObject,
 } from '../hooks/useMapObjects';
 import { useAuth } from '../hooks/useAuthState';
+import { useMarkBoardRead } from '../hooks/useBoards';
 import { usePartnerProfile } from '../hooks/usePartnerProfile';
 import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
@@ -161,6 +162,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/MapLibre 1개). 포커스 시 데이터만 교체.
   const map = useMapHost();
   const isFocused = useIsFocused();
+
+  // 새 흔적 표시(0009): 들어올 때와 나갈 때 "봤다"고 기록 → 머무는 동안 생긴 흔적도 본 것으로 친다.
+  const markRead = useMarkBoardRead();
+  useEffect(() => {
+    if (!isFocused) return;
+    markRead(boardId);
+    return () => markRead(boardId);
+  }, [isFocused, boardId, markRead]);
 
   // 지도 마커 클릭 → 강조 ID만 설정(시트 자동 오픈 안 함, Surface First 우선).
   const [highlightedId, setHighlightedId] = useState<string | null>(null);

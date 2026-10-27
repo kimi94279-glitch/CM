@@ -21,7 +21,8 @@ export type RootStackParamList = {
   InviteJoin: { token?: string } | undefined;
   // 워크스페이스 보유 (solo | active)
   BoardList: undefined;
-  CreateBoard: undefined;
+  // boardId 가 있으면 이름 바꾸기
+  CreateBoard: { boardId: string; title: string } | undefined;
   BoardDetail: { boardId: string; title: string; focus?: BoardFocus };
   PlaceAdd: { boardId: string };
 };

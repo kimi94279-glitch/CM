@@ -66,6 +66,8 @@ export function usePushRefresh() {
       const boardId = notification.request.content.data?.boardId;
       if (typeof boardId !== 'string') return;
       queryClient.invalidateQueries({ predicate: (q) => q.queryKey[1] === boardId });
+      // 목록의 새 흔적 표시도 갱신
+      queryClient.invalidateQueries({ queryKey: ['board-activity'] });
     });
     return () => sub.remove();
   }, [queryClient]);

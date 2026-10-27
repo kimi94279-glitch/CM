@@ -28,7 +28,7 @@ export function LoginScreen({ navigation }: Props) {
     <ScreenContainer>
       <View style={styles.header}>
         <Text style={styles.title}>Couple Map</Text>
-        <Text style={styles.subtitle}>둘이 함께 시작해요</Text>
+        <Text style={styles.subtitle}>지도 위에 같이 그려요</Text>
       </View>
 
       <PendingInviteNote />

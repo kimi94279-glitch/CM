@@ -1,16 +1,25 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation } from '@tanstack/react-query';
-import React from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { BoardCard } from '../components/BoardCard';
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
-import { useBoards } from '../hooks/useBoards';
+import { useBoardActivity, useBoards, useDeleteBoard } from '../hooks/useBoards';
 import { signOut } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
+import type { Board } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardList'>;
 
@@ -18,15 +27,56 @@ export function BoardListScreen({ navigation }: Props) {
   const { workspace } = useAuth();
   const isSolo = workspace?.status === 'solo';
   const boardsQuery = useBoards(workspace?.id);
+  const activityQuery = useBoardActivity(workspace?.id);
+  const deleteMutation = useDeleteBoard(workspace?.id);
   const logout = useMutation({ mutationFn: signOut });
 
-  const boards = boardsQuery.data ?? [];
+  // 최근에 흔적이 생긴 지도가 위로 (흔적이 없으면 만든 시각)
+  const activity = activityQuery.data;
+  const boards = useMemo(() => {
+    const list = boardsQuery.data ?? [];
+    const recent = (b: Board) => activity?.[b.id]?.lastActivityAt ?? b.created_at;
+    return [...list].sort((a, b) => recent(b).localeCompare(recent(a)));
+  }, [boardsQuery.data, activity]);
+
+  const confirmDelete = (board: Board) => {
+    Alert.alert(
+      '이 지도를 지울까요?',
+      isSolo
+        ? '이 지도에 남긴 장소·메모·그림이 모두 지워져요.'
+        : '같이 남긴 장소·메모·그림이 모두 지워지고, 상대 화면에서도 사라져요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '지우기',
+          style: 'destructive',
+          onPress: () =>
+            deleteMutation.mutate(board.id, {
+              onError: () => Alert.alert('지우지 못했어요', '잠시 후 다시 시도해 주세요.'),
+            }),
+        },
+      ]
+    );
+  };
+
+  // ⋯ 메뉴: 이름 바꾸기 / 지우기 (Android Alert 버튼 최대 3개)
+  const openMenu = (board: Board) => {
+    Alert.alert(board.title, undefined, [
+      {
+        text: '이름 바꾸기',
+        onPress: () =>
+          navigation.navigate('CreateBoard', { boardId: board.id, title: board.title }),
+      },
+      { text: '지우기', style: 'destructive', onPress: () => confirmDelete(board) },
+      { text: '취소', style: 'cancel' },
+    ]);
+  };
 
   return (
     <ScreenContainer style={styles.container}>
       {/* 헤더 (초대는 솔로일 때만, 작은 단일 링크로 유지) */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>우리의 데이트</Text>
+        <Text style={styles.headerTitle}>{isSolo ? '내 지도' : '우리 지도'}</Text>
         <View style={styles.headerActions}>
           {isSolo ? (
             <Pressable onPress={() => navigation.navigate('InviteCreate')} hitSlop={8}>
@@ -52,12 +102,12 @@ export function BoardListScreen({ navigation }: Props) {
       ) : boards.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🗺️</Text>
-          <Text style={styles.emptyTitle}>첫 번째 데이트 계획을 만들어보세요</Text>
+          <Text style={styles.emptyTitle}>첫 지도를 만들어 볼까요?</Text>
           <Text style={styles.emptyDesc}>
-            가고 싶은 장소를 모으고 데이트 코스를 함께 정리할 수 있어요.
+            가고 싶은 곳을 찍고, 지도 위에 같이 그리고, 서로의 흔적에 반응해요.
           </Text>
           <Button
-            title="새 데이트 보드 만들기"
+            title="새 지도 만들기"
             onPress={() => navigation.navigate('CreateBoard')}
             style={styles.emptyCta}
           />
@@ -69,9 +119,11 @@ export function BoardListScreen({ navigation }: Props) {
           renderItem={({ item }) => (
             <BoardCard
               board={item}
+              activity={activity?.[item.id]}
               onPress={() =>
                 navigation.navigate('BoardDetail', { boardId: item.id, title: item.title })
               }
+              onMore={() => openMenu(item)}
             />
           )}
           contentContainerStyle={styles.list}

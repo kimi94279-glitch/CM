@@ -146,6 +146,17 @@ related:
 - UNIQUE `(place_id, user_id, reaction_type)` — 같은 사람이 같은 장소에 같은 반응 중복 불가.
 - 반응은 생성/삭제(토글)만 존재하므로 `updated_at`을 두지 않는다.
 
+### 3.8 board_reads (0009 — 새 흔적 표시)
+
+| 컬럼 | 타입 | 제약 |
+| --- | --- | --- |
+| board_id | uuid | PK, FK → `boards(id)` ON DELETE CASCADE |
+| user_id | uuid | PK, FK → `users(id)` ON DELETE CASCADE |
+| last_read_at | timestamptz | NOT NULL, default now() |
+
+- 사람별·보드별 "마지막으로 본 시각". 본인 행만 SELECT, 쓰기는 `mark_board_read` RPC 경유(서버 시각).
+- `board_activity()`(SECURITY INVOKER — 호출자 RLS 로 읽음)가 보드마다 `unread`(내가 본 뒤 상대가 남긴 장소·메모·반응·지도 객체 수)와 `last_activity_at`을 돌려준다. 수정·삭제는 세지 않는다.
+
 ---
 
 ## 4. Relationships
@@ -231,6 +242,7 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
 - **실제 하드 삭제:** 별도 데이터 관리 정책이 수립된 경우에만 수행한다.
 
 > ⚠️ 데이터 손실 경고: 보드 삭제(boards → places CASCADE)는 해당 보드의 장소·메모·반응을 영구 삭제한다. 앱에서 명시적 확인 UI가 필요하다.
+> → 구현(2026-10-27): 보드 목록 ⋯ → 지우기 → 확인 알림("같이 남긴 장소·메모·그림이 모두 지워지고, 상대 화면에서도 사라져요"). map_objects·board_reads·push_throttle 도 CASCADE.
 
 ---
 
