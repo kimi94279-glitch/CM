@@ -12,14 +12,19 @@
   - 네이티브 크래시: SDK 기본
 - 개인정보: `sendDefaultPii: false`(IP 등 미전송), 사용자는 내부 uid 만(닉네임·이메일 미전송). 성능 추적·세션 리플레이 끔.
 
+## 현재 상태 (2026-10-27)
+
+- 조직 `cm-p5` (GitHub 로그인, 데이터 위치 **EU** — DSN 호스트 `ingest.de.sentry.io`), 프로젝트 `cm-app`(React Native, 오류 수집만, 팀 #cm)
+- 로컬 `.env` 에 `EXPO_PUBLIC_SENTRY_DSN` 넣음(.env 는 git 제외)
+
 ## 직접 할 일
 
-1. [sentry.io](https://sentry.io) 가입 → 프로젝트 만들기(플랫폼 React Native)
-2. **DSN** 복사
-   - 로컬: `.env` 에 `EXPO_PUBLIC_SENTRY_DSN=...`
-   - EAS 빌드: Expo 대시보드 → 프로젝트 → Environment variables 에 같은 이름으로(공개값이라 plain 가능)
+1. ~~[sentry.io](https://sentry.io) 가입 → 프로젝트 만들기(플랫폼 React Native)~~ → 완료
+2. **DSN**
+   - ~~로컬: `.env` 에 `EXPO_PUBLIC_SENTRY_DSN=...`~~ → 완료
+   - ~~EAS 빌드: Environment variables 에 `EXPO_PUBLIC_SENTRY_DSN`~~ → 완료(2026-10-27): expo.dev 계정 `kimiim` **계정 전체(Global)** 변수, Plain text, development·preview·production. 값 = Sentry → Settings → Projects → cm-app → Client Keys (DSN)
 3. (출시 빌드 전) 소스맵 업로드 — 오류 위치를 원본 코드로 보려면 필요
-   - app.json 플러그인을 옵션형으로: `["@sentry/react-native", { "organization": "<org-slug>", "project": "<project-slug>" }]`
+   - app.json 플러그인을 옵션형으로: `["@sentry/react-native", { "organization": "cm-p5", "project": "cm-app" }]`
    - Sentry → Settings → Auth Tokens 에서 토큰 발급 → EAS 시크릿 `SENTRY_AUTH_TOKEN` (로컬은 `.env.local`, **커밋 금지**)
    - `eas.json` development·preview 는 `SENTRY_DISABLE_AUTO_UPLOAD=true` 로 업로드를 건너뛴다. **production 프로필은 토큰이 없으면 빌드가 실패**할 수 있으니 토큰을 먼저 넣거나 같은 값을 넣는다.
 4. 확인: 개발 빌드에서 일부러 오류를 내 Sentry Issues 에 뜨는지 본다.
