@@ -53,6 +53,15 @@ export function CoupleConnectScreen({ navigation }: Props) {
           <Text style={styles.link}>코드 입력</Text>
         </Pressable>
       </View>
+
+      {/* 로그아웃·계정 삭제는 지도 없이도 할 수 있어야 한다 */}
+      <Pressable
+        onPress={() => navigation.navigate('Settings')}
+        hitSlop={8}
+        style={styles.settingsRow}
+      >
+        <Text style={styles.linkMuted}>설정</Text>
+      </Pressable>
     </ScreenContainer>
   );
 }
@@ -87,6 +96,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: spacing.lg,
+  },
+  settingsRow: {
+    alignSelf: 'center',
+    marginTop: 'auto',
+    paddingVertical: spacing.md,
   },
   linkMuted: {
     ...typography.label,

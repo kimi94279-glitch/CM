@@ -58,7 +58,15 @@ export function CanvasObjectList({
                 place={item}
                 index={index + 1}
                 mine={mine}
-                authorLabel={partnerLabel === null ? null : mine ? '나' : partnerLabel}
+                authorLabel={
+                  partnerLabel === null
+                    ? null
+                    : mine
+                      ? '나'
+                      : item.created_by === null
+                        ? '떠난 사람'
+                        : partnerLabel
+                }
                 highlighted={item.id === highlightedId}
                 onDelete={() => onDelete(item)}
                 deleting={deletingId === item.id}

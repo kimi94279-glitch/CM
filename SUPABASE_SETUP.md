@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0009)
+## 3.5 추가 마이그레이션 (0002 ~ 0010)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -97,6 +97,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0007_push_draw_text.sql` | 그림(`draw`) 알림 문구 분리 | 필수(그림 알림). 재실행 안전 |
 | `0008_invite_merge.sql` | `accept_invite` 솔로 보드 합치기 + `invite_preview` RPC(authenticated 전용) | 필수(초대 흐름 v2). 재실행 안전 |
 | `0009_board_activity.sql` | `board_reads` + `mark_board_read` / `board_activity` RPC (보드 목록 새 흔적 표시) | 필수(새 흔적). 미적용이어도 목록은 동작(표시만 빠짐). 재실행 안전 |
+| `0010_account_deletion.sql` | `leave_workspace` / `delete_my_account` RPC + `places`·`map_objects.created_by` NULL 허용 | 필수(출시: 앱 내 계정 삭제). 재실행 안전 |
 
 ### 적용 전 상태 점검 (읽기 전용)
 

@@ -19,6 +19,8 @@ export type RootStackParamList = {
   CoupleConnect: undefined;
   InviteCreate: undefined;
   InviteJoin: { token?: string } | undefined;
+  // 계정·연결 설정 (no_workspace | solo | active)
+  Settings: undefined;
   // 워크스페이스 보유 (solo | active)
   BoardList: undefined;
   // boardId 가 있으면 이름 바꾸기

@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -43,23 +44,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [workspace, setWorkspace] = useState<Couple | null>(null);
   const mounted = useRef(true);
+  const queryClient = useQueryClient();
+  const lastUserId = useRef<string | null>(null);
 
-  const apply = useCallback(async (next: Session | null) => {
-    setSession(next);
-    try {
-      const resolved = await resolveState(next);
-      if (mounted.current) {
-        setStatus(resolved.status);
-        setWorkspace(resolved.workspace);
+  const apply = useCallback(
+    async (next: Session | null) => {
+      // 다른 사람으로 바뀌거나(로그아웃·계정 삭제 후 재로그인) 로그아웃되면 이전 사람의 캐시를 비운다.
+      const nextUserId = next?.user?.id ?? null;
+      if (lastUserId.current !== nextUserId) {
+        if (lastUserId.current !== null) queryClient.clear();
+        lastUserId.current = nextUserId;
       }
-    } catch {
-      // 상태 계산 실패 시 안전하게 폴백한다.
-      if (mounted.current) {
-        setStatus(next ? 'no_profile' : 'unauthenticated');
-        setWorkspace(null);
+      setSession(next);
+      try {
+        const resolved = await resolveState(next);
+        if (mounted.current) {
+          setStatus(resolved.status);
+          setWorkspace(resolved.workspace);
+        }
+      } catch {
+        // 상태 계산 실패 시 안전하게 폴백한다.
+        if (mounted.current) {
+          setStatus(next ? 'no_profile' : 'unauthenticated');
+          setWorkspace(null);
+        }
       }
-    }
-  }, []);
+    },
+    [queryClient]
+  );
 
   const refresh = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -79,9 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [apply]);
 
-  // 혼자 쓰는 중이면 상대가 내 초대를 받아들였을 수 있다 → 앱으로 돌아올 때 공간을 다시 확인한다.
+  // 혼자 쓰는 중이면 상대가 내 초대를 받아들였을 수 있고, 함께 쓰는 중이면 상대가 연결을 끊었을 수 있다
+  // → 앱으로 돌아올 때 공간을 다시 확인한다.
   useEffect(() => {
-    if (status !== 'solo') return;
+    if (status !== 'solo' && status !== 'active') return;
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') refresh();
     });

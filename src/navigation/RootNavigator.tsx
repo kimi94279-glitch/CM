@@ -12,6 +12,7 @@ import { PlaceAddScreen } from '../screens/PlaceAddScreen';
 import { InviteJoinScreen } from '../screens/InviteJoinScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ProfileSetupScreen } from '../screens/ProfileSetupScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 import { SignupScreen } from '../screens/SignupScreen';
 import { SplashScreen } from '../screens/SplashScreen';
 import type { RootStackParamList } from './types';
@@ -48,6 +49,7 @@ export function RootNavigator() {
           <Stack.Screen name="CoupleConnect" component={CoupleConnectScreen} />
           <Stack.Screen name="InviteCreate" component={InviteCreateScreen} />
           <Stack.Screen name="InviteJoin" component={InviteJoinScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </>
       )}
 
@@ -64,6 +66,7 @@ export function RootNavigator() {
           <Stack.Screen name="PlaceAdd" component={PlaceAddScreen} />
           <Stack.Screen name="InviteCreate" component={InviteCreateScreen} />
           <Stack.Screen name="InviteJoin" component={InviteJoinScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </>
       )}
 
@@ -78,6 +81,7 @@ export function RootNavigator() {
             options={{ contentStyle: { backgroundColor: 'transparent' } }}
           />
           <Stack.Screen name="PlaceAdd" component={PlaceAddScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </>
       )}
     </Stack.Navigator>

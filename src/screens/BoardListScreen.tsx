@@ -1,5 +1,4 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMutation } from '@tanstack/react-query';
 import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +16,6 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useBoardActivity, useBoards, useDeleteBoard } from '../hooks/useBoards';
-import { signOut } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import type { Board } from '../types/models';
 
@@ -29,7 +27,6 @@ export function BoardListScreen({ navigation }: Props) {
   const boardsQuery = useBoards(workspace?.id);
   const activityQuery = useBoardActivity(workspace?.id);
   const deleteMutation = useDeleteBoard(workspace?.id);
-  const logout = useMutation({ mutationFn: signOut });
 
   // 최근에 흔적이 생긴 지도가 위로 (흔적이 없으면 만든 시각)
   const activity = activityQuery.data;
@@ -83,8 +80,8 @@ export function BoardListScreen({ navigation }: Props) {
               <Text style={styles.headerLink}>같이 그릴 사람 초대</Text>
             </Pressable>
           ) : null}
-          <Pressable onPress={() => logout.mutate()} hitSlop={8}>
-            <Text style={styles.logout}>로그아웃</Text>
+          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
+            <Text style={styles.settings}>설정</Text>
           </Pressable>
         </View>
       </View>
@@ -164,7 +161,7 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.primary,
   },
-  logout: {
+  settings: {
     ...typography.label,
     color: colors.textMuted,
   },

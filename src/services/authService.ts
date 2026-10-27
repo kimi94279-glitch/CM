@@ -23,6 +23,14 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+// 계정 삭제 (delete_my_account RPC, 0010) — 되돌릴 수 없다.
+// 함께 쓰던 지도는 상대에게 남고, 혼자 쓰던 지도는 지워진다. 서버에서 계정이 지워지므로 이 기기 세션만 정리한다.
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+}
+
 export async function getSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;

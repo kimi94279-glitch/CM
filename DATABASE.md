@@ -237,9 +237,20 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
 
 ### 삭제보다 상태 전환
 
-- **관계 종료:** `couples.status = 'ended'`, `ended_at = now()`. boards/places/memos/reactions 전부 보존.
-- **사용자 탈퇴:** 활성 커플이 있으면 먼저 종료(ended) 처리 후 진행. RESTRICT가 실수 삭제를 DB에서 차단한다.
-- **실제 하드 삭제:** 별도 데이터 관리 정책이 수립된 경우에만 수행한다.
+- ~~**관계 종료:** `couples.status = 'ended'`, `ended_at = now()`. boards/places/memos/reactions 전부 보존.~~ → 개정(0010): ended 는 두 사람 모두 지도를 잃으므로 쓰지 않는다. 아래 "연결 끊기"로 대체.
+- ~~**사용자 탈퇴:** 활성 커플이 있으면 먼저 종료(ended) 처리 후 진행.~~ → 개정(0010): 아래 "계정 삭제".
+- RESTRICT 는 그대로 둔다 — 실수 삭제를 DB에서 막고, 탈퇴 정리는 전용 RPC 가 순서대로 처리한다.
+
+### 연결 끊기 · 계정 삭제 (0010, 2026-10-27)
+
+- **연결 끊기 `leave_workspace()`:** 나가는 사람만 빠진다. 남는 사람이 공간·지도를 그대로 갖고 `solo` 로 바뀐다(`user_a_id` = 남는 사람, `user_b_id` = NULL). 나간 사람은 공간 없음(no_workspace)에서 다시 시작. 나간 사람의 흔적은 작성자 그대로 남고, 그 보드의 읽음 기록만 지운다.
+- **계정 삭제 `delete_my_account()`:** 되돌릴 수 없다.
+  1. 함께 쓰는 중이면 먼저 연결 끊기 → 상대가 지도를 갖는다
+  2. 혼자 쓰던 공간이면 공간과 보드를 지운다(하위 흔적 CASCADE). 지난 `ended` 공간도 정리
+  3. 다른 사람 지도에 남은 내 흔적: 메모·반응은 삭제, 장소·스티커·그림은 `created_by = NULL`(작성자 없음)로 남긴다 — 장소를 지우면 그 위의 상대 메모·반응까지 지워지므로
+  4. 내가 만든 초대 삭제 → `auth.users` 삭제 → users · push_tokens · push_throttle · board_reads CASCADE
+- 이를 위해 `places.created_by`, `map_objects.created_by` 는 NULL 허용(0010). 앱은 작성자 없는 흔적을 "떠난 사람"으로 표시한다.
+- 실행 주체: SECURITY DEFINER(postgres 소유 — `auth.users` DELETE 권한 확인 2026-10-27), anon 실행 불가.
 
 > ⚠️ 데이터 손실 경고: 보드 삭제(boards → places CASCADE)는 해당 보드의 장소·메모·반응을 영구 삭제한다. 앱에서 명시적 확인 UI가 필요하다.
 > → 구현(2026-10-27): 보드 목록 ⋯ → 지우기 → 확인 알림("같이 남긴 장소·메모·그림이 모두 지워지고, 상대 화면에서도 사라져요"). map_objects·board_reads·push_throttle 도 CASCADE.
@@ -291,6 +302,8 @@ couple_invites ──(N:1, RESTRICT)──> users (created_by)   // couples를 �
         │                                  │
         ▼                                  ▼
       solo ──(accept_invite: 솔로 승격)──> active ──(관계 종료)──> ended
+        ▲                                  │
+        └──────(leave_workspace: 남는 사람)──┘   (0010: ended 대신 사용, 나간 사람은 공간 없음)
 ```
 
 - `pending` 상태는 존재하지 않는다. 초대 대기는 couples가 아닌 couple_invites가 표현한다.

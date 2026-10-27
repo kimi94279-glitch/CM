@@ -32,7 +32,7 @@ export interface Place {
   provider: PlaceProvider | null;
   provider_place_id: string | null;
   order_index: number;
-  created_by: string;
+  created_by: string | null; // 탈퇴한 사람이 찍은 장소는 null (0010)
   created_at: string;
   updated_at: string;
 }
@@ -80,7 +80,7 @@ export interface MapObject {
   longitude: number;
   zoom_level: number;
   payload: Record<string, unknown>;
-  created_by: string;
+  created_by: string | null; // 탈퇴한 사람의 스티커·그림은 null (0010)
   created_at: string;
   updated_at: string;
 }

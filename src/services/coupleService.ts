@@ -21,6 +21,12 @@ export async function createSoloWorkspace(): Promise<Couple> {
   return data as Couple;
 }
 
+// 연결 끊기 (leave_workspace RPC, 0010): 나만 빠지고, 함께 쓰던 지도는 상대가 혼자 쓰는 공간으로 갖는다.
+export async function leaveWorkspace(): Promise<void> {
+  const { error } = await supabase.rpc('leave_workspace');
+  if (error) throw error;
+}
+
 // 초대 생성: couple_invites 행 삽입 (이 시점에 couple 은 생성되지 않음 - DATABASE.md)
 export async function createInvite(): Promise<CoupleInvite> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
