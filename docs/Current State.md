@@ -40,7 +40,10 @@
 
 ## 다음
 
-- Sentry 연결(직접: 계정·DSN) → AppErrorBoundary.componentDidCatch · friendlyError 에서 전송
+- ~~Sentry 연결~~ → 코드 완료(2026-10-27, @sentry/react-native 7.11): DSN(`EXPO_PUBLIC_SENTRY_DSN`)만 넣으면 켜짐 — 화면 오류·예상 밖 오류·지도 실패·네이티브 크래시. 남은 일(직접): Sentry 프로젝트·DSN, 출시 빌드 전 소스맵 토큰. docs/Sentry Setup.md
+- 개인정보처리방침·이용약관: 운영자(개인 — 본명) · 문의 이메일(비즈니스 계정 새로 만들 예정) 받으면 web/ 에 페이지 + 가입 동의. 처리 위탁·국외 이전: Supabase(시드니)·Sentry·Expo 푸시·OpenFreeMap
+- iPad 지원 유지(supportsTablet true) — iPad 전용 UI 를 따로 설계할 예정(2026-10-27). 스토어에 iPad 스크린샷 필요
+- 앱 이름 보류(가칭 유지) · 번들 ID/패키지명 미정 — 첫 TestFlight/Play 업로드 전에 확정(올린 뒤엔 못 바꿈)
 - 지도 스타일·타일도 오프라인 대비가 필요하면 PMTiles 자가호스팅(ADR-013) — 지금은 OpenFreeMap 네트워크 의존
 
 - 소셜 로그인 콘솔 설정(직접): Supabase Redirect URL `couplemap://auth/callback` · 카카오 앱(REST 키·Client Secret·Redirect URI·동의항목) → Supabase Kakao(이메일 없는 사용자 허용) · Apple Developer App ID Sign in with Apple → Supabase Apple Client IDs. 그 뒤 새 개발 빌드(expo-apple-authentication·expo-web-browser 네이티브 모듈 추가)

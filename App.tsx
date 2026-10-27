@@ -22,6 +22,10 @@ import {
 import { RootNavigator } from './src/navigation/RootNavigator';
 import type { RootStackParamList } from './src/navigation/types';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { initMonitoring, wrapRoot } from './src/services/monitoring';
+
+// 오류 수집은 가장 먼저 켠다(EXPO_PUBLIC_SENTRY_DSN 이 없으면 아무 일도 안 함).
+initMonitoring();
 
 const queryClient = new QueryClient();
 
@@ -55,7 +59,7 @@ function onAppStateChange(status: AppStateStatus) {
   focusManager.setFocused(status === 'active');
 }
 
-export default function App() {
+function App() {
   // 네비게이터가 처음 마운트된 뒤(onReady)에만 알림 탭 이동을 처리한다.
   const [navReady, setNavReady] = useState(false);
 
@@ -90,3 +94,5 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
+export default wrapRoot(App);

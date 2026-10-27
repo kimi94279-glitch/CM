@@ -5,6 +5,7 @@ import { AppState } from 'react-native';
 
 import { getMyProfile } from '../services/authService';
 import { getMyWorkspace } from '../services/coupleService';
+import { setMonitoringUser } from '../services/monitoring';
 import { supabase } from '../services/supabase';
 import type { Couple } from '../types/models';
 
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (lastUserId.current !== nextUserId) {
         if (lastUserId.current !== null) queryClient.clear();
         lastUserId.current = nextUserId;
+        setMonitoringUser(nextUserId);
       }
       setSession(next);
       try {

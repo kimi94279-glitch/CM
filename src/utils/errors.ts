@@ -1,3 +1,5 @@
+import { reportError } from '../services/monitoring';
+
 // 사용자에게 보여줄 오류 문구.
 // DB·네트워크 원문(영문 코드, SQL·RLS 메시지)은 화면에 내보내지 않고 개발 로그로만 남긴다.
 export function friendlyError(error: unknown): string {
@@ -14,5 +16,7 @@ export function friendlyError(error: unknown): string {
   ) {
     return '이 지도에 대한 권한이 없어요. 앱을 다시 열어 주세요.';
   }
+  // 네트워크·권한이 아닌 예상 밖 오류만 수집(소음 줄이기)
+  reportError(error);
   return '잠시 후 다시 시도해 주세요.';
 }

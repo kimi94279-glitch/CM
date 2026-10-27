@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, typography } from '../constants/theme';
+import { reportError } from '../services/monitoring';
 import { Button } from './Button';
 
 interface Props {
@@ -14,7 +15,7 @@ interface State {
 }
 
 // 화면을 그리다 예외가 나면 앱 전체가 하얗게 멈추는 대신 "다시 시도" 화면을 보여준다.
-// 오류 수집(Sentry 등)을 붙이면 componentDidCatch 에서 보낸다.
+// 오류는 Sentry 로 보낸다(services/monitoring — DSN 이 있을 때만).
 export class AppErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null };
 
@@ -24,6 +25,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[AppErrorBoundary]', error, info.componentStack);
+    reportError(error, { componentStack: info.componentStack });
   }
 
   private reset = () => this.setState({ error: null });

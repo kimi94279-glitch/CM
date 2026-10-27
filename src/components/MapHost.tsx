@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
+import { reportMessage } from '../services/monitoring';
 import { Button } from './Button';
 import { MapWebView, type MapWebViewHandle } from './MapWebView';
 import {
@@ -54,6 +55,7 @@ export function MapHost({ children }: { children: ReactNode }) {
         reloadMap();
         return;
       }
+      reportMessage(`map fatal: ${stage}`);
       setMapFailed(true);
     },
     [reloadMap]
