@@ -39,6 +39,7 @@ import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/u
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { Place, PlaceSearchResult } from '../types/models';
+import { friendlyError } from '../utils/errors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -113,7 +114,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       {
         onError: (e) => {
           setMemoText(content); // 실패 시 입력 복구(낙관 반영은 훅에서 롤백).
-          Alert.alert('메모 저장 실패', e instanceof Error ? e.message : String(e));
+          Alert.alert('메모 저장 실패', friendlyError(e));
         },
       }
     );
@@ -155,7 +156,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     if (!last) return;
     setDrawnIds((ids) => ids.slice(0, -1));
     removeMapObject.mutate(last, {
-      onError: (e) => Alert.alert('되돌리기 실패', e instanceof Error ? e.message : String(e)),
+      onError: (e) => Alert.alert('되돌리기 실패', friendlyError(e)),
     });
   };
 
@@ -353,8 +354,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         updateMapObject.mutate(
           { id, patch: { latitude: lat, longitude: lng } },
           {
-            onError: (e) =>
-              Alert.alert('이동 저장 실패', e instanceof Error ? e.message : String(e)),
+            onError: (e) => Alert.alert('이동 저장 실패', friendlyError(e)),
           }
         ),
       onMapPress: (point) => {
@@ -369,8 +369,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               payload: { emoji: stickerEmoji },
             },
             {
-              onError: (e) =>
-                Alert.alert('스티커 저장 실패', e instanceof Error ? e.message : String(e)),
+              onError: (e) => Alert.alert('스티커 저장 실패', friendlyError(e)),
             }
           );
           return;
@@ -393,8 +392,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           },
           {
             onSuccess: (saved) => setDrawnIds((ids) => [...ids, saved.id]),
-            onError: (e) =>
-              Alert.alert('그림 저장 실패', e instanceof Error ? e.message : String(e)),
+            onError: (e) => Alert.alert('그림 저장 실패', friendlyError(e)),
           }
         );
       },
@@ -412,7 +410,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         id: selectedObject.id,
         patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } },
       },
-      { onError: (e) => Alert.alert('크기 저장 실패', e instanceof Error ? e.message : String(e)) }
+      { onError: (e) => Alert.alert('크기 저장 실패', friendlyError(e)) }
     );
   };
   // 선택 객체 삭제.
@@ -420,7 +418,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     if (!selectedObject) return;
     removeMapObject.mutate(selectedObject.id, {
       onSuccess: () => setSelectedObjectId(null),
-      onError: (e) => Alert.alert('삭제 실패', e instanceof Error ? e.message : String(e)),
+      onError: (e) => Alert.alert('삭제 실패', friendlyError(e)),
     });
   };
 
@@ -578,11 +576,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                       <Pressable
                         onPress={() =>
                           removeMemo.mutate(m.id, {
-                            onError: (e) =>
-                              Alert.alert(
-                                '메모 삭제 실패',
-                                e instanceof Error ? e.message : String(e)
-                              ),
+                            onError: (e) => Alert.alert('메모 삭제 실패', friendlyError(e)),
                           })
                         }
                         hitSlop={8}
@@ -628,8 +622,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                   myReactionTypes.has(type) && styles.reactionEmojiMine,
                 ]}
                 onPress={() => {
-                  const onError = (e: unknown) =>
-                    Alert.alert('반응 저장 실패', e instanceof Error ? e.message : String(e));
+                  const onError = (e: unknown) => Alert.alert('반응 저장 실패', friendlyError(e));
                   // 토글: 내가 이미 누른 반응이면 제거, 아니면 추가.
                   if (myReactionTypes.has(type)) {
                     removeReaction.mutate({ placeId: reactionPlaceId, type }, { onError });

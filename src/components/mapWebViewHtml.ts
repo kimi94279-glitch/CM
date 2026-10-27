@@ -1,5 +1,6 @@
 import { colors } from '../constants/theme';
 import type { Place } from '../types/models';
+import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_VERSION } from './vendor/maplibreAssets';
 
 // WebView 에 전달할 최소 장소 정보
 export interface MapPlace {
@@ -33,8 +34,6 @@ export function safeJson(data: unknown): string {
 
 // 기본 중심(서울시청)
 const DEFAULT_CENTER = { lat: 37.5666, lng: 126.9784 };
-// MapLibre GL JS CDN 버전 (Mapbox GL v1 포크 — Marker/LngLatBounds/카메라 API 동일).
-const MAPLIBRE_GL_VERSION = '5.24.0';
 // 시작 지도 스타일 — OpenFreeMap positron(무료·키리스, OSM/OpenMapTiles). Light/미니멀이라 캔버스 위 요소가 돋보인다.
 // 추후 CM Style V1(자체 style.json)로 교체 예정 — source URL만 바꾸면 PMTiles 자가호스팅으로도 전환 가능(ADR-013).
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
@@ -55,7 +54,7 @@ export function buildMapHtml(places: MapPlace[]): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link href="https://unpkg.com/maplibre-gl@${MAPLIBRE_GL_VERSION}/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>${MAPLIBRE_CSS}</style>
   <style>
     html,body,#map{margin:0;padding:0;width:100%;height:100%;}
     /* 펜 모드 전용 투명 캔버스: 지도 위를 덮고 손가락 선을 받는다(평소 숨김). */
@@ -72,6 +71,7 @@ export function buildMapHtml(places: MapPlace[]): string {
 <body>
   <div id="map"></div>
   <canvas id="pen"></canvas>
+  <script>${MAPLIBRE_JS}</script>
   <script>
     function send(o){ try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }catch(e){} }
     // 보강: long-press 텍스트 선택/컨텍스트 메뉴 차단 (CSS user-select가 놓치는 잔여 케이스 대비)
@@ -490,11 +490,17 @@ export function buildMapHtml(places: MapPlace[]): string {
     // 편집 선택 갱신: 선택 id 설정 후 diff 재적용(선택 링/드래그가능만 UPDATE, 재빌드 없음). null 이면 해제.
     window.selectObject = function(id){ SELECTED_ID = id; applyObjects(OBJECTS); };
 
-    var s = document.createElement('script');
-    s.src = 'https://unpkg.com/maplibre-gl@${MAPLIBRE_GL_VERSION}/dist/maplibre-gl.js';
-    s.onerror = function(){ send({ type:'error', stage:'script', message:'MapLibre GL JS script load failed' }); };
-    s.onload = function(){
-      if(!window.maplibregl){ send({ type:'error', stage:'sdk', message:'maplibregl undefined' }); return; }
+    // 지도를 못 띄우는 오류 → RN 이 실패 화면(다시 시도)을 보여준다(MapHost).
+    // 첫 스타일 로드 전 오류는 잠깐 기다려 본다 — 스프라이트 하나가 늦는 정도면 곧 load 가 온다.
+    var fatalTimer = null;
+    function failSoon(stage, message){
+      if (styleLoaded || fatalTimer) return;
+      fatalTimer = setTimeout(function(){ if (!styleLoaded) send({ type:'fatal', stage: stage, message: message }); }, 4000);
+    }
+
+    // MapLibre GL JS ${MAPLIBRE_VERSION} 는 위 <script> 로 앱 안에 들어 있다(CDN 없음 — vendor/maplibreAssets).
+    (function init(){
+      if(!window.maplibregl){ send({ type:'fatal', stage:'sdk', message:'maplibregl undefined' }); return; }
       try {
         // MapLibre는 access token이 없다(OpenFreeMap 키리스). 스타일 JSON URL만 지정.
         map = new maplibregl.Map({
@@ -537,10 +543,16 @@ export function buildMapHtml(places: MapPlace[]): string {
           applyDrawings();
           send({ type:'ready', count: PLACES.length });
         });
-        map.on('error', function(ev){ send({ type:'error', stage:'map', message: ev && ev.error ? String(ev.error.message || ev.error) : 'map error' }); });
-      } catch(e){ send({ type:'error', stage:'map', message:String(e) }); }
-    };
-    document.head.appendChild(s);
+        map.on('error', function(ev){
+          var message = ev && ev.error ? String(ev.error.message || ev.error) : 'map error';
+          // 첫 로드 전(오프라인·스타일 서버 장애)이면 치명, 이후(타일 하나 실패 등)는 진단용.
+          if (!styleLoaded) failSoon('style', message);
+          else send({ type:'error', stage:'map', message: message });
+        });
+        // 느린 망 대비 30초. 실패 화면이 뜬 뒤라도 늦게 load 되면 ready 가 화면을 걷는다(MapHost).
+        setTimeout(function(){ if (!styleLoaded) send({ type:'fatal', stage:'timeout', message:'style load timeout' }); }, 30000);
+      } catch(e){ send({ type:'fatal', stage:'sdk', message:String(e) }); }
+    })();
   </script>
 </body>
 </html>`;

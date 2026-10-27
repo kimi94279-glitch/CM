@@ -1,7 +1,9 @@
-import React, { useMemo, useRef, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
+import { Button } from './Button';
 import { MapWebView, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
@@ -28,6 +30,34 @@ export function MapHost({ children }: { children: ReactNode }) {
   const boardIdRef = useRef<string | null>(null);
   const callbacksRef = useRef<MapCallbacks>({});
   const mapRef = useRef<MapWebViewHandle>(null);
+
+  // 지도 안정성: 못 뜨면 실패 화면 → "다시 시도" 로 WebView 를 새로 띄운다(key 교체 = 처음부터 다시).
+  // WebView 프로세스가 죽은 경우(crash)는 한 번은 조용히 다시 띄우고, 또 죽으면 실패 화면.
+  const [mapKey, setMapKey] = useState(0);
+  const [mapFailed, setMapFailed] = useState(false);
+  const crashRetried = useRef(false);
+
+  const reloadMap = useCallback(() => {
+    setMapFailed(false);
+    setMapKey((k) => k + 1);
+  }, []);
+
+  const onMapReady = useCallback(() => {
+    crashRetried.current = false;
+    setMapFailed(false);
+  }, []);
+
+  const onMapFatal = useCallback(
+    (stage: string) => {
+      if (stage === 'crash' && !crashRetried.current) {
+        crashRetried.current = true;
+        reloadMap();
+        return;
+      }
+      setMapFailed(true);
+    },
+    [reloadMap]
+  );
 
   const controller = useMemo<MapHostController>(
     () => ({
@@ -81,6 +111,7 @@ export function MapHost({ children }: { children: ReactNode }) {
           pointerEvents={visible ? 'box-none' : 'none'}
         >
           <MapWebView
+            key={mapKey}
             ref={mapRef}
             places={boardData.places}
             reactions={boardData.reactions}
@@ -94,7 +125,18 @@ export function MapHost({ children }: { children: ReactNode }) {
             onObjectPress={(id) => callbacksRef.current.onObjectPress?.(id)}
             onObjectMove={(id, lat, lng) => callbacksRef.current.onObjectMove?.(id, lat, lng)}
             onDrawEnd={(stroke) => callbacksRef.current.onDrawEnd?.(stroke)}
+            onReady={onMapReady}
+            onFatal={onMapFatal}
           />
+          {mapFailed ? (
+            <View style={styles.failWrap} pointerEvents="box-none">
+              <View style={styles.failCard}>
+                <Text style={styles.failTitle}>지도를 불러오지 못했어요</Text>
+                <Text style={styles.failDesc}>인터넷 연결을 확인하고 다시 시도해 주세요.</Text>
+                <Button title="다시 시도" onPress={reloadMap} style={styles.failButton} />
+              </View>
+            </View>
+          ) : null}
         </View>
         {/* 네비게이터(위층). BoardDetail은 투명+box-none으로 지도를 노출/통과시킨다. */}
         {children}
@@ -105,4 +147,37 @@ export function MapHost({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  failWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceMuted,
+  },
+  failCard: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  failTitle: {
+    ...typography.title,
+    color: colors.textStrong,
+    textAlign: 'center',
+  },
+  failDesc: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  failButton: {
+    alignSelf: 'stretch',
+    marginTop: spacing.lg,
+  },
 });

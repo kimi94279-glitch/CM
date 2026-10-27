@@ -33,6 +33,9 @@ interface MapWebViewProps {
   // 펜 모드: 켜면 지도 제스처가 잠기고 손가락 선이 onDrawEnd 로 올라온다.
   penMode?: boolean;
   onDrawEnd?: (stroke: DrawStroke) => void;
+  // 지도가 처음 뜸 / 못 뜸. stage: style(오프라인·스타일 서버) · timeout · sdk · crash(WebView 프로세스 종료)
+  onReady?: () => void;
+  onFatal?: (stage: string) => void;
 }
 
 // WebView 'drawEnd' 메시지 검증 → DrawStroke. 형식이 어긋나면 null.
@@ -138,6 +141,8 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     myUserId = null,
     penMode = false,
     onDrawEnd,
+    onReady,
+    onFatal,
   },
   ref
 ) {
@@ -290,6 +295,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         if (penModeRef.current) {
           webRef.current?.injectJavaScript('window.setPenMode && window.setPenMode(true); true;');
         }
+        onReady?.();
+        return;
+      }
+      if (msg.type === 'fatal') {
+        onFatal?.(typeof msg.stage === 'string' ? msg.stage : 'unknown');
         return;
       }
       if (msg.type === 'drawEnd') {
@@ -337,6 +347,9 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       onShouldStartLoadWithRequest={shouldStartLoad}
       onOpenWindow={(e) => openExternally(e.nativeEvent.targetUrl)}
       onMessage={handleMessage}
+      // WebView 프로세스가 죽으면(메모리 부족 등) 빈 화면이 남는다 → MapHost 가 다시 띄운다.
+      onRenderProcessGone={() => onFatal?.('crash')}
+      onContentProcessDidTerminate={() => onFatal?.('crash')}
       style={styles.web}
     />
   );

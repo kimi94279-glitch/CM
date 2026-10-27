@@ -14,6 +14,8 @@
 - 새 흔적 표시(코드 완료 · 0009 DB 적용 완료 2026-10-27 — 실기기 확인 대기): 보드 목록에 상대가 내가 본 뒤 남긴 흔적 수(상대 잉크 점) · 마지막 흔적 시각 · 최근 활동순 정렬. 보드에 들어올 때·나갈 때 읽음 기록, 푸시 수신 시 갱신
 - 계정 삭제·연결 끊기(코드 완료 · 0010 DB 적용 완료 2026-10-27 — 실기기 확인 대기): 설정 화면(목록·첫 화면에서 진입) — 이름·이메일, 같이 그리는 사람, 연결 끊기(지도는 남는 사람에게), 로그아웃, 계정 삭제(혼자 쓰던 지도는 삭제 / 함께 쓰던 지도는 상대에게 남고 내 메모·반응 삭제, 장소·그림은 "떠난 사람"으로). 다른 사람으로 로그인하면 이전 캐시 비움
 - 카카오·Apple 로그인(코드 완료 — 콘솔 설정·새 개발 빌드 대기): 카카오 = 브라우저 인증 세션 + PKCE code 교환(모든 기기), Apple = iOS 네이티브 ID 토큰 + nonce. 로그인 화면은 카카오 → Apple(iOS) → "이메일로 로그인"(접힘). 소셜 이름으로 프로필 닉네임 기본값. app.json ios.bundleIdentifier `com.couplemap.mobile`·usesAppleSignIn, 플러그인 expo-apple-authentication·expo-web-browser. 설정 절차 SUPABASE_SETUP.md §4.5
+- 지도 안정성(2026-10-27): MapLibre GL JS 5.24.0 을 앱 안에 넣음(CDN unpkg 의존 제거 — `npm run vendor:maplibre` 가 src/components/vendor/maplibreAssets.ts 생성, 버전 고정). 스타일 로드 실패(오프라인·서버 장애, 4초 확인)·30초 타임아웃·SDK 오류 → "지도를 불러오지 못했어요 · 다시 시도" 화면(WebView 새로 띄움), WebView 프로세스 종료는 1회 자동 재시작. 늦게라도 뜨면 실패 화면 자동 해제. 브라우저 검증: 인라인 로드·unpkg 요청 0·ready·핀 2개 표시 / 잘못된 스타일 URL → fatal:style. Android export 번들 5.4MB 정상
+- 오류 처리(2026-10-27): 앱 전체 오류 경계(AppErrorBoundary — 하얀 화면 대신 "다시 시도"), 지도 화면 알림의 DB 원문 오류 → 쉬운 문구(utils/errors friendlyError). 오류 수집(Sentry)은 계정·DSN 필요 → 대기
 - 보드 이름 바꾸기·지우기(목록 ⋯ 메뉴, 지우기는 확인 알림) · "데이트" 문구 정리(목록·만들기·로그인·스플래시 → "지도"·"같이 그려요")
 
 ## 현재 버그
@@ -37,6 +39,9 @@
 - 0010 account_deletion … 적용됨(2026-10-27). leave_workspace + delete_my_account(SECURITY DEFINER, auth.users 삭제 — postgres DELETE 권한 확인) + places/map_objects.created_by NULL 허용. 적용 전 점검 계정 3·프로필 3·solo 3·active 0·보드 5·장소 11·객체 31·메모 0·반응 7·초대 2. 확인: created_by NULL 허용(places·map_objects), 두 함수 SECURITY DEFINER·소유자 postgres, anon 실행 불가·authenticated 가능. 롤백 테스트(실제 데이터 — 솔로 공간에 다른 사용자를 임시 연결 + 그 사람의 장소·메모·반응·그림 추가): 비로그인 → 'not authenticated' / 연결 끊기 → 남는 사람이 user_a·solo / 상대 계정 삭제 → 공간 solo 로 남는 사람 보유·보드 4개 유지·상대 auth·프로필 삭제·상대 메모·반응 0·상대 장소/그림 작성자 NULL·내 메모 유지 / 혼자 쓰던 사람 계정 삭제 → 공간·보드·auth·프로필 0 / 푸시 큐 0 → 전부 롤백(계정 3·solo 3·보드 5·장소 11·작성자 없는 장소 0·객체 31·메모 0·반응 7·초대 2). 오프라인(PGlite) 31항목 통과: 함께 쓰던 사람 탈퇴 시 상대가 지도 보유·내 메모/반응 삭제·장소/그림 작성자 없음·상대 메모 유지 / 혼자 쓰던 지도 전부 삭제 / 연결 끊기(user_a·user_b 둘 다) / 나간 사람 RLS 차단·새로 시작 가능 / 비로그인 거부 / 재실행 안전
 
 ## 다음
+
+- Sentry 연결(직접: 계정·DSN) → AppErrorBoundary.componentDidCatch · friendlyError 에서 전송
+- 지도 스타일·타일도 오프라인 대비가 필요하면 PMTiles 자가호스팅(ADR-013) — 지금은 OpenFreeMap 네트워크 의존
 
 - 소셜 로그인 콘솔 설정(직접): Supabase Redirect URL `couplemap://auth/callback` · 카카오 앱(REST 키·Client Secret·Redirect URI·동의항목) → Supabase Kakao(이메일 없는 사용자 허용) · Apple Developer App ID Sign in with Apple → Supabase Apple Client IDs. 그 뒤 새 개발 빌드(expo-apple-authentication·expo-web-browser 네이티브 모듈 추가)
 - Apple 로그인 계정 삭제 시 Apple 토큰 해지(auth/revoke, Edge Function) — App Store 심사 요구

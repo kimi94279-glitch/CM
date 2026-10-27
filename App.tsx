@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppErrorBoundary } from './src/components/AppErrorBoundary';
 import { MapHost } from './src/components/MapHost';
 import { AuthProvider } from './src/hooks/useAuthState';
 import { PendingInviteProvider, usePendingInviteRouting } from './src/hooks/usePendingInvite';
@@ -70,16 +71,18 @@ export default function App() {
           <PendingInviteProvider>
             <PushNotifications navReady={navReady} />
             <PendingInviteLinks navReady={navReady} />
-            <MapHost>
-              <NavigationContainer
-                ref={navigationRef}
-                theme={navTheme}
-                fallback={<SplashScreen />}
-                onReady={() => setNavReady(true)}
-              >
-                <RootNavigator />
-              </NavigationContainer>
-            </MapHost>
+            <AppErrorBoundary>
+              <MapHost>
+                <NavigationContainer
+                  ref={navigationRef}
+                  theme={navTheme}
+                  fallback={<SplashScreen />}
+                  onReady={() => setNavReady(true)}
+                >
+                  <RootNavigator />
+                </NavigationContainer>
+              </MapHost>
+            </AppErrorBoundary>
             <StatusBar style="auto" />
           </PendingInviteProvider>
         </AuthProvider>

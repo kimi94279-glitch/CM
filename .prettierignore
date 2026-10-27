@@ -5,6 +5,8 @@ web-build/
 android/
 ios/
 package-lock.json
+# 자동 생성(scripts/vendor-maplibre.mjs)
+src/components/vendor/
 
 # 기획 문서는 수기 작성본 유지
 PRD.md
