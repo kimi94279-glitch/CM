@@ -1,5 +1,7 @@
 import { colors } from '../constants/theme';
+import type { PeopleInks } from '../hooks/useInks';
 import type { Place } from '../types/models';
+import { whoOf, type Who } from '../utils/who';
 import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_VERSION } from './vendor/maplibreAssets';
 
 // WebView 에 전달할 최소 장소 정보
@@ -9,10 +11,14 @@ export interface MapPlace {
   latitude: number;
   longitude: number;
   order_index: number;
-  mine: boolean; // 작성자 = 나(핀 색: you / partner)
+  who: Who; // 작성자: 나 · 지금 상대 · 그 밖(예전 상대·탈퇴) — 핀 색
 }
 
-export function toMapPlaces(places: Place[], myId: string | null): MapPlace[] {
+export function toMapPlaces(
+  places: Place[],
+  myId: string | null,
+  partnerId: string | null
+): MapPlace[] {
   // 방어적 정렬: DB 가 정렬되어 있어도 order_index 기준으로 한 번 더 정렬
   return [...places]
     .sort((a, b) => a.order_index - b.order_index)
@@ -22,7 +28,7 @@ export function toMapPlaces(places: Place[], myId: string | null): MapPlace[] {
       latitude: p.latitude,
       longitude: p.longitude,
       order_index: p.order_index,
-      mine: p.created_by === myId,
+      who: whoOf(p.created_by, myId, partnerId),
     }));
 }
 
@@ -45,8 +51,15 @@ const FOCUS_ZOOM = 16; // 알림 탭 등으로 특정 핀/좌표에 맞출 때: 
 const PEN_WIDTH = 4;
 const DRAW_CAP = 40;
 
-export function buildMapHtml(places: MapPlace[]): string {
+// WebView 로 넘기는 잉크: 사람 구분별 solid(핀·테두리)·soft(펜 선)
+export function toMapInks(inks: PeopleInks) {
+  const pick = (who: Who) => ({ solid: inks[who].solid, soft: inks[who].soft });
+  return { me: pick('me'), partner: pick('partner'), other: pick('other') };
+}
+
+export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
   const placesJson = safeJson(places);
+  const inksJson = safeJson(toMapInks(inks));
   const centerJson = safeJson(DEFAULT_CENTER);
 
   return `<!DOCTYPE html>
@@ -83,10 +96,14 @@ export function buildMapHtml(places: MapPlace[]): string {
     // 카메라 고정 대상 { lat, lng } (알림 탭 진입). 사용자가 지도를 움직이거나 Recenter 하기 전까지
     // 장소 갱신(renderPlaces → applyCamera)이 와도 이 위치를 유지한다 — 데이터 도착 순서와 무관하게 동작.
     var FOCUS = null;
-    // 작성자 잉크(DESIGN.md 사람마다 잉크): 지금은 나=라일락, 상대=스카이. 선택 링은 잉크와 겹치지 않게 검정.
-    var YOU_COLOR = '${colors.you}', PARTNER_COLOR = '${colors.partner}', SELECT_COLOR = '${colors.textStrong}';
-    // 펜 선은 잉크 soft(파스텔) 톤.
-    var YOU_SOFT = '${colors.youSoft}', PARTNER_SOFT = '${colors.partnerSoft}';
+    // 작성자 잉크(DESIGN.md 사람마다 잉크): 나 · 지금 상대 · 그 밖(예전 상대·탈퇴 — 회색). 각자 고른 색을 RN 이 주입,
+    // 바뀌면 setInks 로 다시 칠한다. solid = 핀·테두리, soft = 펜 선. 선택 링은 잉크와 겹치지 않게 검정.
+    var INKS = ${inksJson}, SELECT_COLOR = '${colors.textStrong}';
+    function inkOf(who){ return INKS[who] || INKS.other; }
+    // 이 보드에서 마지막으로 보던 카메라 {lng, lat, zoom} — 다시 들어오면 그 자리(RN 이 보드별로 기억).
+    var CAMERA = null;
+    // 사용자가 지도를 직접 움직였으면 장소가 바뀌어도 카메라를 건드리지 않는다(Recenter 전까지).
+    var USER_MOVED = false;
     var PEN_WIDTH = ${PEN_WIDTH}, DRAW_CAP = ${DRAW_CAP};
     var map, bounds;
     var styleLoaded = false;   // 'load' 이후에만 source/layer 추가 가능
@@ -95,8 +112,8 @@ export function buildMapHtml(places: MapPlace[]): string {
     var PENDING = [];          // 방금 그려 RN 저장 응답을 기다리는 선(다음 renderObjects 때 비움)
     var markers = [];          // 장소(번호 핀) 마커
     var annotationMarkers = []; // 핀 위 주석(말풍선 + 반응 칩) 마커 — 장소당 1개
-    var REACTIONS = {};        // 마지막 반응 입력 { placeId: { mine:[], partner:[] } }
-    var MEMOS = {};            // 마지막 메모 입력 { placeId: [{ text, mine }] }
+    var REACTIONS = {};        // 마지막 반응 입력 { placeId: { me:[], partner:[], other:[] } }
+    var MEMOS = {};            // 마지막 메모 입력 { placeId: [{ text, who }] }
     var routeReady = false;    // 경로 source/layer 1회 생성 여부
     var objectMarkerMap = {};  // id -> { marker, el } (증분 렌더: clear+rebuild 대신 id diff)
     var OBJECTS = [];          // 마지막 렌더된 객체 목록(선택 갱신 시 재사용)
@@ -112,6 +129,11 @@ export function buildMapHtml(places: MapPlace[]): string {
         map.jumpTo({ center: [FOCUS.lng, FOCUS.lat], zoom: FOCUS_ZOOM });
         return;
       }
+      if (USER_MOVED) return;
+      if (CAMERA) {
+        map.jumpTo({ center: [CAMERA.lng, CAMERA.lat], zoom: CAMERA.zoom });
+        return;
+      }
       if (PLACES.length === 0) {
         map.jumpTo({ center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat], zoom: EMPTY_ZOOM });
       } else if (PLACES.length === 1) {
@@ -122,7 +144,9 @@ export function buildMapHtml(places: MapPlace[]): string {
     }
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     // Recenter 는 고정을 풀고 전체 장소 기준으로 돌아간다.
-    window.recenter = function(){ FOCUS = null; applyCamera(); };
+    window.recenter = function(){ FOCUS = null; CAMERA = null; USER_MOVED = false; applyCamera(); };
+    // 보드에 들어올 때 RN 이 그 보드의 마지막 카메라(없으면 null = 장소 기준)를 준다.
+    window.setCamera = function(c){ CAMERA = c || null; USER_MOVED = false; applyCamera(); };
     // 카메라 고정 설정(null = 해제). 보드 전환 시 RN 이 null 로 이전 보드 고정을 지운다.
     window.setFocus = function(p){ FOCUS = p; if (p) applyCamera(); };
 
@@ -188,7 +212,7 @@ export function buildMapHtml(places: MapPlace[]): string {
     }
 
     // 장소 배열로 마커/폴리라인/카메라를 재구성. 초기 로드와 RN 증분 업데이트가 공용 사용(단일 경로).
-    function applyPlaces(list){
+    function applyPlaces(list, keepCamera){
       if (!map) return;
       PLACES = list || [];
       clearOverlays();
@@ -202,7 +226,7 @@ export function buildMapHtml(places: MapPlace[]): string {
         coords.push(lngLat);
 
         var el = document.createElement('div');
-        el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:' + (p.mine ? YOU_COLOR : PARTNER_COLOR) + ';color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
+        el.style.cssText = 'width:28px;height:28px;line-height:28px;border-radius:14px;background:' + inkOf(p.who).solid + ';color:#fff;text-align:center;font-weight:700;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
         el.textContent = String(i + 1);
         // GL 마커는 click 을 가로채지 않음 → 전파 차단해야 map 'click'(배경 탭)이 따라오지 않는다.
         el.addEventListener('click', function(e){ e.stopPropagation(); send({ type:'markerClick', id: p.id }); });
@@ -220,8 +244,8 @@ export function buildMapHtml(places: MapPlace[]): string {
         });
       }
 
-      // 카메라: applyCamera()로 위임 — 초기/Recenter/증분 갱신 모두 동일 0/1/2+ 로직.
-      applyCamera();
+      // 카메라: applyCamera()로 위임 — 초기/Recenter/증분 갱신 모두 동일 0/1/2+ 로직(색만 다시 칠할 땐 그대로).
+      if (!keepCamera) applyCamera();
       // 주석은 PLACES 좌표에 매달리므로 장소가 바뀌면 다시 붙인다(삭제된 장소의 잔상 제거).
       applyAnnotations();
     }
@@ -252,16 +276,17 @@ export function buildMapHtml(places: MapPlace[]): string {
       PLACES.forEach(function(place){
         var group = REACTIONS[place.id];
         var memos = MEMOS[place.id] || [];
-        var hasReactions = !!group && (group.mine.length > 0 || group.partner.length > 0);
+        var hasReactions = !!group && ['me', 'partner', 'other'].some(function(w){ return group[w] && group[w].length > 0; });
         if (!hasReactions && !memos.length) return;
         var el = document.createElement('div');
         el.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;';
-        memos.forEach(function(m){ el.appendChild(memoBubble(m.text, m.mine ? YOU_COLOR : PARTNER_COLOR)); });
+        memos.forEach(function(m){ el.appendChild(memoBubble(m.text, inkOf(m.who).solid)); });
         if (hasReactions){
           var row = document.createElement('div');
           row.style.cssText = 'display:flex;gap:2px;white-space:nowrap;';
-          if (group.mine.length) row.appendChild(reactionChip(group.mine, YOU_COLOR));
-          if (group.partner.length) row.appendChild(reactionChip(group.partner, PARTNER_COLOR));
+          ['me', 'partner', 'other'].forEach(function(w){
+            if (group[w] && group[w].length) row.appendChild(reactionChip(group[w], inkOf(w).solid));
+          });
           el.appendChild(row);
         }
         // 주석 탭 = 그 핀 탭(반응/메모 바 열기). 배경 탭(선택 해제)으로 새지 않게 전파 차단.
@@ -274,6 +299,15 @@ export function buildMapHtml(places: MapPlace[]): string {
     // RN → WebView(injectJavaScript) 진입점. ready 이전 호출은 호출측(RN)에서 가드.
     window.renderReactions = function(byPlaceId){ REACTIONS = byPlaceId || {}; applyAnnotations(); };
     window.renderMemos = function(byPlaceId){ MEMOS = byPlaceId || {}; applyAnnotations(); };
+    // 잉크가 바뀌면(내가 색을 고르거나 상대가 바꿈) 카메라는 그대로 두고 핀·주석·스티커·선을 다시 칠한다.
+    window.setInks = function(next){
+      if (!next) return;
+      INKS = next;
+      if (!map) return;
+      applyPlaces(PLACES, true);
+      applyObjects(OBJECTS);
+      if (drawReady) map.setPaintProperty('draw-line', 'line-color', drawColorExpr());
+    };
 
     // el 의 데이터/시각(크기·이모지·가시성·선택링)을 객체 상태에 맞춰 갱신. ADD/UPDATE 공용.
     // dataset.lvl = 생성 당시 GL zoom(zoom_level). 좌표 고정 + world-space 크기.
@@ -289,7 +323,7 @@ export function buildMapHtml(places: MapPlace[]): string {
       el.dataset.vis = px >= 6 ? '1' : '0';
       el.style.display = el.dataset.vis === '1' ? '' : 'none';
       // 작성자 색 외곽선(다이컷 스티커처럼 글리프 둘레). em 단위라 world-space 크기와 함께 스케일된다.
-      var c = o.mine ? YOU_COLOR : PARTNER_COLOR;
+      var c = inkOf(o.who).solid;
       el.style.textShadow = '0.05em 0 0 ' + c + ',-0.05em 0 0 ' + c + ',0 0.05em 0 ' + c + ',0 -0.05em 0 ' + c;
       // 선택 링(선택 시 표시, 아니면 해제) — UPDATE 시 토글도 처리. 작성자 색과 겹치지 않게 잉크색 점선.
       el.style.outline = (o.id === SELECTED_ID) ? '3px dashed ' + SELECT_COLOR : 'none';
@@ -344,16 +378,20 @@ export function buildMapHtml(places: MapPlace[]): string {
       map.addLayer({
         id:'draw-line', type:'line', source:'draw',
         layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{ 'line-color':['case', ['get', 'mine'], YOU_SOFT, PARTNER_SOFT], 'line-opacity':0.95, 'line-width': drawWidthExpr(0) }
+        paint:{ 'line-color': drawColorExpr(), 'line-opacity':0.95, 'line-width': drawWidthExpr(0) }
       });
       drawReady = true;
     }
-    function drawFeature(id, payload, mine, zoomLevel){
+    // 선 색 = 작성자 잉크 soft. setInks 때 setPaintProperty 로 갈아 끼운다.
+    function drawColorExpr(){
+      return ['match', ['get', 'who'], 'me', INKS.me.soft, 'partner', INKS.partner.soft, INKS.other.soft];
+    }
+    function drawFeature(id, payload, who, zoomLevel){
       var pts = payload && payload.points;
       if (!pts || pts.length < 2) return null;
       return {
         type:'Feature',
-        properties:{ id: id, mine: !!mine, w: payload.w || PEN_WIDTH, s: payload.scale || 1, z: payload.z != null ? payload.z : zoomLevel },
+        properties:{ id: id, who: who || 'other', w: payload.w || PEN_WIDTH, s: payload.scale || 1, z: payload.z != null ? payload.z : zoomLevel },
         geometry:{ type:'LineString', coordinates: pts }
       };
     }
@@ -362,9 +400,9 @@ export function buildMapHtml(places: MapPlace[]): string {
       ensureDrawLayers();
       var feats = [];
       OBJECTS.forEach(function(o){
-        if (o && o.type === 'draw'){ var f = drawFeature(o.id, o.payload, o.mine, o.zoom_level); if (f) feats.push(f); }
+        if (o && o.type === 'draw'){ var f = drawFeature(o.id, o.payload, o.who, o.zoom_level); if (f) feats.push(f); }
       });
-      PENDING.forEach(function(p){ var f = drawFeature(p.id, p.payload, true, p.payload.z); if (f) feats.push(f); });
+      PENDING.forEach(function(p){ var f = drawFeature(p.id, p.payload, 'me', p.payload.z); if (f) feats.push(f); });
       map.getSource('draw').setData({ type:'FeatureCollection', features: feats });
       map.setFilter('draw-selected', ['==', ['get', 'id'], SELECTED_ID || '']);
     }
@@ -406,7 +444,7 @@ export function buildMapHtml(places: MapPlace[]): string {
       try { pen.setPointerCapture(e.pointerId); } catch (_){}
       stroke = [localPt(e)];
       clearPen();
-      penCtx.strokeStyle = YOU_SOFT; penCtx.lineWidth = PEN_WIDTH; penCtx.lineCap = 'round'; penCtx.lineJoin = 'round';
+      penCtx.strokeStyle = INKS.me.soft; penCtx.lineWidth = PEN_WIDTH; penCtx.lineCap = 'round'; penCtx.lineJoin = 'round';
     });
     pen.addEventListener('pointermove', function(e){
       if (!stroke) return;
@@ -533,8 +571,18 @@ export function buildMapHtml(places: MapPlace[]): string {
         map.on('zoom', resizeObjects);
 
         // 사용자가 직접 지도를 움직이면 카메라 고정 해제(코드의 jumpTo/fitBounds 는 originalEvent 없음).
-        map.on('dragstart', function(){ FOCUS = null; });
-        map.on('zoomstart', function(e){ if (e && e.originalEvent) FOCUS = null; });
+        map.on('dragstart', function(){ FOCUS = null; USER_MOVED = true; });
+        map.on('zoomstart', function(e){ if (e && e.originalEvent){ FOCUS = null; USER_MOVED = true; } });
+        // 카메라가 멈추면 RN 에 알려 보드별로 기억한다(잦은 저장을 피해 잠깐 모아서).
+        var cameraTimer = null;
+        map.on('moveend', function(){
+          if (!styleLoaded) return;
+          clearTimeout(cameraTimer);
+          cameraTimer = setTimeout(function(){
+            var c = map.getCenter();
+            send({ type:'camera', lng: c.lng, lat: c.lat, zoom: map.getZoom() });
+          }, 400);
+        });
 
         map.on('load', function(){
           styleLoaded = true;

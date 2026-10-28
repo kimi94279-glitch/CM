@@ -1,15 +1,31 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SocialButtons } from '../components/SocialButtons';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import {
+  colors,
+  INK_ORDER,
+  inkLabels,
+  inks as palette,
+  radius,
+  spacing,
+  typography,
+  type InkName,
+} from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
+import { useInks } from '../hooks/useInks';
 import { usePartnerProfile } from '../hooks/usePartnerProfile';
-import { deleteMyAccount, getMyProfile, isGuest, signOut } from '../services/authService';
+import {
+  deleteMyAccount,
+  getMyProfile,
+  isGuest,
+  signOut,
+  updateMyInk,
+} from '../services/authService';
 import { leaveWorkspace } from '../services/coupleService';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -22,6 +38,25 @@ export function SettingsScreen({ navigation }: Props) {
   const guest = isGuest(session);
   const profileQuery = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
   const partnerQuery = usePartnerProfile();
+  const queryClient = useQueryClient();
+  const inks = useInks();
+
+  // 내 잉크 바꾸기(0012) — 바로 보이게 먼저 바꿔 두고, 실패하면 되돌린다. 지도는 useInks 로 다시 칠해진다.
+  const inkMutation = useMutation({
+    mutationFn: (name: InkName) => updateMyInk(name),
+    onMutate: (name: InkName) => {
+      const prev = queryClient.getQueryData(['my-profile']);
+      queryClient.setQueryData(['my-profile'], (old: object | null | undefined) =>
+        old ? { ...old, ink: name } : old
+      );
+      return { prev };
+    },
+    onError: (_e, _name, ctx) => {
+      queryClient.setQueryData(['my-profile'], ctx?.prev);
+      Alert.alert('잉크를 바꾸지 못했어요', '잠시 후 다시 시도해 주세요.');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['my-profile'] }),
+  });
 
   const isActive = workspace?.status === 'active';
   const isSolo = workspace?.status === 'solo';
@@ -119,6 +154,36 @@ export function SettingsScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : null}
+
+        <Text style={styles.section}>내 잉크</Text>
+        <View style={styles.inkRow}>
+          {INK_ORDER.map((name) => {
+            const selected = inks.myInk === name;
+            return (
+              <Pressable
+                key={name}
+                onPress={() => inkMutation.mutate(name)}
+                disabled={selected || inkMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={`${inkLabels[name]} 잉크`}
+                accessibilityState={{ selected }}
+                style={[
+                  styles.inkSwatch,
+                  {
+                    backgroundColor: palette[name].soft,
+                    borderColor: selected ? palette[name].solid : 'transparent',
+                  },
+                ]}
+              >
+                <View style={[styles.inkDot, { backgroundColor: palette[name].solid }]} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.inkHint}>
+          내 핀·메모·그림이 {inkLabels[inks.myInk]} 색으로 보여요.
+          {isActive ? ' 상대와 같은 색을 고르면 내 화면에선 상대가 다른 색으로 보여요.' : ''}
+        </Text>
 
         {isActive || isSolo ? (
           <>
@@ -230,6 +295,29 @@ const styles = StyleSheet.create({
   },
   logout: {
     marginTop: spacing.xl,
+  },
+  inkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  inkSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inkDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  inkHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   guestBox: {
     marginTop: spacing.md,

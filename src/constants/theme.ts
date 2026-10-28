@@ -10,7 +10,8 @@ export interface Ink {
   tint: string;
 }
 
-// 잉크 팔레트 6색. 각자 잉크 고르기는 다음 단계 — 지금은 나=라일락, 상대=스카이로 고정.
+// 잉크 팔레트 6색 — 각자 고른다(users.ink, 0012). 지도에서 나·지금 상대는 각자의 잉크(같으면 상대를 다음 색으로),
+// 예전 상대·떠난 사람은 inkOther(회색). 이름은 DB CHECK(users_ink_check)와 같아야 한다.
 export const inks = {
   lilac: { solid: '#6F5DD8', soft: '#B9AAF5', text: '#4A3BB0', tint: '#F1EEFD' },
   sky: { solid: '#2F78BC', soft: '#9CCBF2', text: '#1F5E99', tint: '#EAF4FD' },
@@ -19,6 +20,26 @@ export const inks = {
   peach: { solid: '#B5502F', soft: '#F7B9A6', text: '#9A3F25', tint: '#FDEFEA' },
   rose: { solid: '#C04A82', soft: '#F2B6D2', text: '#953563', tint: '#FCEEF5' },
 } as const satisfies Record<string, Ink>;
+
+export type InkName = keyof typeof inks;
+export const INK_ORDER: InkName[] = ['lilac', 'sky', 'mint', 'butter', 'peach', 'rose'];
+export const DEFAULT_INK: InkName = 'lilac';
+export const inkLabels: Record<InkName, string> = {
+  lilac: '라일락',
+  sky: '하늘',
+  mint: '민트',
+  butter: '버터',
+  peach: '복숭아',
+  rose: '장미',
+};
+
+// 예전 상대·탈퇴한 사람의 흔적(누구인지 지금 공간에서 알 수 없음) — 무채색
+export const inkOther: Ink = {
+  solid: '#6E6E73',
+  soft: '#C7C7CC',
+  text: '#6E6E73',
+  tint: '#F2F2F7',
+};
 
 export const colors = {
   // 틀(무채색)

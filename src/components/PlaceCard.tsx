@@ -1,13 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, inks, spacing, typography, type Ink } from '../constants/theme';
 import type { Place } from '../types/models';
 
 interface PlaceCardProps {
   place: Place;
   index: number; // 표시용 순번 (1부터)
-  mine?: boolean; // 내가 추가한 장소인지(배지 색: you / partner)
+  ink?: Ink; // 장소를 추가한 사람의 잉크(나 · 지금 상대 · 그 밖=회색)
   authorLabel?: string | null; // 작성자 표기('나' / 상대 이름). null 이면 생략(솔로)
   highlighted?: boolean; // 지도에서 마커 클릭 시 강조
   onDelete?: () => void; // 삭제 요청 (확인은 호출 측에서)
@@ -17,15 +17,15 @@ interface PlaceCardProps {
 export function PlaceCard({
   place,
   index,
-  mine = true,
+  ink = inks.lilac,
   authorLabel = null,
   highlighted = false,
   onDelete,
   deleting = false,
 }: PlaceCardProps) {
   // 배지 = 잉크 solid(흰 숫자), 작성자 글자 = 잉크 text(흰 바탕 가독성).
-  const badgeColor = mine ? colors.you : colors.partner;
-  const authorTextColor = mine ? colors.youText : colors.partnerText;
+  const badgeColor = ink.solid;
+  const authorTextColor = ink.text;
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={[styles.badge, { backgroundColor: badgeColor }]}>

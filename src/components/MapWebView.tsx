@@ -13,7 +13,9 @@ import { REACTION_EMOJI } from '../constants/reactions';
 import { colors } from '../constants/theme';
 import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models';
 import type { DrawStroke } from './MapHostContext';
-import { buildMapHtml, safeJson, toMapPlaces, type MapPlace } from './mapWebViewHtml';
+import type { PeopleInks } from '../hooks/useInks';
+import { whoOf, type Who } from '../utils/who';
+import { buildMapHtml, safeJson, toMapInks, toMapPlaces, type MapPlace } from './mapWebViewHtml';
 
 interface MapWebViewProps {
   places: Place[];
@@ -30,12 +32,25 @@ interface MapWebViewProps {
   selectedObjectId?: string | null;
   // 내 uid — 핀/반응/스티커를 작성자 색(나/상대)으로 구분하는 기준.
   myUserId?: string | null;
+  // 지금 같이 그리는 사람 uid — 그 밖의 작성자(예전 상대·탈퇴)는 회색으로 구분한다.
+  partnerUserId?: string | null;
+  // 사람 구분별 잉크(각자 고른 색, useInks). 바뀌면 지도를 다시 칠한다.
+  inks: PeopleInks;
+  // 카메라가 멈출 때마다(보드별로 기억해 두었다가 다시 들어오면 그 자리로)
+  onCamera?: (camera: MapCamera) => void;
   // 펜 모드: 켜면 지도 제스처가 잠기고 손가락 선이 onDrawEnd 로 올라온다.
   penMode?: boolean;
   onDrawEnd?: (stroke: DrawStroke) => void;
   // 지도가 처음 뜸 / 못 뜸. stage: style(오프라인·스타일 서버) · timeout · sdk · crash(WebView 프로세스 종료)
   onReady?: () => void;
   onFatal?: (stage: string) => void;
+}
+
+// 지도 카메라(보드별 마지막 위치)
+export interface MapCamera {
+  lng: number;
+  lat: number;
+  zoom: number;
 }
 
 // WebView 'drawEnd' 메시지 검증 → DrawStroke. 형식이 어긋나면 null.
@@ -56,7 +71,7 @@ function toDrawStroke(msg: {
 
 // 지리 객체 → WebView 렌더용 슬림 형태(필요 필드만).
 // 낙관적 임시 객체(temp-*, useAddMapObject)는 created_by 가 비어 있지만 방금 내가 놓은 것이다.
-function toRenderObjects(objects: MapObject[], myId: string | null) {
+function toRenderObjects(objects: MapObject[], myId: string | null, partnerId: string | null) {
   return objects.map((o) => ({
     id: o.id,
     type: o.type,
@@ -64,43 +79,47 @@ function toRenderObjects(objects: MapObject[], myId: string | null) {
     longitude: o.longitude,
     payload: o.payload,
     zoom_level: o.zoom_level, // world-space 스케일 기준: 생성 당시 줌 레벨
-    mine: o.created_by === myId || o.id.startsWith('temp-'),
+    who: o.id.startsWith('temp-') ? ('me' as Who) : whoOf(o.created_by, myId, partnerId),
   }));
 }
 
-// 장소별 반응 이모지(작성자별, 유니크). 카운트는 미표시.
-type ReactionGroups = Record<string, { mine: string[]; partner: string[] }>;
+// 장소별 반응 이모지(작성자 구분별, 유니크). 카운트는 미표시.
+type ReactionGroups = Record<string, Record<Who, string[]>>;
 
-// 반응(PlaceReaction[]) → { placeId: { mine: [이모지], partner: [이모지] } }.
-function toReactionMap(reactions: PlaceReaction[], myId: string | null): ReactionGroups {
+// 반응(PlaceReaction[]) → { placeId: { me: [이모지], partner: [...], other: [...] } }.
+function toReactionMap(
+  reactions: PlaceReaction[],
+  myId: string | null,
+  partnerId: string | null
+): ReactionGroups {
   const out: ReactionGroups = {};
   for (const r of reactions) {
     const emoji = REACTION_EMOJI[r.reaction_type];
     if (!emoji) continue;
-    const group = out[r.place_id] ?? (out[r.place_id] = { mine: [], partner: [] });
-    const arr = r.user_id === myId ? group.mine : group.partner;
+    const group = out[r.place_id] ?? (out[r.place_id] = { me: [], partner: [], other: [] });
+    const arr = group[whoOf(r.user_id, myId, partnerId)];
     if (!arr.includes(emoji)) arr.push(emoji);
   }
   return out;
 }
 
 // 핀 위 말풍선: 장소별 작성자당 최신 1개(최대 2개, 오래된 → 최근 순). 전체 대화는 핀 바에서 본다.
-type MemoBubbles = Record<string, { text: string; mine: boolean }[]>;
+type MemoBubbles = Record<string, { text: string; who: Who }[]>;
 
-// 메모(PlaceMemo[]) → { placeId: [{ text, mine }] }. 낙관적 임시 메모(temp-*)는 내 것.
-function toMemoMap(memos: PlaceMemo[], myId: string | null): MemoBubbles {
-  const latest = new Map<string, { memo: PlaceMemo; mine: boolean }>();
+// 메모(PlaceMemo[]) → { placeId: [{ text, who }] }. 낙관적 임시 메모(temp-*)는 내 것.
+function toMemoMap(memos: PlaceMemo[], myId: string | null, partnerId: string | null): MemoBubbles {
+  const latest = new Map<string, { memo: PlaceMemo; who: Who }>();
   for (const m of memos) {
-    const mine = m.user_id === myId || m.id.startsWith('temp-');
-    const key = `${m.place_id}:${mine ? 'me' : 'partner'}`;
+    const who: Who = m.id.startsWith('temp-') ? 'me' : whoOf(m.user_id, myId, partnerId);
+    const key = `${m.place_id}:${who}`;
     const prev = latest.get(key);
-    if (!prev || prev.memo.created_at <= m.created_at) latest.set(key, { memo: m, mine });
+    if (!prev || prev.memo.created_at <= m.created_at) latest.set(key, { memo: m, who });
   }
   const out: MemoBubbles = {};
   [...latest.values()]
     .sort((a, b) => a.memo.created_at.localeCompare(b.memo.created_at))
-    .forEach(({ memo, mine }) => {
-      (out[memo.place_id] ?? (out[memo.place_id] = [])).push({ text: memo.content, mine });
+    .forEach(({ memo, who }) => {
+      (out[memo.place_id] ?? (out[memo.place_id] = [])).push({ text: memo.content, who });
     });
   return out;
 }
@@ -123,6 +142,8 @@ export interface MapWebViewHandle {
   recenter(): void;
   // 카메라를 특정 좌표에 고정(알림 탭 진입). 사용자가 지도를 움직이면 풀린다. null = 해제.
   setFocus(point: { lat: number; lng: number } | null): void;
+  // 보드의 마지막 카메라로 맞춘다(null = 장소 기준 자동). 사용자가 움직이기 전까지 장소가 바뀌어도 그대로.
+  setCamera(camera: MapCamera | null): void;
 }
 
 // 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap positron, 키리스).
@@ -139,6 +160,9 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     onObjectMove,
     selectedObjectId,
     myUserId = null,
+    partnerUserId = null,
+    inks,
+    onCamera,
     penMode = false,
     onDrawEnd,
     onReady,
@@ -155,6 +179,21 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   const objectPendingRef = useRef<ReturnType<typeof toRenderObjects> | null>(null);
   // 카메라 고정 큐: undefined = 대기 없음, null = 해제 대기, 좌표 = 고정 대기(앱을 알림으로 연 직후 등).
   const focusPendingRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined);
+  // 카메라 큐: undefined = 대기 없음. ready 전에 보드에 들어오면 여기 두었다가 맞춘다.
+  const cameraPendingRef = useRef<MapCamera | null | undefined>(undefined);
+  const inksPendingRef = useRef<PeopleInks | null>(null);
+
+  const pushCamera = useCallback((camera: MapCamera | null) => {
+    webRef.current?.injectJavaScript(
+      `window.setCamera && window.setCamera(${safeJson(camera)}); true;`
+    );
+  }, []);
+
+  const pushInks = useCallback((next: PeopleInks) => {
+    webRef.current?.injectJavaScript(
+      `window.setInks && window.setInks(${safeJson(toMapInks(next))}); true;`
+    );
+  }, []);
 
   const pushFocus = useCallback((point: { lat: number; lng: number } | null) => {
     webRef.current?.injectJavaScript(
@@ -165,7 +204,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   // P1: html 은 마운트 1회만 생성(이후 source 불변 → places 변경 시 WebView 전체 reload 방지).
   // 초기 places 는 베이크되어 첫 페인트에 반영되고, 이후 변경은 injectJavaScript 증분 갱신.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const html = useMemo(() => buildMapHtml(toMapPlaces(places, myUserId)), []);
+  const html = useMemo(() => buildMapHtml(toMapPlaces(places, myUserId, partnerUserId), inks), []);
 
   // places → WebView 증분 반영(마커/폴리라인/카메라만 갱신). ready 이전이면 최신값만 큐에 보관.
   const pushPlaces = useCallback((arr: MapPlace[]) => {
@@ -175,13 +214,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   }, []);
 
   useEffect(() => {
-    const arr = toMapPlaces(places, myUserId);
+    const arr = toMapPlaces(places, myUserId, partnerUserId);
     if (readyRef.current) {
       pushPlaces(arr);
     } else {
       pendingRef.current = arr;
     }
-  }, [places, myUserId, pushPlaces]);
+  }, [places, myUserId, partnerUserId, pushPlaces]);
 
   // reactions → WebView 증분 반영(배지만 갱신). ready 이전이면 최신값만 큐에 보관.
   const pushReactions = useCallback((m: ReactionGroups) => {
@@ -191,13 +230,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   }, []);
 
   useEffect(() => {
-    const m = toReactionMap(reactions ?? [], myUserId);
+    const m = toReactionMap(reactions ?? [], myUserId, partnerUserId);
     if (readyRef.current) {
       pushReactions(m);
     } else {
       reactionPendingRef.current = m;
     }
-  }, [reactions, myUserId, pushReactions]);
+  }, [reactions, myUserId, partnerUserId, pushReactions]);
 
   // memos → WebView 증분 반영(핀 위 말풍선만 갱신). ready 이전이면 최신값만 큐에 보관.
   const pushMemos = useCallback((m: MemoBubbles) => {
@@ -207,13 +246,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   }, []);
 
   useEffect(() => {
-    const m = toMemoMap(memos ?? [], myUserId);
+    const m = toMemoMap(memos ?? [], myUserId, partnerUserId);
     if (readyRef.current) {
       pushMemos(m);
     } else {
       memoPendingRef.current = m;
     }
-  }, [memos, myUserId, pushMemos]);
+  }, [memos, myUserId, partnerUserId, pushMemos]);
 
   // objects → WebView 증분 반영(P0: sticker만 렌더). ready 이전이면 최신값만 큐에 보관.
   const pushObjects = useCallback((arr: ReturnType<typeof toRenderObjects>) => {
@@ -223,13 +262,22 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   }, []);
 
   useEffect(() => {
-    const arr = toRenderObjects(objects ?? [], myUserId);
+    const arr = toRenderObjects(objects ?? [], myUserId, partnerUserId);
     if (readyRef.current) {
       pushObjects(arr);
     } else {
       objectPendingRef.current = arr;
     }
-  }, [objects, myUserId, pushObjects]);
+  }, [objects, myUserId, partnerUserId, pushObjects]);
+
+  // 잉크 변경 → 다시 칠하기(ready 전이면 최신값만 보관)
+  useEffect(() => {
+    if (readyRef.current) {
+      pushInks(inks);
+    } else {
+      inksPendingRef.current = inks;
+    }
+  }, [inks, pushInks]);
 
   // 펜 모드 → WebView 제스처 잠금/캔버스 표시. ready 이전 값은 ready 때 penMode 로 다시 맞춘다.
   const penModeRef = useRef(penMode);
@@ -261,8 +309,15 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           focusPendingRef.current = point;
         }
       },
+      setCamera(camera) {
+        if (readyRef.current) {
+          pushCamera(camera);
+        } else {
+          cameraPendingRef.current = camera;
+        }
+      },
     }),
-    [pushFocus]
+    [pushFocus, pushCamera]
   );
 
   const handleMessage = (e: WebViewMessageEvent) => {
@@ -288,6 +343,15 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           objectPendingRef.current = null;
         }
         // 고정은 장소 반영 뒤에 적용해야 카메라가 그 위치에 머문다.
+        if (inksPendingRef.current) {
+          pushInks(inksPendingRef.current);
+          inksPendingRef.current = null;
+        }
+        // 보드의 마지막 카메라 → 그다음 고정(알림 탭)이 있으면 고정이 이긴다.
+        if (cameraPendingRef.current !== undefined) {
+          pushCamera(cameraPendingRef.current);
+          cameraPendingRef.current = undefined;
+        }
         if (focusPendingRef.current !== undefined) {
           pushFocus(focusPendingRef.current);
           focusPendingRef.current = undefined;
@@ -296,6 +360,15 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           webRef.current?.injectJavaScript('window.setPenMode && window.setPenMode(true); true;');
         }
         onReady?.();
+        return;
+      }
+      if (
+        msg.type === 'camera' &&
+        typeof msg.lng === 'number' &&
+        typeof msg.lat === 'number' &&
+        typeof msg.zoom === 'number'
+      ) {
+        onCamera?.({ lng: msg.lng, lat: msg.lat, zoom: msg.zoom });
         return;
       }
       if (msg.type === 'fatal') {

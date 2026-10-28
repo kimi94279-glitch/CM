@@ -2,7 +2,9 @@ import React from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography } from '../constants/theme';
+import { useInks } from '../hooks/useInks';
 import type { Place } from '../types/models';
+import { whoOf } from '../utils/who';
 import { Button } from './Button';
 import { PlaceCard } from './PlaceCard';
 
@@ -10,6 +12,8 @@ interface CanvasObjectListProps {
   places: Place[];
   // 작성자 구분: 내 uid 와 상대 표시 이름(솔로면 null → 작성자 표기 생략).
   myId: string | null;
+  // 지금 같이 그리는 사람 uid(작성자 구분: 나 · 지금 상대 · 그 밖)
+  partnerId: string | null;
   partnerLabel: string | null;
   highlightedId: string | null;
   deletingId: string | null;
@@ -24,6 +28,7 @@ interface CanvasObjectListProps {
 export function CanvasObjectList({
   places,
   myId,
+  partnerId,
   partnerLabel,
   highlightedId,
   deletingId,
@@ -31,6 +36,7 @@ export function CanvasObjectList({
   onDelete,
   onClose,
 }: CanvasObjectListProps) {
+  const inks = useInks();
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -52,20 +58,20 @@ export function CanvasObjectList({
           data={places}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => {
-            const mine = item.created_by === myId;
+            const who = whoOf(item.created_by, myId, partnerId);
             return (
               <PlaceCard
                 place={item}
                 index={index + 1}
-                mine={mine}
+                ink={inks[who]}
                 authorLabel={
                   partnerLabel === null
                     ? null
-                    : mine
+                    : who === 'me'
                       ? '나'
-                      : item.created_by === null
-                        ? '떠난 사람'
-                        : partnerLabel
+                      : who === 'partner'
+                        ? partnerLabel
+                        : '떠난 사람'
                 }
                 highlighted={item.id === highlightedId}
                 onDelete={() => onDelete(item)}

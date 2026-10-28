@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, spacing, typography, type Ink } from '../constants/theme';
 import type { Board, BoardActivity } from '../types/models';
 import { timeAgo } from '../utils/time';
 
@@ -9,13 +9,15 @@ interface BoardCardProps {
   board: Board;
   // 새 흔적(0009). 없으면(조회 실패 등) 기본 안내만 보여준다.
   activity?: BoardActivity;
+  // 새 흔적 점·글자 색 = 지금 상대 잉크
+  partnerInk?: Ink;
   onPress: () => void;
   onMore: () => void;
 }
 
 const UNREAD_CAP = 99;
 
-export function BoardCard({ board, activity, onPress, onMore }: BoardCardProps) {
+export function BoardCard({ board, activity, partnerInk, onPress, onMore }: BoardCardProps) {
   const unread = activity?.unread ?? 0;
   const last = activity?.lastActivityAt ?? null;
 
@@ -28,8 +30,8 @@ export function BoardCard({ board, activity, onPress, onMore }: BoardCardProps) 
         {unread > 0 ? (
           // 상대가 남긴 새 흔적 → 상대 잉크 색
           <View style={styles.newRow}>
-            <View style={styles.dot} />
-            <Text style={styles.newText}>
+            <View style={[styles.dot, partnerInk && { backgroundColor: partnerInk.solid }]} />
+            <Text style={[styles.newText, partnerInk && { color: partnerInk.text }]}>
               새 흔적 {unread > UNREAD_CAP ? `${UNREAD_CAP}+` : unread}
               {last ? ` · ${timeAgo(last)}` : ''}
             </Text>

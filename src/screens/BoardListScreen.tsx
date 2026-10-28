@@ -16,6 +16,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useBoardActivity, useBoards, useDeleteBoard } from '../hooks/useBoards';
+import { useInks } from '../hooks/useInks';
 import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import type { Board } from '../types/models';
@@ -26,6 +27,7 @@ export function BoardListScreen({ navigation }: Props) {
   const { workspace, session } = useAuth();
   const isSolo = workspace?.status === 'solo';
   const guest = isGuest(session);
+  const inks = useInks();
   const boardsQuery = useBoards(workspace?.id);
   const activityQuery = useBoardActivity(workspace?.id);
   const deleteMutation = useDeleteBoard(workspace?.id);
@@ -127,6 +129,7 @@ export function BoardListScreen({ navigation }: Props) {
             <BoardCard
               board={item}
               activity={activity?.[item.id]}
+              partnerInk={inks.partner}
               onPress={() =>
                 navigation.navigate('BoardDetail', { boardId: item.id, title: item.title })
               }

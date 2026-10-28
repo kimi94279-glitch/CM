@@ -33,13 +33,15 @@ import {
 } from '../hooks/useMapObjects';
 import { useAuth } from '../hooks/useAuthState';
 import { useMarkBoardRead } from '../hooks/useBoards';
-import { usePartnerProfile } from '../hooks/usePartnerProfile';
+import { useInks } from '../hooks/useInks';
+import { usePartnerId, usePartnerProfile } from '../hooks/usePartnerProfile';
 import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { Place, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
+import { whoOf } from '../utils/who';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -72,6 +74,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const myId = session?.user?.id ?? null;
   // 작성자 표시(범례/목록)용 상대 이름. 솔로면 null → 범례·목록 작성자 표기 숨김(전부 내 것).
   const partnerQuery = usePartnerProfile();
+  // 작성자 구분(나 · 지금 상대 · 그 밖)과 각자 고른 잉크
+  const partnerId = usePartnerId();
+  const inks = useInks();
+  const mineInkStyle = { backgroundColor: inks.me.tint, borderColor: inks.me.solid };
   const partnerLabel =
     workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
@@ -474,9 +480,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           style={[styles.legend, { top: insets.top + spacing.xs + 44 + spacing.xs }]}
           pointerEvents="none"
         >
-          <View style={[styles.legendDot, { backgroundColor: colors.you }]} />
+          <View style={[styles.legendDot, { backgroundColor: inks.me.solid }]} />
           <Text style={styles.legendText}>나</Text>
-          <View style={[styles.legendDot, styles.legendGap, { backgroundColor: colors.partner }]} />
+          <View
+            style={[styles.legendDot, styles.legendGap, { backgroundColor: inks.partner.solid }]}
+          />
           <Text style={styles.legendText} numberOfLines={1}>
             {partnerLabel}
           </Text>
@@ -561,14 +569,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               {placeMemos.map((m) => {
                 const isTemp = m.id.startsWith('temp-');
                 const mine = isTemp || m.user_id === myId;
+                const who = mine ? 'me' : whoOf(m.user_id, myId, partnerId);
                 return (
                   <View key={m.id} style={styles.memoRow}>
-                    <View
-                      style={[
-                        styles.legendDot,
-                        { backgroundColor: mine ? colors.you : colors.partner },
-                      ]}
-                    />
+                    <View style={[styles.legendDot, { backgroundColor: inks[who].solid }]} />
                     <Text style={styles.memoRowText} numberOfLines={2}>
                       {m.content}
                     </Text>
@@ -619,7 +623,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
                 key={type}
                 style={[
                   styles.reactionEmojiBtn,
-                  myReactionTypes.has(type) && styles.reactionEmojiMine,
+                  myReactionTypes.has(type) && [styles.reactionEmojiMine, mineInkStyle],
                 ]}
                 onPress={() => {
                   const onError = (e: unknown) => Alert.alert('반응 저장 실패', friendlyError(e));
@@ -639,7 +643,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             ))}
             {/* 한 줄 메모 입력 토글(열림 = 내 색 강조). */}
             <Pressable
-              style={[styles.reactionEmojiBtn, memoOpen && styles.reactionEmojiMine]}
+              style={[
+                styles.reactionEmojiBtn,
+                memoOpen && [styles.reactionEmojiMine, mineInkStyle],
+              ]}
               onPress={toggleMemo}
               accessibilityRole="button"
               accessibilityLabel="한 줄 메모"
@@ -705,7 +712,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           pointerEvents="box-none"
         >
           <View style={styles.stickerBarInner}>
-            <View style={[styles.penInk, { backgroundColor: colors.youSoft }]} />
+            <View
+              style={[styles.penInk, { backgroundColor: inks.me.soft, borderColor: inks.me.solid }]}
+            />
             <Pressable
               style={[styles.editBtn, drawnIds.length === 0 && styles.penUndoEmpty]}
               onPress={undoDraw}
@@ -790,6 +799,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             <CanvasObjectList
               places={places}
               myId={myId}
+              partnerId={partnerId}
               partnerLabel={partnerLabel}
               highlightedId={highlightedId}
               deletingId={deletingId}
@@ -831,6 +841,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             <CanvasObjectList
               places={places}
               myId={myId}
+              partnerId={partnerId}
               partnerLabel={partnerLabel}
               highlightedId={highlightedId}
               deletingId={deletingId}
@@ -1054,12 +1065,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // 내가 이미 누른 반응: 내 잉크 테두리 + 잉크 tint 배경.
+  // 내가 이미 누른 반응: 내 잉크 테두리 + 잉크 tint 배경(색은 mineInkStyle 로 각자 잉크).
   reactionEmojiMine: {
-    backgroundColor: colors.youTint,
     borderRadius: radius.card,
     borderWidth: 2,
-    borderColor: colors.you,
   },
   reactionEmoji: { fontSize: 24 },
   reactionClose: {
@@ -1159,7 +1168,6 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.you,
     marginHorizontal: spacing.xs,
   },
   penUndoEmpty: { opacity: 0.3 },

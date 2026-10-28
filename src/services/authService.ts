@@ -215,6 +215,13 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   return data;
 }
 
+// 내 잉크 바꾸기 (users.ink, 0012 — RLS users_update: 본인만)
+export async function updateMyInk(ink: string): Promise<void> {
+  const uid = await requireUserId();
+  const { error } = await supabase.from('users').update({ ink }).eq('id', uid);
+  if (error) throw error;
+}
+
 // 닉네임으로 프로필 생성 (클라이언트 방식 - FLOW_AUTH.md)
 export async function createProfile(nickname: string): Promise<UserProfile> {
   const uid = await requireUserId();

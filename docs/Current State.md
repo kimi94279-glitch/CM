@@ -17,13 +17,15 @@
 - 지도 안정성(2026-10-27): MapLibre GL JS 5.24.0 을 앱 안에 넣음(CDN unpkg 의존 제거 — `npm run vendor:maplibre` 가 src/components/vendor/maplibreAssets.ts 생성, 버전 고정). 스타일 로드 실패(오프라인·서버 장애, 4초 확인)·30초 타임아웃·SDK 오류 → "지도를 불러오지 못했어요 · 다시 시도" 화면(WebView 새로 띄움), WebView 프로세스 종료는 1회 자동 재시작. 늦게라도 뜨면 실패 화면 자동 해제. 브라우저 검증: 인라인 로드·unpkg 요청 0·ready·핀 2개 표시 / 잘못된 스타일 URL → fatal:style. Android export 번들 5.4MB 정상
 - 오류 처리(2026-10-27): 앱 전체 오류 경계(AppErrorBoundary — 하얀 화면 대신 "다시 시도"), 지도 화면 알림의 DB 원문 오류 → 쉬운 문구(utils/errors friendlyError). 오류 수집(Sentry)은 계정·DSN 필요 → 대기
 - 로그인 없이 시작(코드 완료 · Supabase 익명 로그인·수동 연결 켬 · 0011 적용 2026-10-27 — 실기기 확인 대기): "바로 시작하기" → 이름 → 내 지도. 기본 기능 전부, 같이 그리기(초대 보내기·받기)만 로그인 — 카카오/Apple 연결(linkIdentity)로 같은 사용자 유지(지도 그대로). 게스트 설정: 로그인·기존 계정으로 로그인·기록 지우기(로그아웃 없음), 지도 목록 안내 배너. FLOW_AUTH.md Amendment 2026-10-27
+- 잉크 고르기 + 작성자 3구분(코드 완료 — 0012 적용 대기): 설정 → 내 잉크(6색). 지도·목록·카드에서 나 = 내 잉크, 지금 상대 = 상대 잉크(같으면 내 화면에서 다음 색), 예전 상대·떠난 사람 = 회색. 잉크를 바꾸면 카메라 그대로 다시 칠함
+- 지도 위치 기억: 보드마다 마지막 카메라(가운데·줌)를 기억(AsyncStorage, 최근 50개) → 다시 들어오면 그 자리. 지도를 직접 움직인 뒤에는 데이터가 바뀌어도 카메라를 건드리지 않음(Recenter 로 장소 기준 복귀). 브라우저 검증: 3구분 색·setInks 재칠(카메라 유지)·사용자 이동 후 유지·setCamera·recenter·camera 메시지
 - 보드 이름 바꾸기·지우기(목록 ⋯ 메뉴, 지우기는 확인 알림) · "데이트" 문구 정리(목록·만들기·로그인·스플래시 → "지도"·"같이 그려요")
 
 ## 현재 버그
 
 - ~~스티커 생성 안 됨~~ → C1 해결(0004 적용, map_objects 생성·RLS 확인 2026-06-13)
 - ~~반응 하트만 저장~~ → C1 해결(0003 적용, CHECK 교체)
-- 지도 줌/위치 유지 안 됨 → 미구현(신규 기능, 보류)
+- ~~지도 줌/위치 유지 안 됨~~ → 구현(2026-10-28, 보드별 카메라 기억)
 - 반응 팔레트 외부 탭 닫기 → 코드 존재, 실기기 재현 확인 필요(B/D 미확정)
 
 ## DB
@@ -37,6 +39,7 @@
 - 0008 invite_merge … 적용됨(2026-10-26). accept_invite 솔로 보드 합치기 + 비로그인 거부(anon 실행 권한 회수 — 0002 부터 있던 구멍: auth.uid() 가 null 이면 초대자 공간이 상대 없이 active 가 될 수 있었음) + invite_preview(authenticated 전용). 적용 전 점검 solo 3·active 0·보드 5. 확인: 합치기 본문·가드 포함, 옛 'acceptor has solo data' 없음, anon 실행 불가(accept·preview), preview SECURITY DEFINER. 롤백 테스트(실제 솔로 2곳 — 보드 4 + 1): 비로그인 → 'not authenticated', 미리보기 ok → 수락 → 초대자 공간 유지·active·상대 합류·보드 5개 한곳·수락자 솔로 삭제·미리보기 used·푸시 큐 0 확인 후 전부 롤백(solo 3·보드 4/1/0·테스트 초대 0). 오프라인(PGlite) 24항목 통과
 - 0009 board_activity … 적용됨(2026-10-27). board_reads + mark_board_read + board_activity(SECURITY INVOKER). 적용 전 점검 solo 3·active 0·보드 5·지도 객체 31·board_reads 없음. 확인: 테이블·RLS on·정책 board_reads_select(SELECT)만, mark_board_read SECURITY DEFINER / board_activity INVOKER, anon 실행 불가·authenticated 가능. 롤백 테스트(실제 솔로 공간을 임시로 2인 연결, authenticated 역할로 RLS 적용): 상대에게 보드 4개만 보임 · 안 본 보드 새 흔적 20 → 읽음 기록 후 0 → 상대 새 그림 후 1 · 작성자 본인은 0 · 외부인 기록 거부('not a board member') · 푸시 큐 0 확인 후 전부 롤백(solo 3·보드 5·객체 31·읽음 기록 0). 오프라인(PGlite, RLS 켠 authenticated 역할) 16항목 통과: 상대 흔적만 셈·읽음 후 0·이후 새 흔적만·RLS 로 내 공간만·외부인 기록 거부·직접 쓰기 차단·보드 삭제 시 CASCADE·anon 권한 없음·재실행 안전
 
+- 0012 user_ink … 작성됨, **미적용**(2026-10-28). users.ink(기본 lilac, 6색 CHECK). 오프라인(PGlite) 7항목 통과: 기본값·본인 변경·없는 색 거부·상대 변경 불가(RLS)·상대 읽기 가능·외부인 읽기 불가·재실행 안전(값 유지)
 - 0011 guest_invite_block … 적용됨(2026-10-27). 같은 날 Auth 설정: Allow anonymous sign-ins ON · Allow manual linking ON(Confirm email OFF 유지). 적용 전 점검 사용자 3(익명 0)·solo 3·active 0·초대 2·auth.jwt() 있음. 확인: is_permanent_user 1개, 정책 couple_invites_insert_permanent = RESTRICTIVE·INSERT·authenticated, accept_invite·invite_preview 에 login required(합치기 본문 유지), anon 실행 불가·authenticated 가능. 롤백 테스트(실제 사용자에 is_anonymous 클레임, authenticated 역할): 게스트 그림 저장 OK / 초대 만들기 RLS 거부 / 미리보기·받기 'login required' / 같은 사람 로그인 클레임이면 초대 만들기 OK / 푸시 큐 0 → 전부 롤백(사용자 3·solo 3·초대 2·테스트 초대 0·객체 31).
   - 작성 시점 기록: is_permanent_user + 게스트 초대 만들기 RLS 제한 + accept_invite·invite_preview 로그인 확인. 오프라인(PGlite, JWT is_anonymous) 13항목 통과: 게스트 장소·그림·새 흔적 OK / 게스트 초대 만들기·미리보기·받기 거부 / 로그인한 사람 OK / 게스트가 로그인(같은 uid) 후 받기 성공 + 게스트 때 보드 합쳐짐 / 재실행 안전. 0008·0009·0010 테스트 회귀 통과
 - 0010 account_deletion … 적용됨(2026-10-27). leave_workspace + delete_my_account(SECURITY DEFINER, auth.users 삭제 — postgres DELETE 권한 확인) + places/map_objects.created_by NULL 허용. 적용 전 점검 계정 3·프로필 3·solo 3·active 0·보드 5·장소 11·객체 31·메모 0·반응 7·초대 2. 확인: created_by NULL 허용(places·map_objects), 두 함수 SECURITY DEFINER·소유자 postgres, anon 실행 불가·authenticated 가능. 롤백 테스트(실제 데이터 — 솔로 공간에 다른 사용자를 임시 연결 + 그 사람의 장소·메모·반응·그림 추가): 비로그인 → 'not authenticated' / 연결 끊기 → 남는 사람이 user_a·solo / 상대 계정 삭제 → 공간 solo 로 남는 사람 보유·보드 4개 유지·상대 auth·프로필 삭제·상대 메모·반응 0·상대 장소/그림 작성자 NULL·내 메모 유지 / 혼자 쓰던 사람 계정 삭제 → 공간·보드·auth·프로필 0 / 푸시 큐 0 → 전부 롤백(계정 3·solo 3·보드 5·장소 11·작성자 없는 장소 0·객체 31·메모 0·반응 7·초대 2). 오프라인(PGlite) 31항목 통과: 함께 쓰던 사람 탈퇴 시 상대가 지도 보유·내 메모/반응 삭제·장소/그림 작성자 없음·상대 메모 유지 / 혼자 쓰던 지도 전부 삭제 / 연결 끊기(user_a·user_b 둘 다) / 나간 사람 RLS 차단·새로 시작 가능 / 비로그인 거부 / 재실행 안전
@@ -56,7 +59,7 @@
 - 카카오 버튼 말풍선 심볼(공식 리소스) · 번들 ID/패키지명 확정(앱 이름과 함께)
 
 - Google Play 데이터 삭제 웹 링크: 앱 없이도 삭제를 요청할 수 있는 페이지(web/ 에 추가, 문의 이메일 필요) — Play Console 데이터 보안 양식에 입력
-- 작성자 3구분(나·지금 상대·떠난 사람/예전 상대): 지금은 "나 아님 = 상대 색" — 연결을 끊고 새 사람과 연결하면 예전 사람 흔적이 새 상대 색으로 보임
+- ~~작성자 3구분~~ → 구현(2026-10-28, 예전 상대·떠난 사람 = 회색)
 
 - ~~Sticker 버그 수정~~ → C1 완료
 - 외부 탭 닫기 B/D 판별(실기기 로그)

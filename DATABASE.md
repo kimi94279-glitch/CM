@@ -55,6 +55,8 @@ related:
 | created_at | timestamptz | NOT NULL, default now() |
 | updated_at | timestamptz | NOT NULL, default now() |
 
+- `ink` text NOT NULL default `'lilac'`, CHECK in (lilac, sky, mint, butter, peach, rose) — 각자 고른 잉크(0012). 본인만 수정(users_update), 같은 공간 상대가 읽음(users_select).
+
 ### 3.2 couples
 
 | 컬럼 | 타입 | 제약 |

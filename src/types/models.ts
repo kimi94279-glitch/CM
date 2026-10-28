@@ -3,6 +3,7 @@
 export interface UserProfile {
   id: string;
   nickname: string;
+  ink: string; // 내 잉크 이름(theme inks 키, 0012). 모르는 값이면 기본 잉크로 본다.
   profile_image: string | null;
   created_at: string;
   updated_at: string;

@@ -1,11 +1,13 @@
-import React, { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
+import { useInks } from '../hooks/useInks';
 import { reportMessage } from '../services/monitoring';
 import { Button } from './Button';
-import { MapWebView, type MapWebViewHandle } from './MapWebView';
+import { MapWebView, type MapCamera, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
   type MapBoardData,
@@ -15,6 +17,18 @@ import {
 
 const EMPTY_DATA: MapBoardData = { places: [], reactions: [], memos: [], objects: [] };
 
+// 보드별 마지막 카메라(앱을 껐다 켜도 그 자리). 최근 것만 남긴다.
+const CAMERA_STORE_KEY = 'map-cameras';
+const CAMERA_STORE_MAX = 50;
+// 보드를 바꾼 직후 잠깐은 이전 보드에서 늦게 온 카메라 보고를 버린다(지도 쪽 400ms 모음 + 여유).
+const CAMERA_SWITCH_GUARD_MS = 600;
+type CameraStore = Record<string, MapCamera & { at: number }>;
+
+function cameraFrom(store: CameraStore, boardId: string | null): MapCamera | null {
+  const saved = boardId ? store[boardId] : undefined;
+  return saved ? { lng: saved.lng, lat: saved.lat, zoom: saved.zoom } : null;
+}
+
 // 싱글톤 지도 호스트: WebView+MapLibre 인스턴스를 앱 수명 동안 1개만 유지한다.
 // 네비게이터 "뒤"(최하단 absoluteFill)에 깔리고, 포커스된 BoardDetail이 컨트롤러로 데이터만 교체한다.
 // MapWebView 는 거의 그대로 재사용 — 컨트롤러 setter가 상태를 바꾸면 기존 증분 주입 effect가 동작.
@@ -23,14 +37,53 @@ export function MapHost({ children }: { children: ReactNode }) {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [penMode, setPenMode] = useState(false);
-  // 작성자 색 구분 기준(나/상대). MapHost 는 AuthProvider 안쪽에 있다(App.tsx).
-  const { session } = useAuth();
+  // 작성자 색 구분 기준(나 · 지금 상대 · 그 밖). MapHost 는 AuthProvider 안쪽에 있다(App.tsx).
+  const { session, workspace } = useAuth();
   const myUserId = session?.user?.id ?? null;
+  const partnerUserId =
+    workspace?.status === 'active'
+      ? workspace.user_a_id === myUserId
+        ? workspace.user_b_id
+        : workspace.user_a_id
+      : null;
+  // 각자 고른 잉크(나 · 지금 상대 · 그 밖=회색)
+  const inks = useInks();
 
   // 현재 보드 토큰(잔상 가드)과 콜백(ref 라우팅 — 재렌더 없이 최신 콜백 호출).
   const boardIdRef = useRef<string | null>(null);
   const callbacksRef = useRef<MapCallbacks>({});
   const mapRef = useRef<MapWebViewHandle>(null);
+
+  // 보드별 카메라 기억: 메모리 + AsyncStorage(잠깐 모아서 저장)
+  const camerasRef = useRef<CameraStore>({});
+  const cameraSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boardSwitchedAt = useRef(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CAMERA_STORE_KEY)
+      .then((raw) => {
+        if (raw)
+          camerasRef.current = { ...(JSON.parse(raw) as CameraStore), ...camerasRef.current };
+      })
+      .catch(() => {});
+    return () => {
+      if (cameraSaveTimer.current) clearTimeout(cameraSaveTimer.current);
+    };
+  }, []);
+
+  const onCamera = useCallback((camera: MapCamera) => {
+    const boardId = boardIdRef.current;
+    if (!boardId || Date.now() - boardSwitchedAt.current < CAMERA_SWITCH_GUARD_MS) return;
+    camerasRef.current[boardId] = { ...camera, at: Date.now() };
+    if (cameraSaveTimer.current) clearTimeout(cameraSaveTimer.current);
+    cameraSaveTimer.current = setTimeout(() => {
+      const recent = Object.entries(camerasRef.current)
+        .sort((a, b) => b[1].at - a[1].at)
+        .slice(0, CAMERA_STORE_MAX);
+      camerasRef.current = Object.fromEntries(recent);
+      AsyncStorage.setItem(CAMERA_STORE_KEY, JSON.stringify(camerasRef.current)).catch(() => {});
+    }, 1000);
+  }, []);
 
   // 지도 안정성: 못 뜨면 실패 화면 → "다시 시도" 로 WebView 를 새로 띄운다(key 교체 = 처음부터 다시).
   // WebView 프로세스가 죽은 경우(crash)는 한 번은 조용히 다시 띄우고, 또 죽으면 실패 화면.
@@ -46,6 +99,8 @@ export function MapHost({ children }: { children: ReactNode }) {
   const onMapReady = useCallback(() => {
     crashRetried.current = false;
     setMapFailed(false);
+    // 다시 띄운 지도(다시 시도·크래시 복구)도 지금 보드의 마지막 카메라로
+    mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardIdRef.current));
   }, []);
 
   const onMapFatal = useCallback(
@@ -69,6 +124,8 @@ export function MapHost({ children }: { children: ReactNode }) {
         setSelectedObjectId(null);
         setPenMode(false); // 이전 보드의 펜 모드 해제.
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
+        boardSwitchedAt.current = Date.now();
+        mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardId)); // 이 보드에서 마지막으로 보던 자리(없으면 장소 기준).
         setBoardData(EMPTY_DATA); // 데이터 도착 전 공백 — 이전 보드 마커 제거(잔상 1차 방어).
       },
       setData(boardId, data) {
@@ -121,6 +178,9 @@ export function MapHost({ children }: { children: ReactNode }) {
             objects={boardData.objects}
             selectedObjectId={selectedObjectId}
             myUserId={myUserId}
+            partnerUserId={partnerUserId}
+            inks={inks}
+            onCamera={onCamera}
             penMode={penMode}
             onMarkerPress={(id) => callbacksRef.current.onMarkerPress?.(id)}
             onMapPress={(p) => callbacksRef.current.onMapPress?.(p)}
