@@ -6,23 +6,46 @@ import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { useAddPlace, usePlaceSearch } from '../hooks/usePlaces';
+import { KAKAO_SEARCH_ASSIST } from '../constants/config';
+import { usePlaceSearch } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { PlaceSearchResult } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaceAdd'>;
 
+// 지도로 넘기는 핀 초안 번호(보드 화면이 같은 초안을 두 번 열지 않게) — 화면을 다시 열어도 이어서 증가
+let draftSeq = 0;
+
 export function PlaceAddScreen({ route, navigation }: Props) {
-  const { boardId } = route.params;
+  const { boardId, title } = route.params;
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
 
   const search = usePlaceSearch(query);
-  const addPlace = useAddPlace(boardId);
 
-  const onAdd = (result: PlaceSearchResult) => {
-    addPlace.mutate(result, { onSuccess: () => navigation.goBack() });
-  };
+  // 결과는 저장하지 않는다 — 지도로 돌아가 그 자리에서 사용자가 핀 위치·이름을 확정한다(ADR-016 Option C).
+  const backToMap = (draft: NonNullable<RootStackParamList['BoardDetail']['draft']>) =>
+    navigation.popTo('BoardDetail', { boardId, title, draft });
+
+  const onSelect = (result: PlaceSearchResult) =>
+    backToMap({
+      name: result.name,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      provider: 'kakao',
+      providerPlaceId: result.providerPlaceId,
+      nonce: ++draftSeq,
+    });
+
+  const onDirectPin = () =>
+    backToMap({
+      name: query,
+      latitude: null,
+      longitude: null,
+      provider: 'manual',
+      providerPlaceId: null,
+      nonce: ++draftSeq,
+    });
 
   const renderItem = ({ item }: { item: PlaceSearchResult }) => (
     <View style={styles.resultRow}>
@@ -35,10 +58,9 @@ export function PlaceAddScreen({ route, navigation }: Props) {
         </Text>
       </View>
       <Button
-        title="추가"
+        title="선택"
         variant="secondary"
-        onPress={() => onAdd(item)}
-        loading={addPlace.isPending}
+        onPress={() => onSelect(item)}
         style={styles.addButton}
       />
     </View>
@@ -60,8 +82,14 @@ export function PlaceAddScreen({ route, navigation }: Props) {
         <Button title="검색" onPress={() => setQuery(text.trim())} style={styles.searchButton} />
       </View>
 
-      {addPlace.isError ? (
-        <Text style={styles.error}>추가에 실패했어요. 다시 시도해주세요.</Text>
+      <Button
+        title="📍 지도에 직접 핀 찍기"
+        variant="secondary"
+        onPress={onDirectPin}
+        style={styles.directPin}
+      />
+      {KAKAO_SEARCH_ASSIST && (search.data?.length ?? 0) > 0 ? (
+        <Text style={styles.muted}>검색 제공: 카카오</Text>
       ) : null}
 
       {search.isFetching ? (
@@ -90,6 +118,9 @@ export function PlaceAddScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  directPin: {
+    marginBottom: spacing.md,
+  },
   title: {
     ...typography.title,
     color: colors.textStrong,

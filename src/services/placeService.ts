@@ -1,4 +1,4 @@
-import type { Place, PlaceSearchResult } from '../types/models';
+import type { Place, PlaceDraft } from '../types/models';
 import { supabase } from './supabase';
 
 // 모든 데이터 접근은 service 계층을 통해서만 수행한다. (ARCHITECTURE.md)
@@ -34,8 +34,8 @@ export async function removePlace(placeId: string): Promise<void> {
   if (error) throw error;
 }
 
-// 검색 결과를 보드에 추가
-export async function addPlace(boardId: string, result: PlaceSearchResult): Promise<Place> {
+// 사용자가 확정한 핀을 보드에 추가(검색 결과를 그대로 저장하지 않는다 — ADR-016 Option C)
+export async function addPlace(boardId: string, draft: PlaceDraft): Promise<Place> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   const uid = userData.user?.id;
@@ -47,11 +47,11 @@ export async function addPlace(boardId: string, result: PlaceSearchResult): Prom
     .from('places')
     .insert({
       board_id: boardId,
-      name: result.name,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      provider: result.provider,
-      provider_place_id: result.providerPlaceId,
+      name: draft.name.trim(),
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      provider: draft.provider,
+      provider_place_id: draft.providerPlaceId,
       order_index: orderIndex,
       created_by: uid,
     })

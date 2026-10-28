@@ -58,6 +58,8 @@ export function MapHost({ children }: { children: ReactNode }) {
   const camerasRef = useRef<CameraStore>({});
   const cameraSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boardSwitchedAt = useRef(0);
+  // 마지막으로 보고된 지도 가운데(보드 전환 가드와 무관하게 항상 갱신) — 핀 확정 위치
+  const lastCenterRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(CAMERA_STORE_KEY)
@@ -72,6 +74,7 @@ export function MapHost({ children }: { children: ReactNode }) {
   }, []);
 
   const onCamera = useCallback((camera: MapCamera) => {
+    lastCenterRef.current = { lat: camera.lat, lng: camera.lng, at: Date.now() };
     const boardId = boardIdRef.current;
     if (!boardId || Date.now() - boardSwitchedAt.current < CAMERA_SWITCH_GUARD_MS) return;
     camerasRef.current[boardId] = { ...camera, at: Date.now() };
@@ -150,6 +153,9 @@ export function MapHost({ children }: { children: ReactNode }) {
       setPenMode(boardId, on) {
         if (boardIdRef.current !== boardId) return;
         setPenMode(on);
+      },
+      getCenter() {
+        return lastCenterRef.current;
       },
       show() {
         setVisible(true);

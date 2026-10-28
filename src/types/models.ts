@@ -22,7 +22,9 @@ export interface Couple {
   updated_at: string;
 }
 
-export type PlaceProvider = 'naver' | 'manual';
+// 장소 출처: kakao = 카카오 검색으로 찾아 사용자가 확정한 핀(ID 는 카카오맵 링크용) · manual = 직접 찍은 핀
+// · naver = 예전 방식(레거시)
+export type PlaceProvider = 'naver' | 'manual' | 'kakao';
 
 export interface Place {
   id: string;
@@ -59,7 +61,16 @@ export interface PlaceMemo {
   updated_at: string;
 }
 
-// 검색 결과(저장 전). place-search Edge Function 의 정규화 출력과 일치.
+// 저장 직전의 핀(사용자가 위치·이름을 확정한 것) — ADR-016 Option C
+export interface PlaceDraft {
+  name: string;
+  latitude: number;
+  longitude: number;
+  provider: 'kakao' | 'manual';
+  providerPlaceId: string | null;
+}
+
+// 검색 결과 — 화면 표시 전용(저장하지 않는다). place-search Edge Function 의 정규화 출력과 일치.
 export interface PlaceSearchResult {
   name: string;
   address: string;

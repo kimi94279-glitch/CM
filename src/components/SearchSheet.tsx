@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing, typography } from '../constants/theme';
 import type { PlaceSearchResult } from '../types/models';
@@ -10,27 +10,37 @@ interface SearchSheetProps {
   isFetching: boolean;
   isError: boolean;
   results: PlaceSearchResult[];
-  onAdd: (result: PlaceSearchResult) => void;
-  adding: boolean;
+  onSelect: (result: PlaceSearchResult) => void;
+  // 검색에 없거나 검색 없이: 지금 지도 가운데에 직접 핀을 꽂는다
+  onDirectPin: () => void;
+  // 카카오 찾기 보조가 켜져 있는지(꺼지면 직접 핀만)
+  assistEnabled: boolean;
   maxHeight: number;
   bottomInset: number;
 }
 
-// 지도 위 하단 검색 결과 시트(C-1). 상태: empty / loading / error / result.
-// Half Sheet 시각 패턴(상단 라운드 + 그림자)을 따르되 목록 시트와 별개의 검색 전용 콘텐츠.
+// 지도 위 하단 검색 결과 시트(C-1). 상태: empty / loading / error / result + 항상 "직접 핀 찍기".
+// 검색 결과(카카오)는 화면 표시 전용 — 고르면 지도 이동 후 사용자가 핀 위치·이름을 확정한다(ADR-016 Option C).
 export function SearchSheet({
   query,
   isFetching,
   isError,
   results,
-  onAdd,
-  adding,
+  onSelect,
+  onDirectPin,
+  assistEnabled,
   maxHeight,
   bottomInset,
 }: SearchSheetProps) {
   return (
     <View style={[styles.card, { maxHeight, paddingBottom: bottomInset }]}>
-      {query.length === 0 ? (
+      {!assistEnabled ? (
+        <View style={styles.center}>
+          <Text style={styles.emoji}>📍</Text>
+          <Text style={styles.invite}>지도에 직접 핀을 꽂아요</Text>
+          <Text style={styles.inviteSub}>아래 버튼을 누르고 지도를 움직여 자리를 맞춰 주세요.</Text>
+        </View>
+      ) : query.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emoji}>🔍</Text>
           <Text style={styles.invite}>어디 가고 싶어?</Text>
@@ -60,12 +70,20 @@ export function SearchSheet({
           data={results}
           keyExtractor={(item, i) => `${item.providerPlaceId ?? item.name}-${i}`}
           renderItem={({ item }) => (
-            <SearchResultRow result={item} onAdd={() => onAdd(item)} adding={adding} />
+            <SearchResultRow result={item} onSelect={() => onSelect(item)} />
           )}
+          ListHeaderComponent={<Text style={styles.attribution}>검색 제공: 카카오</Text>}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         />
       )}
+      <Pressable
+        onPress={onDirectPin}
+        style={({ pressed }) => [styles.directPin, pressed && styles.pressed]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.directPinText}>📍 지도에 직접 핀 찍기</Text>
+      </Pressable>
     </View>
   );
 }
@@ -95,6 +113,20 @@ const styles = StyleSheet.create({
   invite: { ...typography.title, color: colors.textStrong },
   inviteSub: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   error: { ...typography.body, color: colors.danger, textAlign: 'center' },
+  attribution: {
+    ...typography.caption,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  directPin: {
+    borderTopWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  directPinText: { ...typography.label, color: colors.textStrong, fontWeight: '600' },
+  pressed: { opacity: 0.7 },
   noResultTitle: {
     ...typography.body,
     fontWeight: '600',

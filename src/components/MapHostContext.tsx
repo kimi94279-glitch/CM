@@ -43,6 +43,8 @@ export interface MapHostController {
   focus(boardId: string, lat: number, lng: number): void;
   // 펜 모드(토큰 일치 시에만): 켜면 지도 이동·확대가 잠기고 손가락이 선을 그린다.
   setPenMode(boardId: string, on: boolean): void;
+  // 지금 지도 가운데(마지막으로 보고된 카메라)와 보고 시각(ms). 핀 확정 모드에서 가운데 핀 자리로 쓴다.
+  getCenter(): { lat: number; lng: number; at: number } | null;
   // 지도 표시/숨김(포커스 전환 시).
   show(): void;
   hide(): void;

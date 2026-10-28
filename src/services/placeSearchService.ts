@@ -9,7 +9,8 @@ interface SearchDebugInfo {
   contextBody?: string;
 }
 
-// place-search Edge Function 호출 (네이버 지역 검색 프록시)
+// place-search Edge Function 호출 (카카오 로컬 검색 프록시 — 배포본 기준).
+// 결과는 화면 표시 전용이다: 저장은 사용자가 확정한 핀만(placeService.addPlace).
 export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
   const debug: SearchDebugInfo = {};
   const { data, error } = await supabase.functions.invoke('place-search', {

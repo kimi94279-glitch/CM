@@ -6,12 +6,11 @@ import type { PlaceSearchResult } from '../types/models';
 
 interface SearchResultRowProps {
   result: PlaceSearchResult;
-  onAdd: () => void;
-  adding?: boolean;
+  onSelect: () => void;
 }
 
-// 검색 결과 1행(장소명 + 주소 + [추가]). PlaceAddScreen UI 복붙이 아닌 경량 전용 컴포넌트.
-export function SearchResultRow({ result, onAdd, adding = false }: SearchResultRowProps) {
+// 검색 결과 1행(장소명 + 주소 + [선택]). 고르면 지도가 그 자리로 가고 사용자가 핀을 확정한다(바로 저장하지 않음).
+export function SearchResultRow({ result, onSelect }: SearchResultRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.body}>
@@ -23,13 +22,12 @@ export function SearchResultRow({ result, onAdd, adding = false }: SearchResultR
         </Text>
       </View>
       <Pressable
-        style={[styles.addBtn, adding ? styles.addBtnDisabled : null]}
-        onPress={onAdd}
-        disabled={adding}
+        style={styles.addBtn}
+        onPress={onSelect}
         accessibilityRole="button"
-        accessibilityLabel={`${result.name} 추가`}
+        accessibilityLabel={`${result.name} 선택`}
       >
-        <Text style={styles.addText}>{adding ? '추가 중' : '추가'}</Text>
+        <Text style={styles.addText}>선택</Text>
       </Pressable>
     </View>
   );
@@ -57,6 +55,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surface,
   },
-  addBtnDisabled: { opacity: 0.5 },
   addText: { ...typography.label, color: colors.textStrong, fontWeight: '600' },
 });

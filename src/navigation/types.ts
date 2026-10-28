@@ -9,6 +9,17 @@ export interface BoardFocus {
   nonce: number;
 }
 
+// 태블릿 장소 찾기(PlaceAdd)에서 지도로 돌아올 때 넘기는 핀 초안. 좌표 null = 지금 지도 가운데(직접 핀).
+// nonce 가 바뀔 때마다 1회 핀 확정 모드를 연다.
+export interface PlaceDraftParam {
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  provider: 'kakao' | 'manual';
+  providerPlaceId: string | null;
+  nonce: number;
+}
+
 export type RootStackParamList = {
   // unauthenticated
   Login: undefined;
@@ -25,6 +36,6 @@ export type RootStackParamList = {
   BoardList: undefined;
   // boardId 가 있으면 이름 바꾸기
   CreateBoard: { boardId: string; title: string } | undefined;
-  BoardDetail: { boardId: string; title: string; focus?: BoardFocus };
-  PlaceAdd: { boardId: string };
+  BoardDetail: { boardId: string; title: string; focus?: BoardFocus; draft?: PlaceDraftParam };
+  PlaceAdd: { boardId: string; title: string };
 };

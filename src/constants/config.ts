@@ -13,5 +13,11 @@ export const INVITE_EXPIRY_HOURS = 48;
 // 초대 코드 길이
 export const INVITE_TOKEN_LENGTH = 8;
 
+// 장소 찾기 보조(카카오 로컬 검색) — ADR-016 Option C.
+// 검색 결과는 화면에만 보여 주고 저장하지 않는다. 결과를 고르면 지도를 그 자리로 옮기고,
+// 사용자가 핀 위치·이름을 확정한 것만 저장한다. 카카오 장소 ID 는 "카카오맵에서 보기" 링크용으로만 둔다.
+// 카카오 공식 회신에서 허용되지 않으면 false → 검색 없이 "직접 핀 찍기"만 남는다.
+export const KAKAO_SEARCH_ASSIST = true;
+
 // 장소 한 줄 메모(말풍선) 최대 길이. DB 는 길이 제약이 없고 입력에서만 제한한다.
 export const MEMO_MAX_LENGTH = 40;

@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0012)
+## 3.5 추가 마이그레이션 (0002 ~ 0013)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -100,6 +100,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0010_account_deletion.sql` | `leave_workspace` / `delete_my_account` RPC + `places`·`map_objects.created_by` NULL 허용 | 필수(출시: 앱 내 계정 삭제). 재실행 안전 |
 | `0011_guest_invite_block.sql` | `is_permanent_user()` + 게스트(익명 세션) 초대 만들기 RLS 차단 + `accept_invite`·`invite_preview` 로그인 확인 | 필수(로그인 없이 시작). 재실행 안전 |
 | `0012_user_ink.sql` | `users.ink`(기본 lilac, 6색 CHECK) — 각자 잉크 고르기 | 필수(잉크 고르기). 미적용이면 설정의 잉크 변경만 실패(지도는 기본색). 재실행 안전 |
+| `0013_place_provider_kakao.sql` | `places.provider` CHECK 를 `('naver','manual','kakao')` 로 정리(운영 드리프트 기록, 이름 무관 재생성) | 필수(장소 찾기 Option C). 운영은 이미 kakao 허용이라 동작 변화 없음. 재실행 안전 |
 
 ### 적용 전 상태 점검 (읽기 전용)
 

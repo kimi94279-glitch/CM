@@ -6,6 +6,7 @@ import {
   Alert,
   Animated,
   Keyboard,
+  Linking,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -20,9 +21,10 @@ import { Button } from '../components/Button';
 import { CanvasObjectList } from '../components/CanvasObjectList';
 import { useMapHost } from '../components/MapHostContext';
 import { MapSearchBar } from '../components/MapSearchBar';
+import { CenterPin, PlaceDraftCard } from '../components/PlaceDraftCard';
 import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
-import { MEMO_MAX_LENGTH } from '../constants/config';
+import { KAKAO_SEARCH_ASSIST, MEMO_MAX_LENGTH } from '../constants/config';
 import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import {
@@ -39,8 +41,9 @@ import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
 import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
-import type { Place, PlaceSearchResult } from '../types/models';
+import type { Place, PlaceDraft, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
+import { kakaoPlaceUrl } from '../utils/kakaoMap';
 import { whoOf } from '../utils/who';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
@@ -55,7 +58,7 @@ const STICKER_EMOJIS = ['❤️', '😂', '👀', '🤮', '☕', '🌳', '📸']
 // Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다.
 // 기본 상태는 지도만. 목록은 모바일=Floating 버튼→Half Sheet, 태블릿=Right Side Panel.
 export function BoardDetailScreen({ route, navigation }: Props) {
-  const { boardId } = route.params;
+  const { boardId, title } = route.params;
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= TABLET_MIN;
@@ -82,6 +85,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
+  const reactionPlace = reactionPlaceId ? places.find((p) => p.id === reactionPlaceId) : undefined;
   // 팔레트를 연 핀에서 내가 이미 누른 반응(내 색 강조 + 토글 판정).
   const myReactionTypes = useMemo(
     () =>
@@ -246,8 +250,103 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setSearchOpen(false);
     setSheetOpen(true);
   };
-  const onAddResult = (result: PlaceSearchResult) => {
-    addPlace.mutate(result, { onSuccess: () => closeSearch() });
+  // 핀 확정(ADR-016 Option C): 검색 결과는 저장하지 않는다. 고르면 지도가 그 자리로 가고,
+  // 사용자가 가운데 핀 위치·이름을 확정한 것만 저장한다. latitude null = 지금 지도 가운데(직접 핀).
+  type Placing = Omit<PlaceDraft, 'name' | 'latitude' | 'longitude'> & {
+    latitude: number | null;
+    longitude: number | null;
+    key: number;
+  };
+  const [placing, setPlacing] = useState<Placing | null>(null);
+  const [draftName, setDraftName] = useState('');
+  const [draftError, setDraftError] = useState<string | null>(null);
+  // 핀 확정 모드를 연 시각 — 이후에 보고된 지도 가운데만 "사용자가 맞춘 자리"로 쓴다.
+  const placingSinceRef = useRef(0);
+
+  const startPlacing = (next: Omit<Placing, 'key'>, name: string) => {
+    closeSearch();
+    setSheetOpen(false);
+    setReactionPlaceId(null);
+    // 펜·스티커 모드에선 지도가 안 움직이므로 끈다(핀 자리는 지도를 움직여 맞춘다).
+    setPenMode(false);
+    setStickerMode(false);
+    setDraftName(name);
+    setDraftError(null);
+    setPlacing({ ...next, key: Date.now() });
+  };
+  const onSelectResult = (result: PlaceSearchResult) =>
+    startPlacing(
+      {
+        provider: 'kakao',
+        providerPlaceId: result.providerPlaceId,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      },
+      result.name
+    );
+  const onDirectPin = () =>
+    startPlacing(
+      { provider: 'manual', providerPlaceId: null, latitude: null, longitude: null },
+      searchText.trim()
+    );
+
+  // 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안 → 1회 핀 확정 모드
+  const draftParam = route.params.draft;
+  const [seenDraftNonce, setSeenDraftNonce] = useState<number | null>(null);
+  if (draftParam && draftParam.nonce !== seenDraftNonce) {
+    setSeenDraftNonce(draftParam.nonce);
+    setPenMode(false);
+    setStickerMode(false);
+    setDraftName(draftParam.name);
+    setDraftError(null);
+    setPlacing({
+      provider: draftParam.provider,
+      providerPlaceId: draftParam.providerPlaceId,
+      latitude: draftParam.latitude,
+      longitude: draftParam.longitude,
+      key: draftParam.nonce,
+    });
+  }
+
+  // 핀 확정 모드 시작: 고른 장소로 지도를 옮긴다(직접 핀은 지금 자리 그대로).
+  useEffect(() => {
+    if (!placing) return;
+    placingSinceRef.current = Date.now();
+    if (placing.latitude !== null && placing.longitude !== null) {
+      map.focus(boardId, placing.latitude, placing.longitude);
+    }
+  }, [placing, boardId, map]);
+
+  const cancelPlacing = () => {
+    Keyboard.dismiss();
+    setPlacing(null);
+    setDraftError(null);
+  };
+
+  const confirmPlacing = () => {
+    if (!placing) return;
+    const center = map.getCenter();
+    const adjusted = center && center.at > placingSinceRef.current ? center : null;
+    const lat = adjusted?.lat ?? placing.latitude ?? center?.lat ?? null;
+    const lng = adjusted?.lng ?? placing.longitude ?? center?.lng ?? null;
+    if (lat === null || lng === null) {
+      setDraftError('지도를 조금 움직여 자리를 맞춘 뒤 다시 눌러 주세요.');
+      return;
+    }
+    Keyboard.dismiss();
+    addPlace.mutate(
+      {
+        name: draftName.trim(),
+        latitude: lat,
+        longitude: lng,
+        provider: placing.provider,
+        providerPlaceId: placing.providerPlaceId,
+      },
+      {
+        onSuccess: () => setPlacing(null),
+        onError: (e) => setDraftError(friendlyError(e)),
+      }
+    );
   };
 
   // Half Sheet 높이(고정 px). drag-down dismiss 임계값도 이 값을 공유한다.
@@ -301,7 +400,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     [cardHeight]
   );
 
-  const goAdd = () => navigation.navigate('PlaceAdd', { boardId });
+  const goAdd = () => navigation.navigate('PlaceAdd', { boardId, title });
 
   // ── 싱글톤 MapHost 구동 ────────────────────────────────────────────────
   // 보드 진입(마운트/보드 변경) → 토큰 설정 + 이전 보드 오버레이 clear(잔상 가드). 보드당 1회.
@@ -493,7 +592,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
       {/* 모바일 전용 Floating 버튼(목록). 시트가 열려 있으면 숨김.
           향후 Floating Actions 그룹(목록/추가/현재위치)으로 확장 가능한 컨테이너 구조. */}
-      {!isTablet && !sheetOpen && !searchOpen ? (
+      {!isTablet && !sheetOpen && !searchOpen && !placing ? (
         <View
           style={[styles.fabGroup, { bottom: insets.bottom + spacing.lg }]}
           pointerEvents="box-none"
@@ -654,6 +753,21 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             >
               <Text style={styles.reactionEmoji}>💬</Text>
             </Pressable>
+            {/* 카카오로 찾아 꽂은 핀: 영업시간·리뷰는 카카오맵에서(저장한 건 장소 ID 뿐) */}
+            {reactionPlace?.provider === 'kakao' && reactionPlace.provider_place_id ? (
+              <Pressable
+                style={styles.kakaoLinkBtn}
+                onPress={() =>
+                  Linking.openURL(kakaoPlaceUrl(reactionPlace.provider_place_id as string)).catch(
+                    () => {}
+                  )
+                }
+                accessibilityRole="link"
+                accessibilityLabel="카카오맵에서 보기"
+              >
+                <Text style={styles.kakaoLinkText}>카카오맵</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={styles.reactionClose}
               onPress={() => {
@@ -853,6 +967,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
+      {/* 핀 확정 모드: 가운데 고정 핀 + 이름 확인 카드(키보드 위로) */}
+      {placing ? (
+        <>
+          <CenterPin color={inks.me.solid} />
+          <PlaceDraftCard
+            name={draftName}
+            onChangeName={setDraftName}
+            fromKakao={placing.provider === 'kakao'}
+            saving={addPlace.isPending}
+            error={draftError}
+            onConfirm={confirmPlacing}
+            onCancel={cancelPlacing}
+            lift={keyboardHeight}
+            bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
+          />
+        </>
+      ) : null}
+
       {/* 검색 결과 Sheet: keyboardHeight 만큼 위로 올림(양 플랫폼 결정적).
           box-none → 시트 미점유 상단 지도는 계속 보이고 조작 가능(Surface First). */}
       {searchOpen ? (
@@ -865,8 +997,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             isFetching={search.isFetching}
             isError={search.isError}
             results={search.data ?? []}
-            onAdd={onAddResult}
-            adding={addPlace.isPending}
+            onSelect={onSelectResult}
+            onDirectPin={onDirectPin}
+            assistEnabled={KAKAO_SEARCH_ASSIST}
             maxHeight={Math.max(200, height - keyboardHeight - insets.top - 80)}
             bottomInset={keyboardHeight > 0 ? spacing.sm : insets.bottom}
           />
@@ -1071,6 +1204,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   reactionEmoji: { fontSize: 24 },
+  kakaoLinkBtn: {
+    height: 44,
+    paddingHorizontal: spacing.sm,
+    justifyContent: 'center',
+  },
+  kakaoLinkText: { ...typography.caption, fontWeight: '600', color: colors.textStrong },
   reactionClose: {
     width: 32,
     height: 44,
