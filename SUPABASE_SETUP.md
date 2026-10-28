@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0013)
+## 3.5 추가 마이그레이션 (0002 ~ 0014)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -101,6 +101,19 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0011_guest_invite_block.sql` | `is_permanent_user()` + 게스트(익명 세션) 초대 만들기 RLS 차단 + `accept_invite`·`invite_preview` 로그인 확인 | 필수(로그인 없이 시작). 재실행 안전 |
 | `0012_user_ink.sql` | `users.ink`(기본 lilac, 6색 CHECK) — 각자 잉크 고르기 | 필수(잉크 고르기). 미적용이면 설정의 잉크 변경만 실패(지도는 기본색). 재실행 안전 |
 | `0013_place_provider_kakao.sql` | `places.provider` CHECK 를 `('naver','manual','kakao')` 로 정리(운영 드리프트 기록, 이름 무관 재생성) | 필수(장소 찾기 Option C). 운영은 이미 kakao 허용이라 동작 변화 없음. 재실행 안전 |
+| `0014_poi_matching.sql` | 공공데이터 장소 `poi`·`poi_dongs`(앱 직접 접근 불가) + `poi_lookup`(service_role 전용)·`poi_rebuild_dongs` + `places.kakao_place_id` + provider `public` | 필수(장소 찾기 D′ — docs/Place Matching.md). 적용 뒤 아래 "공공데이터 적재". 재실행 안전 |
+
+### 공공데이터 적재·갱신 (0014 뒤 — 자동)
+
+`scripts/poi-import/refresh_poi.py` 하나가 처음 적재와 분기 갱신을 다 한다: 포털 최신 파일 확인 → 우리 poi 보다 새로우면 내려받기 →
+서울·데이트 업종만(2026-06-30 기준 299,240건) → REST 업서트(2,000건씩) → 새 분기 행이 80% 이상일 때만 옛 행(폐업·이전) 삭제 → `poi_rebuild_dongs()`.
+핀(places)은 poi 를 참조하지 않아 갱신에 영향이 없다. 대시보드 CSV 가져오기는 30만 건에서 들어가지 않아(2026-10-28) 쓰지 않는다.
+
+1. **저장소 Secret** `SUPABASE_SERVICE_ROLE_KEY` 추가(GitHub → Settings → Secrets and variables → Actions) — Supabase → Project Settings → API Keys 의 secret(service_role) 키. 앱·`EXPO_PUBLIC_` 에 넣지 않는다.
+2. `.github/workflows/poi-refresh.yml` 이 **매주 월요일 03:00 KST** 에 돈다(새 파일 없으면 바로 끝). 처음 적재는 Actions → POI Refresh → **Run workflow**.
+3. 손으로 돌릴 때: `.env` 에 `SUPABASE_SERVICE_ROLE_KEY=` 를 넣고 `python -I scripts/poi-import/refresh_poi.py --env .env` (같은 분기 다시 올리기 `--force`, 올리지 않고 CSV 만 `--zip <zip> --date YYYY-MM-DD --out-csv data/poi/x.csv`).
+4. 확인: `select count(*), min(data_date), max(data_date) from public.poi;` · `select count(*) from public.poi_dongs;`(서울 466) · 매칭 검증 `node scripts/poi-import/verify_match.mjs <레포> <CSV> <결과 json>`
+5. 실패하면: 포털 응답 형식이 바뀌었거나(최신 파일 정보를 못 읽음) 새 파일이 이상한 경우(안전 멈춤 — 옛 행을 지우지 않음). 다음 실행이 마무리하지 못한 갱신을 다시 올리고 마무리한다.
 
 ### 적용 전 상태 점검 (읽기 전용)
 

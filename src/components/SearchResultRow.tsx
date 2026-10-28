@@ -7,10 +7,11 @@ import type { PlaceSearchResult } from '../types/models';
 interface SearchResultRowProps {
   result: PlaceSearchResult;
   onSelect: () => void;
+  disabled?: boolean;
 }
 
-// 검색 결과 1행(장소명 + 주소 + [선택]). 고르면 지도가 그 자리로 가고 사용자가 핀을 확정한다(바로 저장하지 않음).
-export function SearchResultRow({ result, onSelect }: SearchResultRowProps) {
+// 검색 결과 1행(장소명 + 주소 + [선택]). 고르면 공공데이터와 맞춰 본 뒤 사용자가 핀을 확정한다(바로 저장하지 않음).
+export function SearchResultRow({ result, onSelect, disabled = false }: SearchResultRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.body}>
@@ -22,10 +23,12 @@ export function SearchResultRow({ result, onSelect }: SearchResultRowProps) {
         </Text>
       </View>
       <Pressable
-        style={styles.addBtn}
+        style={[styles.addBtn, disabled && styles.disabled]}
         onPress={onSelect}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={`${result.name} 선택`}
+        accessibilityState={{ disabled }}
       >
         <Text style={styles.addText}>선택</Text>
       </Pressable>
@@ -56,4 +59,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   addText: { ...typography.label, color: colors.textStrong, fontWeight: '600' },
+  disabled: { opacity: 0.5 },
 });

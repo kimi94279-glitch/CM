@@ -22,9 +22,9 @@ export interface Couple {
   updated_at: string;
 }
 
-// 장소 출처: kakao = 카카오 검색으로 찾아 사용자가 확정한 핀(ID 는 카카오맵 링크용) · manual = 직접 찍은 핀
-// · naver = 예전 방식(레거시)
-export type PlaceProvider = 'naver' | 'manual' | 'kakao';
+// 장소 출처(ADR-016 Option D′, 0014): public = 공공데이터(상가정보) 레코드(provider_place_id = 상가업소번호)
+// · manual = 사용자가 직접 찍은 핀 · kakao / naver = 예전 방식(레거시, 새로 만들지 않음)
+export type PlaceProvider = 'public' | 'manual' | 'kakao' | 'naver';
 
 export interface Place {
   id: string;
@@ -34,6 +34,7 @@ export interface Place {
   longitude: number;
   provider: PlaceProvider | null;
   provider_place_id: string | null;
+  kakao_place_id: string | null; // 카카오맵 링크용 장소 ID 단독(0014) — 카카오에서 저장하는 건 이것뿐
   order_index: number;
   created_by: string | null; // 탈퇴한 사람이 찍은 장소는 null (0010)
   created_at: string;
@@ -61,23 +62,42 @@ export interface PlaceMemo {
   updated_at: string;
 }
 
-// 저장 직전의 핀(사용자가 위치·이름을 확정한 것) — ADR-016 Option C
+// 저장 직전의 핀 — 이름·좌표는 공공데이터 레코드 또는 사용자가 정한 값뿐(ADR-016 Option D′).
 export interface PlaceDraft {
   name: string;
   latitude: number;
   longitude: number;
-  provider: 'kakao' | 'manual';
-  providerPlaceId: string | null;
+  provider: 'public' | 'manual';
+  providerPlaceId: string | null; // public 이면 상가업소번호
+  kakaoPlaceId: string | null;
 }
 
-// 검색 결과 — 화면 표시 전용(저장하지 않는다). place-search Edge Function 의 정규화 출력과 일치.
+// 검색 결과(카카오) — 화면 표시와 매칭 조회 키 전용(저장하지 않는다). place-search search 출력과 일치.
 export interface PlaceSearchResult {
   name: string;
   address: string;
+  jibunAddress?: string; // 매칭이 안 될 때 동네를 찾는 조회 키(함수 배포 전 응답엔 없음)
   latitude: number;
   longitude: number;
-  provider: PlaceProvider;
-  providerPlaceId: string | null;
+  provider: 'kakao';
+  providerPlaceId: string | null; // 카카오 장소 ID
+}
+
+// place-search match 출력 — 고른 카카오 결과에 맞는 공공데이터 레코드(없으면 null)와, 없을 때 옮겨 갈 동네 중심.
+export interface PlaceMatch {
+  poiId: string;
+  name: string;
+  branch: string | null;
+  category: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  confidence: 'high' | 'low';
+}
+
+export interface PlaceMatchResponse {
+  match: PlaceMatch | null;
+  dong: { name: string; latitude: number; longitude: number } | null;
 }
 
 // Infinite Geographic Canvas 객체(Place 비종속, 좌표 고정). DB map_objects 와 일치.

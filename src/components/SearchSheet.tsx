@@ -11,6 +11,8 @@ interface SearchSheetProps {
   isError: boolean;
   results: PlaceSearchResult[];
   onSelect: (result: PlaceSearchResult) => void;
+  // 고른 결과를 공공데이터와 맞춰 보는 중(짧은 로딩)
+  selecting: boolean;
   // 검색에 없거나 검색 없이: 지금 지도 가운데에 직접 핀을 꽂는다
   onDirectPin: () => void;
   // 카카오 찾기 보조가 켜져 있는지(꺼지면 직접 핀만)
@@ -20,13 +22,14 @@ interface SearchSheetProps {
 }
 
 // 지도 위 하단 검색 결과 시트(C-1). 상태: empty / loading / error / result + 항상 "직접 핀 찍기".
-// 검색 결과(카카오)는 화면 표시 전용 — 고르면 지도 이동 후 사용자가 핀 위치·이름을 확정한다(ADR-016 Option C).
+// 검색 결과(카카오)는 화면 표시 전용 — 고르면 공공데이터에서 같은 가게를 찾아 핀 확정으로 간다(ADR-016 Option D′).
 export function SearchSheet({
   query,
   isFetching,
   isError,
   results,
   onSelect,
+  selecting,
   onDirectPin,
   assistEnabled,
   maxHeight,
@@ -70,9 +73,18 @@ export function SearchSheet({
           data={results}
           keyExtractor={(item, i) => `${item.providerPlaceId ?? item.name}-${i}`}
           renderItem={({ item }) => (
-            <SearchResultRow result={item} onSelect={() => onSelect(item)} />
+            <SearchResultRow result={item} onSelect={() => onSelect(item)} disabled={selecting} />
           )}
-          ListHeaderComponent={<Text style={styles.attribution}>검색 제공: 카카오</Text>}
+          ListHeaderComponent={
+            selecting ? (
+              <View style={styles.selecting}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.attribution}>장소 정보를 확인하는 중…</Text>
+              </View>
+            ) : (
+              <Text style={styles.attribution}>검색 제공: 카카오</Text>
+            )
+          }
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         />
@@ -119,6 +131,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },
+  selecting: { flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.md },
   directPin: {
     borderTopWidth: 1,
     borderColor: colors.border,

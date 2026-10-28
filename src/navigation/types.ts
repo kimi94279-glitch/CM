@@ -1,5 +1,7 @@
 // RootNavigator 라우트 파라미터 정의
 
+import type { PlacingDraft } from '../utils/placeDraft';
+
 // 보드 진입 시 카메라를 맞출 대상(알림 탭 등). 장소면 placeId, 스티커처럼 장소가 없으면 좌표.
 // nonce 가 바뀔 때마다 1회 적용된다.
 export interface BoardFocus {
@@ -9,14 +11,9 @@ export interface BoardFocus {
   nonce: number;
 }
 
-// 태블릿 장소 찾기(PlaceAdd)에서 지도로 돌아올 때 넘기는 핀 초안. 좌표 null = 지금 지도 가운데(직접 핀).
+// 태블릿 장소 찾기(PlaceAdd)에서 지도로 돌아올 때 넘기는 핀 초안(utils/placeDraft).
 // nonce 가 바뀔 때마다 1회 핀 확정 모드를 연다.
-export interface PlaceDraftParam {
-  name: string;
-  latitude: number | null;
-  longitude: number | null;
-  provider: 'kakao' | 'manual';
-  providerPlaceId: string | null;
+export interface PlaceDraftParam extends PlacingDraft {
   nonce: number;
 }
 

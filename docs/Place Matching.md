@@ -1,0 +1,244 @@
+---
+title: Place Matching — 공공데이터 정본 + 카카오 매칭
+status: active
+owner: project
+last_review: 2026-10-28
+category: architecture
+related:
+  - ADR-016 Place Search Data Licensing
+---
+# Place Matching — 공공데이터 정본 + 카카오 매칭
+
+> 결정 근거: [[ADR-016 Place Search Data Licensing]] Option D′ (2026-10-28)
+> 원칙: **카카오는 찾기만, 저장은 우리 데이터만.** 카카오에서 남기는 건 장소 ID 하나(카카오맵 링크).
+
+---
+
+## 0. 한눈에
+
+```text
+검색어 ─▶ place-search {action:'search'} ─▶ 카카오 키워드 검색 ─▶ 결과 목록(표시 전용, 앱 메모리)
+                                                                     │ 사용자가 하나 고름
+                                                                     ▼
+           place-search {action:'match', 카카오 이름·좌표·주소} ─▶ 우리 poi(공공데이터)에서 같은 가게 찾기
+                                                                     │   (카카오 값은 조회 키로만 쓰고 버림)
+                          ┌──────────────────────────────────────────┴──────────────────────────┐
+                    매칭 있음                                                               매칭 없음
+       지도 → 공공 레코드 좌표, 이름 = 공공 상호                      지도 → 그 동네(우리 데이터의 법정동 중심)까지만
+       (핀·이름 고칠 수 있음) → provider 'public'                     사용자가 직접 찍고 이름을 씀 → provider 'manual'
+                          └──────────────── 둘 다 kakao_place_id 저장(카카오맵 링크) ───────────────┘
+```
+
+매칭을 **고를 때 한 번** 하는 이유: 카카오 측이 허용한 구조(데브톡 151647 — "저장할 때 이름·좌표를 공공데이터 조회 키로만 사용")와 그대로 맞추기 위해서다.
+검색할 때 결과 전부를 미리 매칭하면 "직접 찍기" 표시를 먼저 보여 줄 수 있지만, 허용 범위 해석이 하나 늘어난다.
+
+---
+
+## 1. 저장 규칙 — 무엇이 어디서 오나
+
+| `places` 필드 | 매칭 있음 | 매칭 없음 | 직접 핀(검색 안 함) |
+|---|---|---|---|
+| `name` | 공공 상호(+지점) 기본값, 사용자가 고치면 그 값 | **사용자가 씀**(빈칸에서 시작) | 사용자가 씀 |
+| `latitude` / `longitude` | 공공 레코드 좌표(핀을 옮기면 그 자리) | 사용자가 찍은 자리 | 사용자가 찍은 자리 |
+| `provider` | `'public'` | `'manual'` | `'manual'` |
+| `provider_place_id` | 상가업소번호 | null | null |
+| `kakao_place_id` (신규) | 카카오 장소 ID | 카카오 장소 ID | null |
+
+- 카카오의 이름·주소·좌표·전화·업종은 **어디에도 저장하지 않는다** — 앱 화면 표시와 매칭 요청 안에서만 쓴다.
+- 매칭 없음일 때 카드에 카카오 이름을 참고로 보여 줄 수는 있지만 입력칸에 채우지 않는다(152223: 장소명 저장 불가).
+- 핀은 저장 뒤 `poi` 와 독립이다(외래 키 없음). 분기 갱신으로 가게가 `poi` 에서 빠져도 핀·대화는 그대로 남는다.
+
+---
+
+## 2. 데이터 — `poi`
+
+**출처:** 소상공인시장진흥공단 상가(상권)정보 — 공공데이터포털 15083033, 이용허락범위 제한 없음, 분기 CSV 무료.
+
+**1단계 범위: 서울.** 2026-06-30 기준 554,092건(중복 ID 0, 좌표 없는 행 0, 지점명 있는 행 51,858).
+
+| 대분류 | 건수 | 적재 |
+|---|---|---|
+| 음식 | 141,126 | ✅ |
+| 소매 | 111,306 | ✅ |
+| 예술·스포츠 | 21,061 | ✅ |
+| 숙박 | 12,409 | ✅ |
+| 수리·개인 | 53,716 | 소분류 골라서(사진관·공방 등) |
+| 교육 | 44,215 | 소분류 골라서(원데이 클래스 등) |
+| 과학·기술 / 시설관리·임대 / 부동산 / 보건의료 | 170,259 | ❌ (데이트 장소일 가능성 낮음 → 매칭 없음 = 사용자 핀) |
+
+→ 약 29~33만 건. 텍스트 평균 약 128바이트/행(상호 18·도로명주소 43·소분류 18 등) → 표 + 위치 인덱스 **100MB 안쪽 예상**(Supabase 무료 500MB 안). 적재 때 실측해 기록한다.
+
+```sql
+create table public.poi (
+  id text primary key,                 -- 상가업소번호(OSM 등 다른 출처는 'osm:node/123' 식 접두어)
+  source text not null default 'sbiz', -- 'sbiz' = 상가정보 (2단계 'osm')
+  name text not null,                  -- 상호명
+  branch text,                         -- 지점명
+  category text,                       -- 상권업종소분류명
+  sigungu text not null,               -- 시군구명
+  bdong text not null,                 -- 법정동명
+  road_address text,                   -- 도로명주소
+  lat double precision not null,
+  lng double precision not null,
+  data_date date not null              -- 데이터 기준일(분기)
+);
+create index poi_geo on public.poi using gist ((point(lng, lat)));
+
+-- 매칭 없을 때 이동할 동네 중심 = 우리 데이터의 평균 좌표
+create table public.poi_dongs (
+  sigungu text not null,
+  bdong text not null,
+  lat double precision not null,
+  lng double precision not null,
+  n int not null,
+  primary key (sigungu, bdong)
+);
+-- 둘 다 RLS on + 정책 없음: 앱이 직접 못 읽는다. Edge Function(service role) 만.
+```
+
+**적재·갱신(자동):** `scripts/poi-import/refresh_poi.py`(파이썬 표준 라이브러리) + `.github/workflows/poi-refresh.yml`(매주 월 03:00 KST).
+
+1. 포털의 최신 파일 정보(`selectFileDataDownload.do` — 로그인 불필요, `dataNm` 끝의 기준일·`nextRegistPrarnde` 다음 등록 예정일)를 읽는다.
+2. 우리 poi 의 기준일보다 새롭거나, 지난 갱신이 마무리되지 않았으면(옛 기준일 행이 남음) 진행 — 아니면 끝.
+3. zip(약 350MB)을 받아 서울 CSV 만 읽고 업종 필터 → service role 로 REST 업서트(상가업소번호 기준, 2,000건씩). 갱신 중에도 poi 가 비는 시간이 없다.
+4. 새 기준일 행이 전체의 80% 이상이면 옛 기준일 행(= 그사이 폐업·이전) 삭제 → `poi_rebuild_dongs()`. 미만이면 지우지 않고 실패로 멈춘다(이상한 파일 방어).
+
+- Secret: 저장소 `SUPABASE_SERVICE_ROLE_KEY` 하나(프로젝트 URL 은 공개값이라 워크플로에 적음). 서비스 롤은 RLS 를 우회하고 statement timeout 이 없다(2026-10-28 확인).
+- 대시보드 CSV 가져오기(48.8MB)는 첫 시도에서 0건으로 끝나 쓰지 않는다.
+- 가짜 REST 서버 테스트 11항목: 안전 멈춤·폐업 행 삭제·기존 가게 날짜 갱신·이미 최신이면 업로드 없음·키 종류별 헤더.
+
+---
+
+## 3. 매칭
+
+### 3.1 후보 찾기 (DB)
+
+```sql
+-- 카카오 좌표 주변 반경 안의 poi 후보 (service_role 만 실행)
+create function public.poi_near(p_lat float8, p_lng float8, p_radius_m int default 150, p_limit int default 40)
+returns setof public.poi language sql stable security definer set search_path = public as $$
+  select * from public.poi
+  where point(lng, lat) <@ box(
+    point(p_lng - p_radius_m / (111320.0 * cos(radians(p_lat))), p_lat - p_radius_m / 110540.0),
+    point(p_lng + p_radius_m / (111320.0 * cos(radians(p_lat))), p_lat + p_radius_m / 110540.0))
+  limit p_limit;
+$$;
+revoke all on function public.poi_near(float8, float8, int, int) from public, anon, authenticated;
+```
+
+### 3.2 점수 (Edge Function, TypeScript)
+
+이름 비교는 TS 모듈(`match.ts`)에서 한다 — pg_trgm 은 DB 로케일에 따라 한글 처리가 달라질 수 있어 피하고, 오프라인 단위 테스트를 쉽게 하려고.
+
+1. **정규화:** NFKC → 소문자 → 공백·기호 제거. 지점 꼬리(`…점`, `본점`)와 동네 이름 토큰(성수·연남 등, 결과 주소의 동 이름)은 따로 뗀다.
+2. **이름 점수:** 카카오 이름 토큰(2자 이상) 중 하나가 공공 상호에 들어 있거나 공공 상호가 카카오 이름에 들어 있으면 강한 일치("어니언 성수" ↔ "어니언컴퍼니"+"성수점"). 아니면 글자 2-gram 자카드 유사도.
+3. **거리:** 30m 안 감점 없음 → 150m 까지 선형 감점. 둘 다 주소 지오코딩이라 보통 수십 m 안.
+4. **판정:**
+   - `high` — 강한 일치 + 120m 안, 그리고 2등과 점수 차가 충분
+   - `low` — 일치는 있지만 거리 멀거나 2등과 비슷 → 확정 카드에서 "등록 이름: ○○ — 이 가게 맞나요?"
+   - 없음 — 그 외. **두 글자 이하 이름**("하하", "귀")은 정규화 후 완전히 같고 50m 안일 때만 인정(파일럿 오매칭 교훈)
+5. **동네:** 매칭이 없으면 카카오 주소(지번 `서울 성동구 성수동2가 …`)에서 시군구·법정동을 떼어 `poi_dongs` 에서 중심을 찾는다. 서울 밖이면 동네도 없음 → 지도를 옮기지 않는다.
+
+---
+
+## 4. API — `place-search` (Edge Function, 카카오)
+
+레포의 네이버 코드를 배포본(카카오) 기준으로 다시 쓰고 `action` 두 개를 둔다. 응답에 `Cache-Control: no-store`, 요청·응답 로그 남기지 않음.
+
+```ts
+// POST { action: 'search', query: string, near?: { lat: number; lng: number } }
+→ { results: Array<{ name: string; address: string; latitude: number; longitude: number; kakaoPlaceId: string }> }
+//   지금과 같은 모양(표시 전용). near 가 있으면 카카오 x·y 로 가까운 곳 우선.
+
+// POST { action: 'match', kakaoPlaceId: string, name: string, address: string, latitude: number, longitude: number }
+→ { match: null | { poiId: string; name: string; branch: string | null; category: string | null;
+                    address: string | null; latitude: number; longitude: number; confidence: 'high' | 'low' };
+    dong: null | { name: string; latitude: number; longitude: number } }   // match 가 없을 때만
+```
+
+- 시크릿: 배포본이 쓰는 카카오 REST 키 이름을 확인해 그대로(코드에 키 없음). DB 는 함수 기본 env 의 service role 로 `poi_near`·`poi_dongs` 만 읽는다.
+- 같은 함수에서 두 일을 하는 이유: 콜드 스타트 한 번, 카카오 키·CORS 처리 한 곳.
+
+---
+
+## 5. 앱 흐름
+
+- **결과 행:** 지금처럼 카카오 이름·주소 + "선택"(목록 머리 "검색 제공: 카카오" 유지).
+- **선택 → match 요청(짧은 로딩)**
+  - `high` → 기존 확정 모드(`PlaceDraftCard`) — 지도 = 공공 좌표, 이름 = 공공 상호(+지점) 기본값. "여기에 핀 꽂기" → `provider 'public'`.
+  - `low` → 같은 확정 모드 + 카드에 "등록 이름: 어니언컴퍼니 성수점 · 다른 곳이면 직접 찍기".
+  - 없음 → 확정 모드를 "직접 찍기"로 — 지도 = 동네 중심(줌 16, 없으면 그대로), 이름 빈칸("이름을 직접 써 주세요"), 카드에 "저장할 수 있는 장소 정보가 없어서 직접 찍어요" → `provider 'manual'` + `kakao_place_id`.
+- **"직접 핀 찍기"(검색 시트 아래)** 는 그대로 — 외부 데이터 0.
+- **카카오맵 버튼:** `kakao_place_id` 가 있는 핀만(`place.map.kakao.com/{id}`).
+- **출처 표기:** 설정(정보) 화면 "장소 정보: 소상공인시장진흥공단 상가(상권)정보(공공데이터포털)" + 기존 OpenStreetMap·OpenMapTiles.
+- **스위치:** `KAKAO_SEARCH_ASSIST` 유지(false → 검색 숨김, 직접 핀만).
+- **태블릿(PlaceAdd):** 선택 → match → 결과를 `draft` 파라미터로 지도에 넘기는 지금 구조 그대로(필드만 바뀜).
+
+---
+
+## 6. DB 변경 — `0014`
+
+- `poi`, `poi_dongs` (+ RLS on, 정책 없음, 위치 인덱스)
+- `poi_near(...)` — security definer, service_role 만 실행
+- `places.kakao_place_id text` (null 허용)
+- `places_provider_check` → `('public', 'manual', 'kakao', 'naver')` — `kakao`·`naver` 는 레거시(새로 안 만듦). 정리 끝나면 빼는 마이그레이션 추가
+- 오프라인(PGlite) 테스트: 제약·권한(anon/authenticated 가 poi·poi_near 못 씀)·반경 쿼리·재실행 안전
+
+---
+
+## 7. 기존 데이터 정리 — 운영 `places` 11건(전부 `provider 'kakao'`)
+
+지금 이름·좌표가 카카오 유래라 `manual` 로 이름만 바꾸는 건 안 된다.
+적재 뒤 각 행을 한 번 매칭(조회 키로만): 맞으면 이름·좌표를 공공 레코드로 바꾸고 `provider 'public'`, `kakao_place_id` = 기존 ID.
+안 맞으면 목록을 사용자에게 보여 주고 **지우기 / 직접 다시 찍기** 중 고른다(개발 중 테스트 데이터로 보임).
+
+---
+
+## 8. 단계
+
+**1단계 — 출시 필수**
+
+1. 배포된 `place-search` 소스 확보 → 레포 동기화(대시보드 Edge Functions 코드 보기) · 카카오 키 시크릿 이름 확인
+2. `0014` 마이그레이션 + 오프라인 테스트
+3. `scripts/poi-import/refresh_poi.py` + 주간 워크플로 → 서울 첫 적재(저장소 Secret 필요) + 크기 실측
+4. `match.ts` + 오프라인 검증(§9)
+5. `place-search` 교체 배포(search·match)
+6. 앱: 선택 → match → 확정 카드 3갈래, 저장 필드(`provider 'public'`·`kakao_place_id`), 출처 표기
+7. 기존 11건 정리 · ADR-016/Current State/SUPABASE_SETUP 갱신
+
+**2단계 — 랜드마크 보완:** OSM(공원·전망대·영화관·박물관·테마파크 — 서울 추출) 을 `poi` 에 `source 'osm'` 으로. ODbL 출처 표시·DB 공유 조건 확인 후. 파일럿에서 랜드마크 0/5 였던 구멍을 메운다.
+
+**3단계:** `poi` 자체 검색(카카오 장애·쿼터 대비 보조), 전국 적재(Supabase Pro), 핀의 가게가 poi 에서 빠지면 "최근 공공데이터에서 빠졌어요(폐업 가능)" 표시. (분기 갱신 자동화는 1단계에서 완료)
+
+---
+
+## 9. 검증 기준
+
+- **매칭 정확도:** 파일럿 시드(`scripts/place-search-spike/pilot_seed.json`) 중 공공데이터에 있는 영업 중 가게 45곳 → 카카오로 찾아 고른 뒤 매칭 성공 **≥ 90%**, 다른 가게로 잘못 매칭 **≤ 2%**. 카카오 결과는 판정에만 쓰고 저장하지 않는다(스파이크와 같은 규칙).
+- **매칭 없음 비율:** 30개 검색어(랜드마크 포함)에서 기록 → 2단계 범위 결정.
+- **지연:** match 요청 p95 < 500ms(함수 따뜻할 때).
+- **새는 경로 0:** 저장 코드에 카카오 이름·좌표가 들어갈 경로가 없는지 리뷰 + `provider 'kakao'` 신규 저장 없음 확인.
+
+---
+
+### 9.1 결과 (2026-10-28, `scripts/poi-import/verify_match.mjs`)
+
+파일럿 100곳을 배포된 카카오 검색(`이름 동네`)으로 찾고, 사용자가 고를 결과(이름에 파일럿 키워드가 든 첫 결과) 1건을 서울 poi(299,240건)와 매칭했다. 카카오 결과는 메모리에서만 쓰고 판정만 남겼다.
+
+| 구분 | 건수 |
+|---|---|
+| 카카오가 못 찾음(폐업·이전 추정 — 시드 리스트가 오래됨) | 45 |
+| 공공데이터와 매칭 | **33** — 수동 확인 결과 모두 맞는 가게(확실 30 · "맞나요?" 3) |
+| 공공데이터에 그 가게가 있는데 못 맞춤 | **0** |
+| 공공데이터에 없음 → 직접 핀 | 19 (랜드마크 4 · 전시 1 · 가게 14) |
+
+- 자동 판정의 "오매칭 3"은 판정 기준의 착시였다: "서순라길" 검색에서 고른 결과가 "서울집시 서순라길점"(가게)이라 서울집시로 맞춘 것, "카츠성수" → "오레노카츠 성수본점", "데일리라운드" → 같은 가게("라운드 데일리"로 등록).
+- 처음 규칙에서 "무신사 뷰티 스페이스"가 첫 단어("무신사")만으로 "무신사 스탠다드"에 확실로 붙었다 → 남은 단어가 짧은 동네·지점 이름이 아니면 **부분 일치 = 확인 받기**로 고쳤다.
+- 가게 기준 매칭률 33/47 ≈ 70% (파일럿 수동 확인 82%보다 낮은 건 이번엔 카카오 좌표 300m 안만 정답으로 쳤기 때문 — 이전·다른 이름 등록은 직접 핀으로 간다).
+
+## 10. 리스크
+
+- **공공 좌표는 건물 단위** — 큰 건물·몰 안 가게는 건물 중심에 찍힌다 → 확정 카드에서 핀을 옮길 수 있다.
+- **등록 상호가 낯설 수 있다**("어니언" → "어니언컴퍼니 성수점") → 이름은 고칠 수 있다. 자주 고쳐지는 이름은 별칭 사전 후보.
+- **분기 갱신 지연** — 최근 3개월 안 개업은 매칭 없음 → 사용자 핀.
+- **법률 판단 아님** — 카카오 측 답변(데브톡)에 맞춘 설계다. 151647 와 다른 점(검색 결과를 화면에 보여 준 뒤 고를 때 매칭, 매칭 없으면 동네까지만 이동)이 걸리면 이 구조 그대로 데브톡에 확인한다.

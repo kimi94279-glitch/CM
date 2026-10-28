@@ -1,0 +1,42 @@
+name: POI Refresh
+
+# 공공데이터(소상공인시장진흥공단 상가(상권)정보, 분기 갱신) → Supabase poi 갱신. ADR-016 Option D′ · docs/Place Matching.md
+# 매주 포털의 최신 파일을 확인해 우리 poi 보다 새로울 때만 내려받아 올린다(새 파일이 없으면 몇 초 만에 끝남).
+# 필요한 저장소 Secret: SUPABASE_SERVICE_ROLE_KEY — Supabase → Project Settings → API Keys 의 secret(service_role) 키.
+# 처음 적재·급할 때: Actions → POI Refresh → Run workflow (force = 같은 분기라도 다시 올리기).
+
+on:
+  schedule:
+    - cron: '0 18 * * 0' # 매주 월요일 03:00 KST
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '같은 분기라도 다시 올리기'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poi-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refresh poi
+        env:
+          SUPABASE_URL: https://nmptqotnakbcorfkemvw.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -I scripts/poi-import/refresh_poi.py ${{ inputs.force && '--force' || '' }}

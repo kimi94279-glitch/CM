@@ -39,11 +39,18 @@ import { useInks } from '../hooks/useInks';
 import { usePartnerId, usePartnerProfile } from '../hooks/usePartnerProfile';
 import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos';
 import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
-import { useAddPlace, useDeletePlace, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
+import {
+  useAddPlace,
+  useDeletePlace,
+  useMatchPlace,
+  usePlaceSearch,
+  usePlaces,
+} from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
-import type { Place, PlaceDraft, PlaceSearchResult } from '../types/models';
+import type { Place, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
-import { kakaoPlaceUrl } from '../utils/kakaoMap';
+import { kakaoPlaceIdOf, kakaoPlaceUrl } from '../utils/kakaoMap';
+import { directDraft, draftFromMatch, metersBetween, type PlacingDraft } from '../utils/placeDraft';
 import { whoOf } from '../utils/who';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
@@ -86,6 +93,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
   const reactionPlace = reactionPlaceId ? places.find((p) => p.id === reactionPlaceId) : undefined;
+  const reactionKakaoId = reactionPlace ? kakaoPlaceIdOf(reactionPlace) : null;
   // 팔레트를 연 핀에서 내가 이미 누른 반응(내 색 강조 + 토글 판정).
   const myReactionTypes = useMemo(
     () =>
@@ -250,70 +258,66 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setSearchOpen(false);
     setSheetOpen(true);
   };
-  // 핀 확정(ADR-016 Option C): 검색 결과는 저장하지 않는다. 고르면 지도가 그 자리로 가고,
-  // 사용자가 가운데 핀 위치·이름을 확정한 것만 저장한다. latitude null = 지금 지도 가운데(직접 핀).
-  type Placing = Omit<PlaceDraft, 'name' | 'latitude' | 'longitude'> & {
-    latitude: number | null;
-    longitude: number | null;
-    key: number;
-  };
+  // 핀 확정(ADR-016 Option D′): 검색 결과(카카오)는 저장하지 않는다. 고르면 공공데이터에서 같은 가게를 찾아
+  // 그 레코드로 시작하고, 없으면 동네까지만 옮겨 사용자가 직접 찍는다(utils/placeDraft).
+  type Placing = PlacingDraft & { key: number };
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draftError, setDraftError] = useState<string | null>(null);
   // 핀 확정 모드를 연 시각 — 이후에 보고된 지도 가운데만 "사용자가 맞춘 자리"로 쓴다.
   const placingSinceRef = useRef(0);
+  const matchPlace = useMatchPlace();
 
-  const startPlacing = (next: Omit<Placing, 'key'>, name: string) => {
+  const startPlacing = (next: PlacingDraft, error: string | null = null) => {
     closeSearch();
     setSheetOpen(false);
     setReactionPlaceId(null);
     // 펜·스티커 모드에선 지도가 안 움직이므로 끈다(핀 자리는 지도를 움직여 맞춘다).
     setPenMode(false);
     setStickerMode(false);
-    setDraftName(name);
-    setDraftError(null);
+    setDraftName(next.name);
+    setDraftError(error);
     setPlacing({ ...next, key: Date.now() });
   };
-  const onSelectResult = (result: PlaceSearchResult) =>
-    startPlacing(
-      {
-        provider: 'kakao',
-        providerPlaceId: result.providerPlaceId,
-        latitude: result.latitude,
-        longitude: result.longitude,
-      },
-      result.name
-    );
-  const onDirectPin = () =>
-    startPlacing(
-      { provider: 'manual', providerPlaceId: null, latitude: null, longitude: null },
-      searchText.trim()
-    );
+  const onSelectResult = (result: PlaceSearchResult) => {
+    if (matchPlace.isPending) return;
+    matchPlace.mutate(result, {
+      onSuccess: (res) => startPlacing(draftFromMatch(result, res)),
+      onError: () =>
+        startPlacing(
+          draftFromMatch(result, null),
+          '장소 정보를 확인하지 못했어요. 지도에서 직접 찍어 주세요.'
+        ),
+    });
+  };
+  const onDirectPin = () => startPlacing(directDraft(searchText.trim()));
+  // "다른 곳이에요": 가까운 등록 가게가 아니면 이름을 비우고 직접 찍기로(지도는 그 자리 그대로).
+  const switchToDirect = () => {
+    if (!placing) return;
+    setDraftName('');
+    setDraftError(null);
+    setPlacing({ ...directDraft('', placing.kakaoPlaceId), key: Date.now() });
+  };
 
   // 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안 → 1회 핀 확정 모드
   const draftParam = route.params.draft;
   const [seenDraftNonce, setSeenDraftNonce] = useState<number | null>(null);
   if (draftParam && draftParam.nonce !== seenDraftNonce) {
-    setSeenDraftNonce(draftParam.nonce);
+    const { nonce, ...draft } = draftParam;
+    setSeenDraftNonce(nonce);
     setPenMode(false);
     setStickerMode(false);
-    setDraftName(draftParam.name);
+    setDraftName(draft.name);
     setDraftError(null);
-    setPlacing({
-      provider: draftParam.provider,
-      providerPlaceId: draftParam.providerPlaceId,
-      latitude: draftParam.latitude,
-      longitude: draftParam.longitude,
-      key: draftParam.nonce,
-    });
+    setPlacing({ ...draft, key: nonce });
   }
 
-  // 핀 확정 모드 시작: 고른 장소로 지도를 옮긴다(직접 핀은 지금 자리 그대로).
+  // 핀 확정 모드 시작: 공공 레코드 자리나 동네 중심으로 지도를 옮긴다(직접 핀은 지금 자리 그대로).
   useEffect(() => {
     if (!placing) return;
     placingSinceRef.current = Date.now();
-    if (placing.latitude !== null && placing.longitude !== null) {
-      map.focus(boardId, placing.latitude, placing.longitude);
+    if (placing.camera) {
+      map.focus(boardId, placing.camera.latitude, placing.camera.longitude);
     }
   }, [placing, boardId, map]);
 
@@ -333,6 +337,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       setDraftError('지도를 조금 움직여 자리를 맞춘 뒤 다시 눌러 주세요.');
       return;
     }
+    // 매칭이 안 된 곳은 동네 중심 그대로 꽂지 않는다 — 사용자가 직접 자리를 맞춘다.
+    if (
+      placing.kind === 'noMatch' &&
+      placing.camera &&
+      metersBetween(lat, lng, placing.camera.latitude, placing.camera.longitude) < 5
+    ) {
+      setDraftError('지도를 움직여 가운데 핀을 그 자리에 맞춰 주세요.');
+      return;
+    }
     Keyboard.dismiss();
     addPlace.mutate(
       {
@@ -341,6 +354,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         longitude: lng,
         provider: placing.provider,
         providerPlaceId: placing.providerPlaceId,
+        kakaoPlaceId: placing.kakaoPlaceId,
       },
       {
         onSuccess: () => setPlacing(null),
@@ -753,15 +767,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             >
               <Text style={styles.reactionEmoji}>💬</Text>
             </Pressable>
-            {/* 카카오로 찾아 꽂은 핀: 영업시간·리뷰는 카카오맵에서(저장한 건 장소 ID 뿐) */}
-            {reactionPlace?.provider === 'kakao' && reactionPlace.provider_place_id ? (
+            {/* 카카오로 찾아 꽂은 핀: 영업시간·리뷰는 카카오맵에서(카카오에서 저장한 건 장소 ID 뿐) */}
+            {reactionKakaoId ? (
               <Pressable
                 style={styles.kakaoLinkBtn}
-                onPress={() =>
-                  Linking.openURL(kakaoPlaceUrl(reactionPlace.provider_place_id as string)).catch(
-                    () => {}
-                  )
-                }
+                onPress={() => Linking.openURL(kakaoPlaceUrl(reactionKakaoId)).catch(() => {})}
                 accessibilityRole="link"
                 accessibilityLabel="카카오맵에서 보기"
               >
@@ -972,13 +982,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         <>
           <CenterPin color={inks.me.solid} />
           <PlaceDraftCard
+            kind={placing.kind}
             name={draftName}
             onChangeName={setDraftName}
-            fromKakao={placing.provider === 'kakao'}
             saving={addPlace.isPending}
             error={draftError}
             onConfirm={confirmPlacing}
             onCancel={cancelPlacing}
+            onSwitchDirect={switchToDirect}
             lift={keyboardHeight}
             bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
           />
@@ -998,6 +1009,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             isError={search.isError}
             results={search.data ?? []}
             onSelect={onSelectResult}
+            selecting={matchPlace.isPending}
             onDirectPin={onDirectPin}
             assistEnabled={KAKAO_SEARCH_ASSIST}
             maxHeight={Math.max(200, height - keyboardHeight - insets.top - 80)}

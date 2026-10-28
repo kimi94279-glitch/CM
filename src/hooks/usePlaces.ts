@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { addPlace, listPlaces, removePlace } from '../services/placeService';
-import { searchPlaces } from '../services/placeSearchService';
+import { matchPlace, searchPlaces } from '../services/placeSearchService';
 import { KAKAO_SEARCH_ASSIST } from '../constants/config';
 import type { PlaceDraft } from '../types/models';
 
@@ -45,4 +45,9 @@ export function usePlaceSearch(query: string) {
     staleTime: 60_000,
     gcTime: 5 * 60_000,
   });
+}
+
+// 고른 검색 결과 1건 → 공공데이터 매칭(+ 없으면 동네 중심). 결과는 핀 초안으로만 쓰고 캐시하지 않는다.
+export function useMatchPlace() {
+  return useMutation({ mutationFn: matchPlace, gcTime: 0 });
 }

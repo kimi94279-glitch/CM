@@ -34,7 +34,7 @@ export async function removePlace(placeId: string): Promise<void> {
   if (error) throw error;
 }
 
-// 사용자가 확정한 핀을 보드에 추가(검색 결과를 그대로 저장하지 않는다 — ADR-016 Option C)
+// 확정한 핀을 보드에 추가 — 이름·좌표는 공공데이터 레코드 또는 사용자가 정한 값(카카오 결과를 저장하지 않는다 — ADR-016 Option D′)
 export async function addPlace(boardId: string, draft: PlaceDraft): Promise<Place> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
@@ -52,6 +52,7 @@ export async function addPlace(boardId: string, draft: PlaceDraft): Promise<Plac
       longitude: draft.longitude,
       provider: draft.provider,
       provider_place_id: draft.providerPlaceId,
+      kakao_place_id: draft.kakaoPlaceId,
       order_index: orderIndex,
       created_by: uid,
     })

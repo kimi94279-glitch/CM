@@ -7,9 +7,10 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { KAKAO_SEARCH_ASSIST } from '../constants/config';
-import { usePlaceSearch } from '../hooks/usePlaces';
+import { useMatchPlace, usePlaceSearch } from '../hooks/usePlaces';
 import type { RootStackParamList } from '../navigation/types';
 import type { PlaceSearchResult } from '../types/models';
+import { directDraft, draftFromMatch, type PlacingDraft } from '../utils/placeDraft';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaceAdd'>;
 
@@ -22,30 +23,21 @@ export function PlaceAddScreen({ route, navigation }: Props) {
   const [query, setQuery] = useState('');
 
   const search = usePlaceSearch(query);
+  const matchPlace = useMatchPlace();
 
-  // 결과는 저장하지 않는다 — 지도로 돌아가 그 자리에서 사용자가 핀 위치·이름을 확정한다(ADR-016 Option C).
-  const backToMap = (draft: NonNullable<RootStackParamList['BoardDetail']['draft']>) =>
-    navigation.popTo('BoardDetail', { boardId, title, draft });
+  // 결과는 저장하지 않는다 — 공공데이터와 맞춰 본 뒤 지도로 돌아가 사용자가 핀을 확정한다(ADR-016 Option D′).
+  const backToMap = (draft: PlacingDraft) =>
+    navigation.popTo('BoardDetail', { boardId, title, draft: { ...draft, nonce: ++draftSeq } });
 
-  const onSelect = (result: PlaceSearchResult) =>
-    backToMap({
-      name: result.name,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      provider: 'kakao',
-      providerPlaceId: result.providerPlaceId,
-      nonce: ++draftSeq,
+  const onSelect = (result: PlaceSearchResult) => {
+    if (matchPlace.isPending) return;
+    matchPlace.mutate(result, {
+      onSuccess: (res) => backToMap(draftFromMatch(result, res)),
+      onError: () => backToMap(draftFromMatch(result, null)),
     });
+  };
 
-  const onDirectPin = () =>
-    backToMap({
-      name: query,
-      latitude: null,
-      longitude: null,
-      provider: 'manual',
-      providerPlaceId: null,
-      nonce: ++draftSeq,
-    });
+  const onDirectPin = () => backToMap(directDraft(query));
 
   const renderItem = ({ item }: { item: PlaceSearchResult }) => (
     <View style={styles.resultRow}>
@@ -61,6 +53,7 @@ export function PlaceAddScreen({ route, navigation }: Props) {
         title="선택"
         variant="secondary"
         onPress={() => onSelect(item)}
+        disabled={matchPlace.isPending}
         style={styles.addButton}
       />
     </View>
@@ -89,7 +82,9 @@ export function PlaceAddScreen({ route, navigation }: Props) {
         style={styles.directPin}
       />
       {KAKAO_SEARCH_ASSIST && (search.data?.length ?? 0) > 0 ? (
-        <Text style={styles.muted}>검색 제공: 카카오</Text>
+        <Text style={styles.muted}>
+          {matchPlace.isPending ? '장소 정보를 확인하는 중…' : '검색 제공: 카카오'}
+        </Text>
       ) : null}
 
       {search.isFetching ? (
