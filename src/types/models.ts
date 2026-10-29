@@ -22,9 +22,10 @@ export interface Couple {
   updated_at: string;
 }
 
-// 장소 출처(ADR-016 Option D′, 0014): public = 공공데이터(상가정보) 레코드(provider_place_id = 상가업소번호)
-// · manual = 사용자가 직접 찍은 핀 · kakao / naver = 예전 방식(레거시, 새로 만들지 않음)
-export type PlaceProvider = 'public' | 'manual' | 'kakao' | 'naver';
+// 장소 출처(ADR-016 하이브리드, 0014·0016): public = 공공데이터(상가정보) 레코드(provider_place_id = 상가업소번호)
+// · manual = 사용자가 직접 찍은 핀
+// · kakao_live = 카카오 실시간 핀 — 장소 ID·검색어만 저장, 좌표·이름은 볼 때마다 카카오에서(latitude/longitude 는 동네 중심 자리표시)
+export type PlaceProvider = 'public' | 'manual' | 'kakao_live';
 
 export interface Place {
   id: string;
@@ -35,6 +36,7 @@ export interface Place {
   provider: PlaceProvider | null;
   provider_place_id: string | null;
   kakao_place_id: string | null; // 카카오맵 링크용 장소 ID 단독(0014) — 카카오에서 저장하는 건 이것뿐
+  live_query: string | null; // 실시간 핀을 다시 찾을 검색어(사용자가 친 글자, 0016)
   order_index: number;
   created_by: string | null; // 탈퇴한 사람이 찍은 장소는 null (0010)
   created_at: string;
@@ -67,9 +69,24 @@ export interface PlaceDraft {
   name: string;
   latitude: number;
   longitude: number;
-  provider: 'public' | 'manual';
+  provider: PlaceProvider;
   providerPlaceId: string | null; // public 이면 상가업소번호
   kakaoPlaceId: string | null;
+  liveQuery: string | null; // kakao_live 이면 다시 찾을 검색어
+}
+
+// 실시간 핀의 지금 모습(place-search resolve) — 화면 표시 전용, 저장하지 않는다.
+export interface LivePlace {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface LiveResolveResponse {
+  places: Record<string, LivePlace>; // 카카오 장소 ID → 지금 모습
+  missing: string[]; // 카카오에서 더는 찾을 수 없음(폐업·이전 등)
+  failed: string[]; // 카카오 오류 — 다음에 다시
 }
 
 // 검색 결과(카카오) — 화면 표시와 매칭 조회 키 전용(저장하지 않는다). place-search search 출력과 일치.

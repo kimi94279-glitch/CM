@@ -25,15 +25,15 @@ export function PlaceAddScreen({ route, navigation }: Props) {
   const search = usePlaceSearch(query);
   const matchPlace = useMatchPlace();
 
-  // 결과는 저장하지 않는다 — 공공데이터와 맞춰 본 뒤 지도로 돌아가 사용자가 핀을 확정한다(ADR-016 Option D′).
+  // 결과는 저장하지 않는다 — 공공데이터와 맞춰 본 뒤(없으면 카카오 실시간 핀) 지도로 돌아가 사용자가 핀을 확정한다(ADR-016 하이브리드).
   const backToMap = (draft: PlacingDraft) =>
     navigation.popTo('BoardDetail', { boardId, title, draft: { ...draft, nonce: ++draftSeq } });
 
   const onSelect = (result: PlaceSearchResult) => {
     if (matchPlace.isPending) return;
     matchPlace.mutate(result, {
-      onSuccess: (res) => backToMap(draftFromMatch(result, res)),
-      onError: () => backToMap(draftFromMatch(result, null)),
+      onSuccess: (res) => backToMap(draftFromMatch(result, res, query)),
+      onError: () => backToMap(draftFromMatch(result, null, query)),
     });
   };
 

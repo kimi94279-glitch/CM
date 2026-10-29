@@ -5,10 +5,7 @@ export function kakaoPlaceUrl(placeId: string): string {
   return `https://place.map.kakao.com/${encodeURIComponent(placeId)}`;
 }
 
-// 핀의 카카오 장소 ID — kakao_place_id(0014), 예전 카카오 핀이면 provider_place_id.
-export function kakaoPlaceIdOf(
-  place: Pick<Place, 'provider' | 'provider_place_id' | 'kakao_place_id'>
-): string | null {
-  if (place.kakao_place_id) return place.kakao_place_id;
-  return place.provider === 'kakao' ? place.provider_place_id : null;
+// 핀의 카카오 장소 ID(0014) — 공공 레코드·실시간 핀 모두 이 칸에 있다.
+export function kakaoPlaceIdOf(place: Pick<Place, 'kakao_place_id'>): string | null {
+  return place.kakao_place_id;
 }

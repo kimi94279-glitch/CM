@@ -42,6 +42,7 @@ import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/u
 import {
   useAddPlace,
   useDeletePlace,
+  useLivePlaces,
   useMatchPlace,
   usePlaceSearch,
   usePlaces,
@@ -50,7 +51,14 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Place, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
 import { kakaoPlaceIdOf, kakaoPlaceUrl } from '../utils/kakaoMap';
-import { directDraft, draftFromMatch, metersBetween, type PlacingDraft } from '../utils/placeDraft';
+import { applyLivePlaces } from '../utils/livePlaces';
+import {
+  directDraft,
+  draftFromMatch,
+  liveDraft,
+  metersBetween,
+  type PlacingDraft,
+} from '../utils/placeDraft';
 import { whoOf } from '../utils/who';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
@@ -72,7 +80,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   const placesQuery = usePlaces(boardId);
   // 로딩 중 `?? []`가 매 렌더 새 배열이 되어 지도 주입 effect가 반복되지 않도록 고정한다.
-  const places = useMemo(() => placesQuery.data ?? [], [placesQuery.data]);
+  const storedPlaces = useMemo(() => placesQuery.data ?? [], [placesQuery.data]);
+  // 카카오 실시간 핀: 저장된 행(장소 ID·검색어)으로 지금 좌표·이름을 불러와 덮어 그린다(메모리에만).
+  // places = 지도용(불러온 실시간 핀만), listPlaces = 목록용(전부, 못 찾은 핀은 알림 붙임).
+  const livePlaces = useLivePlaces(storedPlaces);
+  const { mapPlaces: places, listPlaces } = useMemo(
+    () => applyLivePlaces(storedPlaces, livePlaces.data),
+    [storedPlaces, livePlaces.data]
+  );
 
   // 장소 반응(banter). 핀 위 이모지 배지로 표시. 재진입/앱 복귀 시 상대 반응 반영.
   const reactionsQuery = usePlaceReactions(boardId);
@@ -92,7 +107,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
   // 반응 팔레트가 열린 핀 id (null = 닫힘).
   const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
-  const reactionPlace = reactionPlaceId ? places.find((p) => p.id === reactionPlaceId) : undefined;
+  const reactionPlace = reactionPlaceId
+    ? listPlaces.find((p) => p.id === reactionPlaceId)
+    : undefined;
   const reactionKakaoId = reactionPlace ? kakaoPlaceIdOf(reactionPlace) : null;
   // 팔레트를 연 핀에서 내가 이미 누른 반응(내 색 강조 + 토글 판정).
   const myReactionTypes = useMemo(
@@ -258,8 +275,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setSearchOpen(false);
     setSheetOpen(true);
   };
-  // 핀 확정(ADR-016 Option D′): 검색 결과(카카오)는 저장하지 않는다. 고르면 공공데이터에서 같은 가게를 찾아
-  // 그 레코드로 시작하고, 없으면 동네까지만 옮겨 사용자가 직접 찍는다(utils/placeDraft).
+  // 핀 확정(ADR-016 하이브리드): 검색 결과(카카오)는 저장하지 않는다. 고르면 공공데이터에서 같은 가게를 찾아
+  // 그 레코드로 시작하고, 없으면 카카오 실시간 핀(장소 ID·검색어만 저장)으로 꽂는다(utils/placeDraft).
   type Placing = PlacingDraft & { key: number };
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -281,22 +298,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   };
   const onSelectResult = (result: PlaceSearchResult) => {
     if (matchPlace.isPending) return;
+    const query = searchQuery;
     matchPlace.mutate(result, {
-      onSuccess: (res) => startPlacing(draftFromMatch(result, res)),
+      onSuccess: (res) => startPlacing(draftFromMatch(result, res, query)),
       onError: () =>
         startPlacing(
-          draftFromMatch(result, null),
+          draftFromMatch(result, null, query),
           '장소 정보를 확인하지 못했어요. 지도에서 직접 찍어 주세요.'
         ),
     });
   };
   const onDirectPin = () => startPlacing(directDraft(searchText.trim()));
-  // "다른 곳이에요": 가까운 등록 가게가 아니면 이름을 비우고 직접 찍기로(지도는 그 자리 그대로).
-  const switchToDirect = () => {
+  // "다른 곳이에요": 가까운 등록 가게가 아니면 카카오 실시간 핀으로, 그것도 안 되면 이름을 비우고 직접 찍기로.
+  const switchToOther = () => {
     if (!placing) return;
     setDraftName('');
     setDraftError(null);
-    setPlacing({ ...directDraft('', placing.kakaoPlaceId), key: Date.now() });
+    const next = placing.live ? liveDraft(placing.live) : directDraft('', placing.kakaoPlaceId);
+    setPlacing({ ...next, key: Date.now() });
   };
 
   // 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안 → 1회 핀 확정 모드
@@ -329,6 +348,26 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   const confirmPlacing = () => {
     if (!placing) return;
+    // 실시간 핀은 지도 가운데(= 카카오 위치)를 저장하지 않는다 — 동네 중심 자리표시만, 위치는 볼 때마다 카카오에서.
+    if (placing.kind === 'live' && placing.latitude !== null && placing.longitude !== null) {
+      Keyboard.dismiss();
+      addPlace.mutate(
+        {
+          name: draftName.trim() || (placing.liveQuery ?? ''),
+          latitude: placing.latitude,
+          longitude: placing.longitude,
+          provider: 'kakao_live',
+          providerPlaceId: null,
+          kakaoPlaceId: placing.kakaoPlaceId,
+          liveQuery: placing.liveQuery,
+        },
+        {
+          onSuccess: () => setPlacing(null),
+          onError: (e) => setDraftError(friendlyError(e)),
+        }
+      );
+      return;
+    }
     const center = map.getCenter();
     const adjusted = center && center.at > placingSinceRef.current ? center : null;
     const lat = adjusted?.lat ?? placing.latitude ?? center?.lat ?? null;
@@ -355,6 +394,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         provider: placing.provider,
         providerPlaceId: placing.providerPlaceId,
         kakaoPlaceId: placing.kakaoPlaceId,
+        liveQuery: null,
       },
       {
         onSuccess: () => setPlacing(null),
@@ -654,10 +694,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             style={styles.fab}
             onPress={openSheet}
             accessibilityRole="button"
-            accessibilityLabel={`목록 ${places.length}개 열기`}
+            accessibilityLabel={`목록 ${listPlaces.length}개 열기`}
           >
             <Text style={styles.fabIcon}>☰</Text>
-            <Text style={styles.fabCount}>{places.length}</Text>
+            <Text style={styles.fabCount}>{listPlaces.length}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -921,7 +961,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           {mapArea}
           <View style={[styles.sidePanel, { paddingTop: insets.top + spacing.sm }]}>
             <CanvasObjectList
-              places={places}
+              places={listPlaces}
               myId={myId}
               partnerId={partnerId}
               partnerLabel={partnerLabel}
@@ -963,7 +1003,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
               </Pressable>
             </View>
             <CanvasObjectList
-              places={places}
+              places={listPlaces}
               myId={myId}
               partnerId={partnerId}
               partnerLabel={partnerLabel}
@@ -989,7 +1029,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             error={draftError}
             onConfirm={confirmPlacing}
             onCancel={cancelPlacing}
-            onSwitchDirect={switchToDirect}
+            onSwitchOther={switchToOther}
+            canSwitchToLive={!!placing.live}
+            liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
             lift={keyboardHeight}
             bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
           />

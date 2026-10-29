@@ -1,4 +1,4 @@
-import type { PlaceMatchResponse, PlaceSearchResult } from '../types/models';
+import type { LiveResolveResponse, PlaceMatchResponse, PlaceSearchResult } from '../types/models';
 import { supabase } from './supabase';
 
 // place-search Edge Function 호출 실패를 진단 정보(상태·응답 본문)와 함께 던진다.
@@ -44,4 +44,12 @@ export async function matchPlace(result: PlaceSearchResult): Promise<PlaceMatchR
     jibunAddress: result.jibunAddress ?? null,
   });
   return { match: data?.match ?? null, dong: data?.dong ?? null };
+}
+
+// 실시간 핀들의 지금 좌표·이름을 카카오에서 다시 불러온다(저장 없이 표시만 — 데브톡 151294).
+export async function resolveLivePlaces(
+  items: { id: string; query: string }[]
+): Promise<LiveResolveResponse> {
+  const data = await invokePlaceSearch<LiveResolveResponse>({ action: 'resolve', items });
+  return { places: data?.places ?? {}, missing: data?.missing ?? [], failed: data?.failed ?? [] };
 }

@@ -53,6 +53,7 @@ export async function addPlace(boardId: string, draft: PlaceDraft): Promise<Plac
       provider: draft.provider,
       provider_place_id: draft.providerPlaceId,
       kakao_place_id: draft.kakaoPlaceId,
+      live_query: draft.liveQuery,
       order_index: orderIndex,
       created_by: uid,
     })
