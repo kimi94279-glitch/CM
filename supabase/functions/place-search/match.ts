@@ -81,6 +81,18 @@ function kakaoVariants(name: string): Variant[] {
   return out.filter((x) => x.v);
 }
 
+// 랜드마크·시설 이름의 끝말. 카카오 이름(또는 그 변형)이 이렇게 끝나는데 공공 상호가 "다른 상호 + 그 이름(+점)"이면
+// 그 랜드마크 안·근처의 가게다("청계천" ↔ "펠트 청계천점", "63빌딩" ↔ "GS25 63빌딩점", "덕수궁" ↔ "포토시그니처덕수궁").
+// 매칭하지 않으면 실시간 핀으로 가므로 손해가 적다 — docs/Landmark Data Spike.md §3.4.
+const LANDMARK_TAIL =
+  /(공원|숲|천|강|산|호수|궁|타워|빌딩|박물관|미술관|도서관|섬|마을|길|거리|역|대학교|병원|시장|광장)$/;
+
+function isStorefrontOfLandmark(kakaoName: string, pFull: string): boolean {
+  return kakaoVariants(kakaoName).some(
+    ({ v }) => v.length >= 2 && LANDMARK_TAIL.test(v) && pFull.indexOf(v) > 0
+  );
+}
+
 function restIsLabel(rest: string, pFull: string): boolean {
   return (
     !rest || pFull.includes(rest) || rest.length <= 3 || AREA_TOKEN.test(rest) || /점$/.test(rest)
@@ -98,6 +110,7 @@ function nameStrength(
   const pFull = normalizeName(c.name + (c.branch ?? ''));
   if (!kFull || !pBase) return { strength: 'none', similarity: 0 };
   if (pBase === kFull || pFull === kFull) return { strength: 'exact', similarity: 1 };
+  if (isStorefrontOfLandmark(kakaoName, pFull)) return { strength: 'none', similarity: 0 };
   // 공공 상호가 카카오 이름 안에 통째로 들어 있으면("탐앤탐스" ⊂ "탐앤탐스성수") 강한 일치
   if (pBase.length >= 3 && kFull.includes(pBase)) return { strength: 'strong', similarity: 1 };
   let partial = false;

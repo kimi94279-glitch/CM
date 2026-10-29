@@ -297,7 +297,7 @@ ADR-006(카카오 통합)만으로는 문제가 해결되지 않는다.
 - 외부 리뷰 신호(예: 네이버 지도 리뷰의 "누구랑 갔나요 → 연인") 는 API 가 없고 저장도 금지라 쓸 수 없다.
   대신 Couple Map 자체가 같은 신호를 만든다 — 커플들이 보드에 담고 ❤️ 를 단 장소의 **익명 집계**("커플들이 많이 담은 곳")를
   사용자 장소(정본)에 붙여 검색 랭킹·추천에 쓸 수 있다(개인정보처리방침 고지·최소 집계 단위 필요). 우리가 권리를 가진 데이터라 이 ADR 의 원칙과 맞는다.
-- ADR-006(카카오 통합)은 이 ADR 이 Accepted 되면 **Superseded** 로 표기한다.
+- ADR-006(카카오 통합)은 이 ADR 로 **Superseded** 표기했다(2026-10-29).
 
 ---
 
@@ -362,7 +362,7 @@ ADR-006(카카오 통합)만으로는 문제가 해결되지 않는다.
 
 ## Related Documents
 
-- [[ADR-006 Search Provider Consolidation]] — 전제(카카오 지도) 소멸 + 저장 불가로 재검토 대상
+- [[ADR-006 Search Provider Consolidation]] — 전제(카카오 지도) 소멸 + 저장 불가로 이 ADR 이 대체(Superseded)
 - [[ADR-013 MapLibre OSM Migration]] — 지도 공급자 분리(Google Places 제외 사유)
 - [[ADR-013 Product Philosophy]] — 수익화 방향(표현·공유)
 - [[ADR-014 Conversation as the Core Action]] — 장소 = 대화가 쌓이는 자산

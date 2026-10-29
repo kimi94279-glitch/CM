@@ -1,7 +1,8 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Constants from 'expo-constants';
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -213,6 +214,26 @@ export function SettingsScreen({ navigation }: Props) {
           </>
         ) : null}
 
+        {/* 데이터 출처(ADR-016·docs/Place Matching.md) — 공공데이터는 출처 표시 권장, OSM 은 ODbL 출처 표시 */}
+        <Text style={styles.section}>정보</Text>
+        <View style={styles.card}>
+          {CREDITS.map((c, i) => (
+            <View key={c.label}>
+              {i > 0 ? <View style={styles.divider} /> : null}
+              <Pressable
+                onPress={c.url ? () => Linking.openURL(c.url as string).catch(() => {}) : undefined}
+                disabled={!c.url}
+                accessibilityRole={c.url ? 'link' : undefined}
+                style={styles.credit}
+              >
+                <Text style={styles.creditLabel}>{c.label}</Text>
+                <Text style={[styles.creditText, c.url ? styles.creditLink : null]}>{c.text}</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.version}>버전 {Constants.expoConfig?.version ?? '-'}</Text>
+
         {guest ? null : (
           <Button
             title="로그아웃"
@@ -237,6 +258,25 @@ export function SettingsScreen({ navigation }: Props) {
     </ScreenContainer>
   );
 }
+
+// 앱이 쓰는 데이터의 출처. 장소를 더 붙이면(공원·박물관 표준데이터 등) 여기에 더한다.
+const CREDITS: { label: string; text: string; url?: string }[] = [
+  {
+    label: '장소 정보',
+    text: '소상공인시장진흥공단 상가(상권)정보 · 공공데이터포털',
+    url: 'https://www.data.go.kr/data/15083033/fileData.do',
+  },
+  {
+    label: '장소 검색',
+    text: '카카오 — 검색 결과와 카카오 위치로 꽂은 핀의 위치는 저장하지 않고 볼 때마다 불러와요',
+  },
+  {
+    label: '지도',
+    text: '© OpenStreetMap contributors · © OpenMapTiles · OpenFreeMap',
+    url: 'https://www.openstreetmap.org/copyright',
+  },
+  { label: '지도 엔진', text: 'MapLibre GL JS (BSD 3-Clause)' },
+];
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -336,6 +376,27 @@ const styles = StyleSheet.create({
   switchText: {
     ...typography.label,
     color: colors.textMuted,
+  },
+  credit: {
+    paddingVertical: spacing.sm,
+  },
+  creditLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  creditText: {
+    ...typography.body,
+    color: colors.textStrong,
+    marginTop: 2,
+  },
+  creditLink: {
+    textDecorationLine: 'underline',
+  },
+  version: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   deleteRow: {
     alignSelf: 'center',

@@ -1,12 +1,13 @@
 ---
 title: Search Provider Consolidation
-status: active
+status: superseded
 owner: project
-last_review: 2026-06-07
+last_review: 2026-10-29
 category: adr
 related:
   - ADR-001 Map Provider Selection
   - ADR-004 Search Architecture
+  - ADR-016 Place Search Data Licensing
 adr: "006"
 date: 2026-06-03
 tags:
@@ -20,9 +21,11 @@ tags:
 
 Date: 2026-06-03
 
-Status: Accepted (미구현 — 코드 미반영, 전환 예정)
+Status: Superseded by [[ADR-016 Place Search Data Licensing]] (2026-10-29)
 
-> ⚠️ 재검토(2026-10-25): 지도가 MapLibre 로 옮겨져(ADR-013) 카카오 통합의 전제가 사라졌고, 카카오 로컬 API 도 결과 영구 저장을 허용하지 않는다. [[ADR-016 Place Search Data Licensing]](Proposed)이 Accepted 되면 이 ADR 은 Superseded 로 바뀐다.
+> ⚠️ 대체됨(2026-10-29): 지도가 MapLibre 로 옮겨져(ADR-013) 카카오 통합의 전제가 사라졌고, 카카오 로컬 API 도 결과(좌표·이름) 저장을 허용하지 않는다.
+> 장소 검색은 ADR-016 으로 정해졌다 — 카카오 검색 → 공공데이터(상가정보) 매칭해 공공 기록 저장, 매칭이 없으면 카카오 장소 ID·검색어만 저장하는 실시간 핀.
+> 아래 본문은 당시 결정 기록으로 남겨 둔다.
 >
 > ⚠️ 구현 상태: 이 결정은 채택되었으나 **아직 코드에 반영되지 않았다**. 현재 `supabase/functions/place-search`는 여전히 Naver 지역검색 API를 사용하며, `models.ts`·migration의 `provider`도 `'naver'`이다. 전환 시 Edge Function / 데이터 모델 / migration을 함께 갱신해야 한다.
 
