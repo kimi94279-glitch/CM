@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0014)
+## 3.5 추가 마이그레이션 (0002 ~ 0015)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -102,6 +102,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0012_user_ink.sql` | `users.ink`(기본 lilac, 6색 CHECK) — 각자 잉크 고르기 | 필수(잉크 고르기). 미적용이면 설정의 잉크 변경만 실패(지도는 기본색). 재실행 안전 |
 | `0013_place_provider_kakao.sql` | `places.provider` CHECK 를 `('naver','manual','kakao')` 로 정리(운영 드리프트 기록, 이름 무관 재생성) | 필수(장소 찾기 Option C). 운영은 이미 kakao 허용이라 동작 변화 없음. 재실행 안전 |
 | `0014_poi_matching.sql` | 공공데이터 장소 `poi`·`poi_dongs`(앱 직접 접근 불가) + `poi_lookup`(service_role 전용)·`poi_rebuild_dongs` + `places.kakao_place_id` + provider `public` | 필수(장소 찾기 D′ — docs/Place Matching.md). 적용 뒤 아래 "공공데이터 적재". 재실행 안전 |
+| `0015_poi_rebuild_dongs_safeupdate.sql` | `poi_rebuild_dongs()` 전체 삭제에 `where true` — REST 로 부를 때 pg_safeupdate 가 막던 것 | 필수(자동 갱신). 재실행 안전 |
 
 ### 공공데이터 적재·갱신 (0014 뒤 — 자동)
 

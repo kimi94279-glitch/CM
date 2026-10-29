@@ -201,6 +201,11 @@ class Db:
     def delete_older(self, data_date):
         http("DELETE", f"{self.base}/poi?data_date=lt.{data_date}", {**self.h, "Prefer": "return=minimal"}, timeout=300)
 
+    def dongs_count(self):
+        _, headers, _ = http("GET", f"{self.base}/poi_dongs?select=bdong", {**self.h, "Prefer": "count=exact", "Range": "0-0"})
+        rng = headers.get("Content-Range") or headers.get("content-range") or "*/0"
+        return int(rng.split("/")[-1])
+
     def rebuild_dongs(self):
         _, _, raw = http("POST", f"{self.base}/rpc/poi_rebuild_dongs", self.h, {}, timeout=300)
         return json.loads(raw)
@@ -242,6 +247,9 @@ def main():
         log(f"우리 poi: 기준일 {current}, {db.count()}건(이번 기준일보다 옛 행 {older})")
         # 옛 행이 남아 있으면(지난 실행이 안전 멈춤 등으로 마무리 못 함) 다시 올리고 마무리한다
         if current and current >= data_date and older == 0 and not args.force:
+            # 지난 실행이 동네 중심 계산 직전에 멈췄으면 그것만 마저 한다
+            if db.dongs_count() == 0:
+                log(f"동네 중심이 비어 있어 다시 계산: {db.rebuild_dongs()}개")
             log("이미 최신 — 할 일 없음")
             return
 

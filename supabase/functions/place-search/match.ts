@@ -102,10 +102,25 @@ function nameStrength(
   if (pBase.length >= 3 && kFull.includes(pBase)) return { strength: 'strong', similarity: 1 };
   let partial = false;
   for (const { v, rest } of kakaoVariants(kakaoName)) {
-    // 두 글자 이하는 완전히 같을 때만("하하" ≠ "하하하우스", "귀" ≠ "귀빈")
-    const hit = v.length <= 2 || pBase.length <= 2 ? v === pBase : pFull.includes(v);
-    if (!hit) continue;
-    if (restIsLabel(rest, pFull)) return { strength: 'strong', similarity: 1 };
+    // 두 글자 이하는 완전히 같을 때만("하하" ≠ "하하하우스", "귀" ≠ "귀빈").
+    // 카카오 이름은 공공 상호 안에 있거나 상호 앞부분부터 맞아야 한다 — 지점명에만 걸리면 그 장소 안·근처의 다른 가게다
+    // ("서울숲" ≠ "스타벅스 서울숲점").
+    let at: number;
+    if (v.length <= 2 || pBase.length <= 2) {
+      if (v !== pBase) continue;
+      at = 0;
+    } else if (pFull.startsWith(v)) {
+      at = 0;
+    } else if (pBase.includes(v)) {
+      at = pBase.indexOf(v);
+    } else {
+      continue;
+    }
+    // 맞은 부분 앞에 다른 가게 이름이 길게 붙어 있으면 그 장소 안의 다른 가게일 수 있다 → 확인 받기
+    // ("고려대학교 안암병원" ↔ "채선당샤브보트고려대학교안암 병원점"). 짧은 회사·동네 머리말은 괜찮다("성수동대림창고갤러리", "디에즈마를리").
+    const prefix = pBase.slice(0, at);
+    const aligned = prefix.length <= 3 || AREA_TOKEN.test(prefix);
+    if (aligned && restIsLabel(rest, pFull)) return { strength: 'strong', similarity: 1 };
     partial = true;
   }
   if (partial) return { strength: 'partial', similarity: 0.8 };
