@@ -1,66 +1,45 @@
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Keyboard,
-  Linking,
-  PanResponder,
-  Pressable,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BoardFabGroup } from '../components/BoardFabGroup';
+import { BoardTopOverlay } from '../components/BoardTopOverlay';
 import { Button } from '../components/Button';
 import { CanvasObjectList } from '../components/CanvasObjectList';
+import { ObjectEditBar, PenBar, StickerBar } from '../components/CanvasToolBars';
+import { HalfSheet } from '../components/HalfSheet';
 import { useMapHost } from '../components/MapHostContext';
-import { MapSearchBar } from '../components/MapSearchBar';
+import { PlaceActionBar, usePlaceActions } from '../components/PlaceActionBar';
 import { CenterPin, PlaceDraftCard } from '../components/PlaceDraftCard';
-import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
-import { KAKAO_SEARCH_ASSIST, MEMO_MAX_LENGTH } from '../constants/config';
-import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
-import { colors, radius, spacing, typography } from '../constants/theme';
-import {
-  useAddMapObject,
-  useMapObjects,
-  useRemoveMapObject,
-  useUpdateMapObject,
-} from '../hooks/useMapObjects';
+import { KAKAO_SEARCH_ASSIST } from '../constants/config';
+import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
+import { useBoardMapSync } from '../hooks/useBoardMapSync';
 import { useMarkBoardRead } from '../hooks/useBoards';
+import { useCanvasTools } from '../hooks/useCanvasTools';
 import { useInks } from '../hooks/useInks';
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { usePartnerId, usePartnerProfile } from '../hooks/usePartnerProfile';
-import { useAddMemo, usePlaceMemos, useRemoveMemo } from '../hooks/usePlaceMemos';
-import { useAddReaction, usePlaceReactions, useRemoveReaction } from '../hooks/usePlaceReactions';
-import {
-  useAddPlace,
-  useDeletePlace,
-  useLivePlaces,
-  useMatchPlace,
-  usePlaceSearch,
-  usePlaces,
-} from '../hooks/usePlaces';
+import { usePlaceMemos } from '../hooks/usePlaceMemos';
+import { usePlaceReactions } from '../hooks/usePlaceReactions';
+import { useDeletePlace, useLivePlaces, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
+import { usePlacing } from '../hooks/usePlacing';
+import { useSubmittedQuery } from '../hooks/useSubmittedQuery';
 import type { RootStackParamList } from '../navigation/types';
-import type { Place, PlaceSearchResult } from '../types/models';
-import { friendlyError } from '../utils/errors';
-import { kakaoPlaceIdOf, kakaoPlaceUrl } from '../utils/kakaoMap';
+import type { Place } from '../types/models';
+import { kakaoPlaceIdOf } from '../utils/kakaoMap';
 import { applyLivePlaces } from '../utils/livePlaces';
-import { isSearchable } from '../utils/searchText';
-import {
-  directDraft,
-  draftFromMatch,
-  liveDraft,
-  metersBetween,
-  type PlacingDraft,
-} from '../utils/placeDraft';
-import { whoOf } from '../utils/who';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -68,17 +47,19 @@ type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 const TABLET_MIN = 600;
 const SIDE_PANEL_WIDTH = 320;
 
-// P0 스티커 이모지 셋(지리 고정 객체). Text/Arrow/Draw 는 P0 범위 밖.
-const STICKER_EMOJIS = ['❤️', '😂', '👀', '🤮', '☕', '🌳', '📸'];
-
 // Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다.
 // 기본 상태는 지도만. 목록은 모바일=Floating 버튼→Half Sheet, 태블릿=Right Side Panel.
+// 지도 자체는 네비게이터 뒤 싱글톤 MapHost 가 그리고, 이 화면은 데이터·콜백만 주입한다(useBoardMapSync).
+// 아래쪽 바(핀 반응 · 스티커 · 펜 · 편집)와 검색 · 목록 · 핀 확정은 서로 배타 — 하나를 열 때 나머지를 닫는다.
 export function BoardDetailScreen({ route, navigation }: Props) {
   const { boardId, title } = route.params;
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= TABLET_MIN;
+  const keyboardHeight = useKeyboardHeight();
+  const barBottom = insets.bottom + spacing.lg;
 
+  // ── 데이터 ─────────────────────────────────────────────────────────────
   const placesQuery = usePlaces(boardId);
   // 로딩 중 `?? []`가 매 렌더 새 배열이 되어 지도 주입 effect가 반복되지 않도록 고정한다.
   const storedPlaces = useMemo(() => placesQuery.data ?? [], [placesQuery.data]);
@@ -89,127 +70,64 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     () => applyLivePlaces(storedPlaces, livePlaces),
     [storedPlaces, livePlaces]
   );
-
-  // 장소 반응(banter). 핀 위 이모지 배지로 표시. 재진입/앱 복귀 시 상대 반응 반영.
+  // 핀 위 반응 배지·메모 말풍선(지도 주입 + 핀 바). 저장(토글·입력)은 화면에 둔다 — usePlaceActions 주석.
   const reactionsQuery = usePlaceReactions(boardId);
   const reactions = useMemo(() => reactionsQuery.data ?? [], [reactionsQuery.data]);
-  const addReaction = useAddReaction(boardId);
-  const removeReaction = useRemoveReaction(boardId);
-  // 반응 토글 판정용 내 uid (이미 누른 반응이면 제거).
-  const { session, workspace } = useAuth();
-  const myId = session?.user?.id ?? null;
-  // 작성자 표시(범례/목록)용 상대 이름. 솔로면 null → 범례·목록 작성자 표기 숨김(전부 내 것).
-  const partnerQuery = usePartnerProfile();
-  // 작성자 구분(나 · 지금 상대 · 그 밖)과 각자 고른 잉크
-  const partnerId = usePartnerId();
-  const inks = useInks();
-  const mineInkStyle = { backgroundColor: inks.me.tint, borderColor: inks.me.solid };
-  const partnerLabel =
-    workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
-  // 반응 팔레트가 열린 핀 id (null = 닫힘).
-  const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
-  const reactionPlace = reactionPlaceId
-    ? listPlaces.find((p) => p.id === reactionPlaceId)
-    : undefined;
-  const reactionKakaoId = reactionPlace ? kakaoPlaceIdOf(reactionPlace) : null;
-  // 팔레트를 연 핀에서 내가 이미 누른 반응(내 색 강조 + 토글 판정).
-  const myReactionTypes = useMemo(
-    () =>
-      new Set(
-        reactions
-          .filter((r) => r.place_id === reactionPlaceId && r.user_id === myId)
-          .map((r) => r.reaction_type)
-      ),
-    [reactions, reactionPlaceId, myId]
-  );
-
-  // 한 줄 메모(말풍선). 핀 바의 💬 로 입력창을 열고, 보낸 메모는 핀 위 말풍선으로 남는다(ADR-014).
   const memosQuery = usePlaceMemos(boardId);
   const memos = useMemo(() => memosQuery.data ?? [], [memosQuery.data]);
-  const addMemo = useAddMemo(boardId);
-  const removeMemo = useRemoveMemo(boardId);
-  // 입력창이 열린 핀 id. 다른 핀을 탭하거나 바를 닫으면(reactionPlaceId 변경) 자동으로 닫힌 상태가 된다.
-  const [memoPlaceId, setMemoPlaceId] = useState<string | null>(null);
-  const memoOpen = memoPlaceId !== null && memoPlaceId === reactionPlaceId;
-  const [memoText, setMemoText] = useState('');
-  // 입력창 위에 보여줄 이 핀의 최근 대화(최대 3줄, 오래된 → 최근).
-  const placeMemos = useMemo(
-    () => memos.filter((m) => m.place_id === reactionPlaceId).slice(-3),
-    [memos, reactionPlaceId]
-  );
-  const toggleMemo = () => {
-    setMemoText('');
-    if (memoOpen) Keyboard.dismiss();
-    setMemoPlaceId(memoOpen ? null : reactionPlaceId);
-  };
-  const sendMemo = () => {
-    const content = memoText.trim();
-    if (!reactionPlaceId || content.length === 0) return;
-    addMemo.mutate(
-      { placeId: reactionPlaceId, content },
-      {
-        onError: (e) => {
-          setMemoText(content); // 실패 시 입력 복구(낙관 반영은 훅에서 롤백).
-          Alert.alert('메모 저장 실패', friendlyError(e));
-        },
-      }
-    );
-    // 낙관 반영으로 말풍선이 바로 보이므로 입력창을 닫고 지도를 보여준다.
-    setMemoText('');
-    setMemoPlaceId(null);
-    Keyboard.dismiss();
-  };
+  const placeActions = usePlaceActions(boardId);
+  const deletePlace = useDeletePlace(boardId);
+  const deletingId = deletePlace.isPending ? (deletePlace.variables ?? null) : null;
 
-  // Infinite Geographic Canvas P0: 지리 고정 스티커. 도구 ON 시 지도 탭으로 배치.
-  const objectsQuery = useMapObjects(boardId);
-  const objects = useMemo(() => objectsQuery.data ?? [], [objectsQuery.data]);
-  const addMapObject = useAddMapObject(boardId);
-  const updateMapObject = useUpdateMapObject(boardId);
-  const removeMapObject = useRemoveMapObject(boardId);
-  // 편집(Explore→Peek→Edit): 탭으로 객체 선택, 배경 탭으로 해제. 선택 시 편집 툴바 노출.
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
-  const selectedObject = objects.find((o) => o.id === selectedObjectId) ?? null;
-  const [stickerMode, setStickerMode] = useState(false);
-  const [stickerEmoji, setStickerEmoji] = useState('❤️');
-  // 펜 모드: 지도 위에 손가락으로 선을 그린다(내 잉크 soft 색). 켜 있는 동안 지도 이동은 잠긴다.
-  const [penMode, setPenMode] = useState(false);
-  // 이번 펜 모드에서 저장된 내 선(되돌리기용, 최근 것이 끝).
-  const [drawnIds, setDrawnIds] = useState<string[]>([]);
-  const togglePen = () => {
-    const next = !penMode;
-    setPenMode(next);
-    setDrawnIds([]);
-    if (next) {
-      // 하단 바 상호배타: 펜을 켜면 스티커·반응·편집 선택을 닫는다.
-      Keyboard.dismiss();
-      setStickerMode(false);
-      setReactionPlaceId(null);
-      setSelectedObjectId(null);
-    }
-  };
-  const undoDraw = () => {
-    const last = drawnIds[drawnIds.length - 1];
-    if (!last) return;
-    setDrawnIds((ids) => ids.slice(0, -1));
-    removeMapObject.mutate(last, {
-      onError: (e) => Alert.alert('되돌리기 실패', friendlyError(e)),
-    });
-  };
+  // 작성자 구분(나 · 지금 상대 · 그 밖)과 각자 고른 잉크. 솔로면 partnerLabel = null → 범례·작성자 표기 숨김.
+  const { session, workspace } = useAuth();
+  const myId = session?.user?.id ?? null;
+  const partnerQuery = usePartnerProfile();
+  const partnerId = usePartnerId();
+  const inks = useInks();
+  const partnerLabel =
+    workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
 
-  // 싱글톤 지도 호스트 컨트롤러(앱 수명 동안 WebView/MapLibre 1개). 포커스 시 데이터만 교체.
-  const map = useMapHost();
-  const isFocused = useIsFocused();
-
-  // 새 흔적 표시(0009): 들어올 때와 나갈 때 "봤다"고 기록 → 머무는 동안 생긴 흔적도 본 것으로 친다.
-  const markRead = useMarkBoardRead();
-  useEffect(() => {
-    if (!isFocused) return;
-    markRead(boardId);
-    return () => markRead(boardId);
-  }, [isFocused, boardId, markRead]);
-
-  // 지도 마커 클릭 → 강조 ID만 설정(시트 자동 오픈 안 함, Surface First 우선).
+  // ── 화면 상태 ──────────────────────────────────────────────────────────
+  // 반응 바가 열린 핀 id (null = 닫힘), 지도에서 강조된 핀 id(시트 자동 오픈 안 함, Surface First).
+  const [reactionPlaceId, setReactionPlaceId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  // 모바일 Half Sheet 표시 여부 (기본 닫힘 → 기본 화면은 지도만)
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // 지도 위 검색(모바일, 상단 SearchBar + 하단 SearchSheet). 입력 → 400ms 뒤 제출된 검색어로 카카오 검색.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [searchQuery, resetSearchQuery] = useSubmittedQuery(searchText);
+  const search = usePlaceSearch(searchQuery);
+
+  const tools = useCanvasTools(boardId, () => {
+    Keyboard.dismiss();
+    setReactionPlaceId(null);
+  });
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchText('');
+    resetSearchQuery();
+  };
+  const openSearch = () => {
+    setSheetOpen(false);
+    setSearchOpen(true);
+  };
+  const openSheet = () => {
+    setSearchOpen(false);
+    setSheetOpen(true);
+  };
+  const goAdd = () => navigation.navigate('PlaceAdd', { boardId, title });
+
+  // 핀 확정 모드(검색 결과 · 직접 찍기 · 태블릿 PlaceAdd 에서 돌아온 초안). 펜·스티커가 켜 있으면 지도가 안 움직이므로 끈다.
+  const placingFlow = usePlacing(boardId, route.params.draft, () => {
+    closeSearch();
+    setSheetOpen(false);
+    setReactionPlaceId(null);
+    tools.stopTools();
+  });
+  const { placing } = placingFlow;
 
   // 알림 탭 진입(route.params.focus): 장소면 그 핀, 스티커처럼 장소가 없으면 좌표가 대상.
   // 장소 목록이 아직 없으면 대상이 null 이고, 목록이 도착하면 그때 적용된다.
@@ -232,359 +150,57 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setHighlightedId(focusTarget.placeId);
     setReactionPlaceId(focusTarget.placeId);
   }
-  // 모바일 Half Sheet 표시 여부 (기본 닫힘 → 기본 화면은 지도만)
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const deletePlace = useDeletePlace(boardId);
-  const deletingId = deletePlace.isPending ? (deletePlace.variables ?? null) : null;
 
-  // Surface First Search(P2): 검색을 지도 위에서(상단 SearchBar + 하단 SearchSheet) 수행.
-  // 목록 Sheet 와 상호 배타. searchText(입력) → 400ms 디바운스 → searchQuery(제출).
-  // 카카오 쿼터 절약: 두 글자 미만·조합 중인 한글("성수 ㅎ")에선 제출하지 않고 앞 결과를 그대로 둔다(지우면 비움).
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  // ── 지도 ───────────────────────────────────────────────────────────────
+  const map = useMapHost();
+  const isFocused = useIsFocused();
+
+  // 새 흔적 표시(0009): 들어올 때와 나갈 때 "봤다"고 기록 → 머무는 동안 생긴 흔적도 본 것으로 친다.
+  const markRead = useMarkBoardRead();
   useEffect(() => {
-    const id = setTimeout(() => {
-      const t = searchText.trim();
-      if (t.length === 0 || isSearchable(t)) setSearchQuery(t);
-    }, 400);
-    return () => clearTimeout(id);
-  }, [searchText]);
-  const search = usePlaceSearch(searchQuery);
-  const addPlace = useAddPlace(boardId);
+    if (!isFocused) return;
+    markRead(boardId);
+    return () => markRead(boardId);
+  }, [isFocused, boardId, markRead]);
 
-  // 키보드 높이 추적 → SearchSheet를 키보드 위로 올린다(라이브러리 없이 결정적 제어).
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', (e) =>
-      setKeyboardHeight(e.endCoordinates.height)
-    );
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+  useBoardMapSync(map, boardId, {
+    isFocused,
+    data: { places, reactions, memos, objects: tools.objects },
+    focusTarget,
+    focusNonce: focus?.nonce ?? null,
+    selectedObjectId: tools.selectedObjectId,
+    penMode: tools.penMode,
+  });
 
-  // 상호 배타 전환 헬퍼.
-  const openSearch = () => {
-    setSheetOpen(false);
-    setSearchOpen(true);
-  };
-  const closeSearch = () => {
-    setSearchOpen(false);
-    setSearchText('');
-    setSearchQuery('');
-  };
-  const openSheet = () => {
-    setSearchOpen(false);
-    setSheetOpen(true);
-  };
-  // 핀 확정(ADR-016 하이브리드): 검색 결과(카카오)는 저장하지 않는다. 고르면 공공데이터에서 같은 가게를 찾아
-  // 그 레코드로 시작하고, 없으면 카카오 실시간 핀(장소 ID·검색어만 저장)으로 꽂는다(utils/placeDraft).
-  type Placing = PlacingDraft & { key: number };
-  const [placing, setPlacing] = useState<Placing | null>(null);
-  const [draftName, setDraftName] = useState('');
-  const [draftError, setDraftError] = useState<string | null>(null);
-  // 핀 확정 모드를 연 시각 — 이후에 보고된 지도 가운데만 "사용자가 맞춘 자리"로 쓴다.
-  const placingSinceRef = useRef(0);
-  const matchPlace = useMatchPlace();
-
-  const startPlacing = (next: PlacingDraft, error: string | null = null) => {
-    closeSearch();
-    setSheetOpen(false);
-    setReactionPlaceId(null);
-    // 펜·스티커 모드에선 지도가 안 움직이므로 끈다(핀 자리는 지도를 움직여 맞춘다).
-    setPenMode(false);
-    setStickerMode(false);
-    setDraftName(next.name);
-    setDraftError(error);
-    setPlacing({ ...next, key: Date.now() });
-  };
-  const onSelectResult = (result: PlaceSearchResult) => {
-    if (matchPlace.isPending) return;
-    const query = searchQuery;
-    matchPlace.mutate(result, {
-      onSuccess: (res) => startPlacing(draftFromMatch(result, res, query)),
-      onError: () =>
-        startPlacing(
-          draftFromMatch(result, null, query),
-          '장소 정보를 확인하지 못했어요. 지도에서 직접 찍어 주세요.'
-        ),
-    });
-  };
-  const onDirectPin = () => startPlacing(directDraft(searchText.trim()));
-  // "다른 곳이에요": 가까운 등록 가게가 아니면 카카오 실시간 핀으로, 그것도 안 되면 이름을 비우고 직접 찍기로.
-  const switchToOther = () => {
-    if (!placing) return;
-    setDraftName('');
-    setDraftError(null);
-    const next = placing.live ? liveDraft(placing.live) : directDraft('', placing.kakaoPlaceId);
-    setPlacing({ ...next, key: Date.now() });
-  };
-
-  // 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안 → 1회 핀 확정 모드
-  const draftParam = route.params.draft;
-  const [seenDraftNonce, setSeenDraftNonce] = useState<number | null>(null);
-  if (draftParam && draftParam.nonce !== seenDraftNonce) {
-    const { nonce, ...draft } = draftParam;
-    setSeenDraftNonce(nonce);
-    setPenMode(false);
-    setStickerMode(false);
-    setDraftName(draft.name);
-    setDraftError(null);
-    setPlacing({ ...draft, key: nonce });
-  }
-
-  // 핀 확정 모드 시작: 공공 레코드 자리나 동네 중심으로 지도를 옮긴다(직접 핀은 지금 자리 그대로).
-  useEffect(() => {
-    if (!placing) return;
-    placingSinceRef.current = Date.now();
-    if (placing.camera) {
-      map.focus(boardId, placing.camera.latitude, placing.camera.longitude);
-    }
-  }, [placing, boardId, map]);
-
-  const cancelPlacing = () => {
-    Keyboard.dismiss();
-    setPlacing(null);
-    setDraftError(null);
-  };
-
-  const confirmPlacing = () => {
-    if (!placing) return;
-    // 실시간 핀은 지도 가운데(= 카카오 위치)를 저장하지 않는다 — 동네 중심 자리표시만, 위치는 볼 때마다 카카오에서.
-    if (placing.kind === 'live' && placing.latitude !== null && placing.longitude !== null) {
-      Keyboard.dismiss();
-      addPlace.mutate(
-        {
-          name: draftName.trim() || (placing.liveQuery ?? ''),
-          latitude: placing.latitude,
-          longitude: placing.longitude,
-          provider: 'kakao_live',
-          providerPlaceId: null,
-          kakaoPlaceId: placing.kakaoPlaceId,
-          liveQuery: placing.liveQuery,
-        },
-        {
-          onSuccess: () => setPlacing(null),
-          onError: (e) => setDraftError(friendlyError(e)),
-        }
-      );
-      return;
-    }
-    const center = map.getCenter();
-    const adjusted = center && center.at > placingSinceRef.current ? center : null;
-    const lat = adjusted?.lat ?? placing.latitude ?? center?.lat ?? null;
-    const lng = adjusted?.lng ?? placing.longitude ?? center?.lng ?? null;
-    if (lat === null || lng === null) {
-      setDraftError('지도를 조금 움직여 자리를 맞춘 뒤 다시 눌러 주세요.');
-      return;
-    }
-    // 매칭이 안 된 곳은 동네 중심 그대로 꽂지 않는다 — 사용자가 직접 자리를 맞춘다.
-    if (
-      placing.kind === 'noMatch' &&
-      placing.camera &&
-      metersBetween(lat, lng, placing.camera.latitude, placing.camera.longitude) < 5
-    ) {
-      setDraftError('지도를 움직여 가운데 핀을 그 자리에 맞춰 주세요.');
-      return;
-    }
-    Keyboard.dismiss();
-    addPlace.mutate(
-      {
-        name: draftName.trim(),
-        latitude: lat,
-        longitude: lng,
-        provider: placing.provider,
-        providerPlaceId: placing.providerPlaceId,
-        kakaoPlaceId: placing.kakaoPlaceId,
-        liveQuery: null,
-      },
-      {
-        onSuccess: () => setPlacing(null),
-        onError: (e) => setDraftError(friendlyError(e)),
-      }
-    );
-  };
-
-  // Half Sheet 높이(고정 px). drag-down dismiss 임계값도 이 값을 공유한다.
-  const cardHeight = Math.round(height * 0.5);
-  // 시트 Y 오프셋(0=완전 열림, cardHeight=완전 닫힘). transform은 native driver 사용.
-  // Animated.Value는 안정 인스턴스라 useState lazy-init로 보관(ref 접근 금지 규칙 회피).
-  const [translateY] = useState(() => new Animated.Value(0));
-
-  // dismiss: 아래로 슬라이드 애니메이션 완료 후에만 언마운트(setSheetOpen=false) + 다음 오픈 위해 0 리셋.
-  const dismiss = () => {
-    Animated.timing(translateY, {
-      toValue: cardHeight,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) {
-        setSheetOpen(false);
-        translateY.setValue(0);
-      }
-    });
-  };
-
-  // grabber 전용 PanResponder. start에서 선점하지 않고(탭=일반 탭), 아래로 끄는 드래그에서만 responder 획득.
-  // cardHeight가 회전 등으로 바뀌면 임계값이 함께 갱신되도록 deps에 둔다(별도 ref 불필요).
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
-        onPanResponderMove: (_, g) => translateY.setValue(Math.max(0, g.dy)),
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > cardHeight * 0.25 || g.vy > 0.5) {
-            dismiss();
-          } else {
-            Animated.spring(translateY, {
-              toValue: 0,
-              useNativeDriver: true,
-              bounciness: 0,
-            }).start();
-          }
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 0,
-          }).start();
-        },
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cardHeight]
-  );
-
-  const goAdd = () => navigation.navigate('PlaceAdd', { boardId, title });
-
-  // ── 싱글톤 MapHost 구동 ────────────────────────────────────────────────
-  // 보드 진입(마운트/보드 변경) → 토큰 설정 + 이전 보드 오버레이 clear(잔상 가드). 보드당 1회.
-  useEffect(() => {
-    map.beginBoard(boardId);
-  }, [boardId, map]);
-
-  // 포커스 전환 → 표시/숨김만. 데이터/카메라와 분리 → PlaceAdd 왕복 시 팬/줌 보존.
-  useEffect(() => {
-    if (isFocused) map.show();
-    else map.hide();
-  }, [isFocused, map]);
-
-  // 보드 데이터 → 지도 주입(데이터 변경 시에만, focus 비의존). renderPlaces가 카메라까지 정렬.
-  // 토큰 가드(컨트롤러)가 늦게 도착한 이전 보드 응답을 차단한다.
-  useEffect(() => {
-    map.setData(boardId, { places, reactions, memos, objects });
-  }, [boardId, places, reactions, memos, objects, map]);
-
-  // 알림 탭 진입: 대상 좌표에 카메라 고정(지도 = 외부 시스템이라 effect). nonce 당 1회.
-  const handledFocus = useRef<number | null>(null);
-  useEffect(() => {
-    if (!focus || !focusTarget || handledFocus.current === focus.nonce) return;
-    handledFocus.current = focus.nonce;
-    map.focus(boardId, focusTarget.lat, focusTarget.lng);
-  }, [focus, focusTarget, boardId, map]);
-
-  // 편집 선택(선택 링) 동기화.
-  useEffect(() => {
-    map.setSelectedObjectId(boardId, selectedObjectId);
-  }, [boardId, selectedObjectId, map]);
-
-  // 펜 모드 → 지도 제스처 잠금. 다른 화면으로 가면(포커스 해제) 지도를 풀어 둔다.
-  useEffect(() => {
-    map.setPenMode(boardId, penMode && isFocused);
-  }, [boardId, penMode, isFocused, map]);
-
-  // WebView 메시지 콜백을 현재 보드로 등록. stickerMode/Emoji 최신값 반영 위해 변경 시 재등록.
+  // WebView 메시지 콜백을 현재 보드로 등록. 스티커 모드·이모지 최신값 반영 위해 변경 시 재등록.
   useEffect(() => {
     map.setCallbacks(boardId, {
       onMarkerPress: (id) => {
-        // 하단 바 상호배타: 핀 반응 표시 시 스티커 모드/편집 선택 해제.
-        setStickerMode(false);
-        setSelectedObjectId(null);
+        tools.closeForPlace();
         setHighlightedId(id);
         setReactionPlaceId(id);
       },
       onObjectPress: (id) => {
-        // 하단 바 상호배타: 편집 선택 시 반응/스티커 모드 해제.
-        setStickerMode(false);
         setReactionPlaceId(null);
         setHighlightedId(null);
-        setSelectedObjectId(id);
+        tools.selectObject(id);
       },
-      onObjectMove: (id, lat, lng) =>
-        updateMapObject.mutate(
-          { id, patch: { latitude: lat, longitude: lng } },
-          {
-            onError: (e) => Alert.alert('이동 저장 실패', friendlyError(e)),
-          }
-        ),
+      onObjectMove: tools.moveObject,
       onMapPress: (point) => {
-        // 스티커 모드 + 좌표 있음 → 탭 위치에 지리 고정 스티커 생성.
-        if (stickerMode && point) {
-          addMapObject.mutate(
-            {
-              type: 'sticker',
-              latitude: point.lat,
-              longitude: point.lng,
-              zoomLevel: point.level,
-              payload: { emoji: stickerEmoji },
-            },
-            {
-              onError: (e) => Alert.alert('스티커 저장 실패', friendlyError(e)),
-            }
-          );
+        if (tools.stickerMode && point) {
+          tools.placeSticker(point);
           return;
         }
-        // 기본: 배경 탭 → 팔레트/강조/선택 해제(메모 입력 중이면 키보드도 내림).
+        // 기본: 배경 탭 → 바·강조·선택 해제(메모 입력 중이면 키보드도 내림).
         Keyboard.dismiss();
         setReactionPlaceId(null);
         setHighlightedId(null);
-        setSelectedObjectId(null);
+        tools.selectObject(null);
       },
-      // 펜 한 획 → map_objects(draw) 저장. 앵커 = 첫 점, 굵기 스케일 기준 = 그린 줌(payload.z).
-      onDrawEnd: ({ points, zoom, width }) => {
-        addMapObject.mutate(
-          {
-            type: 'draw',
-            latitude: points[0][1],
-            longitude: points[0][0],
-            zoomLevel: Math.round(zoom),
-            payload: { points, z: zoom, w: width },
-          },
-          {
-            onSuccess: (saved) => setDrawnIds((ids) => [...ids, saved.id]),
-            onError: (e) => Alert.alert('그림 저장 실패', friendlyError(e)),
-          }
-        );
-      },
+      onDrawEnd: tools.saveStroke,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, stickerMode, stickerEmoji, map]);
-  // ───────────────────────────────────────────────────────────────────────
-
-  // 선택 객체 크기 조정(payload.scale 배수). 거대/화면밖 객체도 항상 동작(툴바 방식).
-  const resizeSelected = (factor: number) => {
-    if (!selectedObject) return;
-    const prev = (selectedObject.payload?.scale as number) ?? 1;
-    updateMapObject.mutate(
-      {
-        id: selectedObject.id,
-        patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } },
-      },
-      { onError: (e) => Alert.alert('크기 저장 실패', friendlyError(e)) }
-    );
-  };
-  // 선택 객체 삭제.
-  const deleteSelected = () => {
-    if (!selectedObject) return;
-    removeMapObject.mutate(selectedObject.id, {
-      onSuccess: () => setSelectedObjectId(null),
-      onError: (e) => Alert.alert('삭제 실패', friendlyError(e)),
-    });
-  };
+  }, [boardId, tools.stickerMode, tools.stickerEmoji, map]);
 
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
@@ -594,11 +210,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     ]);
   };
 
-  // 지도 영역(지도 + 로딩/에러 + 상단 Overlay + 모바일 FAB)
+  const reactionPlace = reactionPlaceId
+    ? listPlaces.find((p) => p.id === reactionPlaceId)
+    : undefined;
+  const mobileSearching = !isTablet && searchOpen;
+
+  // 지도 영역(로딩/에러 + 상단 Overlay + 모바일 FAB + 아래쪽 바들). 투명 + box-none 으로 지도 터치를 통과시킨다.
   const mapArea = (
     <View style={styles.mapArea} pointerEvents="box-none">
-      {/* 지도는 네비게이터 뒤 싱글톤 MapHost가 렌더한다. 여기는 투명 + box-none 으로 터치를 통과시키고,
-          데이터/콜백/카메라는 위쪽 effect에서 컨트롤러로 주입한다. 오류 시에만 지도를 가리는 오버레이. */}
       {placesQuery.isError ? (
         <View style={[StyleSheet.absoluteFill, styles.errorFill]}>
           <Text style={styles.errorText}>장소를 불러오지 못했어요.</Text>
@@ -612,350 +231,96 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* Top Overlay: 검색 활성 시 SearchBar(전체폭), 아니면 Back + (표시용) MapSearchBar.
-          모바일 검색 진입은 PlaceAdd 풀스크린 대신 지도 위 검색(openSearch). 태블릿은 기존 PlaceAdd 유지. */}
-      <View
-        style={[styles.topOverlay, { paddingTop: insets.top + spacing.xs }]}
-        pointerEvents="box-none"
-      >
-        {!isTablet && searchOpen ? (
-          <SearchBar value={searchText} onChangeText={setSearchText} onClose={closeSearch} />
-        ) : (
-          <>
-            <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
-              <Text style={styles.backIcon}>‹</Text>
-            </Pressable>
-            <View style={styles.searchWrap}>
-              <MapSearchBar onPress={isTablet ? goAdd : openSearch} />
-            </View>
-          </>
-        )}
-      </View>
+      {/* 모바일 검색은 지도 위에서(openSearch), 태블릿은 PlaceAdd 화면. */}
+      <BoardTopOverlay
+        topInset={insets.top}
+        search={
+          mobileSearching
+            ? { text: searchText, onChangeText: setSearchText, onClose: closeSearch }
+            : null
+        }
+        onBack={() => navigation.goBack()}
+        onPressSearch={isTablet ? goAdd : openSearch}
+        legend={
+          partnerLabel !== null
+            ? { meColor: inks.me.solid, partnerColor: inks.partner.solid, partnerLabel }
+            : null
+        }
+      />
 
-      {/* 작성자 범례(커플일 때만): 핀·반응·스티커 색 = 각자의 잉크. 상단 바(44) 바로 아래. */}
-      {partnerLabel !== null && !searchOpen ? (
-        <View
-          style={[styles.legend, { top: insets.top + spacing.xs + 44 + spacing.xs }]}
-          pointerEvents="none"
-        >
-          <View style={[styles.legendDot, { backgroundColor: inks.me.solid }]} />
-          <Text style={styles.legendText}>나</Text>
-          <View
-            style={[styles.legendDot, styles.legendGap, { backgroundColor: inks.partner.solid }]}
-          />
-          <Text style={styles.legendText} numberOfLines={1}>
-            {partnerLabel}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* 모바일 전용 Floating 버튼(목록). 시트가 열려 있으면 숨김.
-          향후 Floating Actions 그룹(목록/추가/현재위치)으로 확장 가능한 컨테이너 구조. */}
       {!isTablet && !sheetOpen && !searchOpen && !placing ? (
-        <View
-          style={[styles.fabGroup, { bottom: insets.bottom + spacing.lg }]}
-          pointerEvents="box-none"
-        >
-          {/* 펜: ON 시 지도 이동이 잠기고 손가락으로 선을 그린다(내 잉크 soft 색). */}
-          <Pressable
-            style={[styles.fab, penMode && styles.fabActive]}
-            onPress={togglePen}
-            accessibilityRole="button"
-            accessibilityLabel="펜으로 그리기"
-            accessibilityState={{ selected: penMode }}
-          >
-            <Text style={[styles.fabIcon, penMode && styles.fabIconActive]}>✎</Text>
-          </Pressable>
-          {/* 스티커 도구(P0): ON 시 지도 탭으로 지리 고정 스티커 배치. */}
-          <Pressable
-            style={[styles.fab, stickerMode && styles.fabActive]}
-            onPress={() =>
-              setStickerMode((v) => {
-                const next = !v;
-                // 하단 바 상호배타: 스티커 모드 켤 때 펜/반응/편집 해제.
-                if (next) {
-                  setPenMode(false);
-                  setReactionPlaceId(null);
-                  setSelectedObjectId(null);
-                }
-                return next;
-              })
-            }
-            accessibilityRole="button"
-            accessibilityLabel="스티커 모드"
-          >
-            <Text style={styles.fabIcon}>✨</Text>
-          </Pressable>
-          {/* Recenter(Utility): 전체 장소 fitBounds. 중립 스타일, 목록 위에 위치(ADR-010 빈도순). */}
-          <Pressable
-            style={styles.fab}
-            onPress={() => map.recenter()}
-            accessibilityRole="button"
-            accessibilityLabel="전체 장소 보기"
-          >
-            <Text style={styles.fabIcon}>⊙</Text>
-          </Pressable>
-          <Pressable
-            style={styles.fab}
-            onPress={openSheet}
-            accessibilityRole="button"
-            accessibilityLabel={`목록 ${listPlaces.length}개 열기`}
-          >
-            <Text style={styles.fabIcon}>☰</Text>
-            <Text style={styles.fabCount}>{listPlaces.length}</Text>
-          </Pressable>
-        </View>
+        <BoardFabGroup
+          bottom={barBottom}
+          penMode={tools.penMode}
+          stickerMode={tools.stickerMode}
+          count={listPlaces.length}
+          onTogglePen={tools.togglePen}
+          onToggleSticker={tools.toggleSticker}
+          onRecenter={() => map.recenter()}
+          onOpenList={openSheet}
+        />
       ) : null}
 
-      {/* 반응 팔레트(핀 탭 시): 하단 중앙 가로 바. (i) 좌표변환 불필요 — 어느 핀인지는 핀 강조로 표시.
-          💬 로 한 줄 메모 입력창(+ 이 핀의 최근 대화)을 바 위에 연다. 입력 중에는 키보드 위로 올린다. */}
       {reactionPlaceId ? (
-        <View
-          style={[
-            styles.reactionBar,
-            {
-              bottom:
-                memoOpen && keyboardHeight > 0
-                  ? keyboardHeight + spacing.sm
-                  : insets.bottom + spacing.lg,
-            },
-          ]}
-          pointerEvents="box-none"
-        >
-          {memoOpen ? (
-            <View style={styles.memoCard}>
-              {placeMemos.map((m) => {
-                const isTemp = m.id.startsWith('temp-');
-                const mine = isTemp || m.user_id === myId;
-                const who = mine ? 'me' : whoOf(m.user_id, myId, partnerId);
-                return (
-                  <View key={m.id} style={styles.memoRow}>
-                    <View style={[styles.legendDot, { backgroundColor: inks[who].solid }]} />
-                    <Text style={styles.memoRowText} numberOfLines={2}>
-                      {m.content}
-                    </Text>
-                    {mine && !isTemp ? (
-                      <Pressable
-                        onPress={() =>
-                          removeMemo.mutate(m.id, {
-                            onError: (e) => Alert.alert('메모 삭제 실패', friendlyError(e)),
-                          })
-                        }
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel="메모 삭제"
-                      >
-                        <Text style={styles.memoDelete}>✕</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                );
-              })}
-              <View style={styles.memoInputRow}>
-                <TextInput
-                  style={styles.memoInput}
-                  value={memoText}
-                  onChangeText={setMemoText}
-                  placeholder="한 줄 남기기 (예: 여기 웨이팅 있대)"
-                  placeholderTextColor={colors.textMuted}
-                  maxLength={MEMO_MAX_LENGTH}
-                  autoFocus
-                  returnKeyType="send"
-                  onSubmitEditing={sendMemo}
-                />
-                <Pressable
-                  style={[styles.memoSend, !memoText.trim() && styles.memoSendDisabled]}
-                  onPress={sendMemo}
-                  disabled={!memoText.trim()}
-                  accessibilityRole="button"
-                  accessibilityLabel="메모 보내기"
-                >
-                  <Text style={styles.memoSendText}>보내기</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-          <View style={styles.reactionBarInner}>
-            {REACTION_ORDER.map((type) => (
-              <Pressable
-                key={type}
-                style={[
-                  styles.reactionEmojiBtn,
-                  myReactionTypes.has(type) && [styles.reactionEmojiMine, mineInkStyle],
-                ]}
-                onPress={() => {
-                  const onError = (e: unknown) => Alert.alert('반응 저장 실패', friendlyError(e));
-                  // 토글: 내가 이미 누른 반응이면 제거, 아니면 추가.
-                  if (myReactionTypes.has(type)) {
-                    removeReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
-                  } else {
-                    addReaction.mutate({ placeId: reactionPlaceId, type }, { onError });
-                  }
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`반응 ${type}`}
-                accessibilityState={{ selected: myReactionTypes.has(type) }}
-              >
-                <Text style={styles.reactionEmoji}>{REACTION_EMOJI[type]}</Text>
-              </Pressable>
-            ))}
-            {/* 한 줄 메모 입력 토글(열림 = 내 색 강조). */}
-            <Pressable
-              style={[
-                styles.reactionEmojiBtn,
-                memoOpen && [styles.reactionEmojiMine, mineInkStyle],
-              ]}
-              onPress={toggleMemo}
-              accessibilityRole="button"
-              accessibilityLabel="한 줄 메모"
-              accessibilityState={{ selected: memoOpen }}
-            >
-              <Text style={styles.reactionEmoji}>💬</Text>
-            </Pressable>
-            {/* 카카오로 찾아 꽂은 핀: 영업시간·리뷰는 카카오맵에서(카카오에서 저장한 건 장소 ID 뿐) */}
-            {reactionKakaoId ? (
-              <Pressable
-                style={styles.kakaoLinkBtn}
-                onPress={() => Linking.openURL(kakaoPlaceUrl(reactionKakaoId)).catch(() => {})}
-                accessibilityRole="link"
-                accessibilityLabel="카카오맵에서 보기"
-              >
-                <Text style={styles.kakaoLinkText}>카카오맵</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={styles.reactionClose}
-              onPress={() => {
-                Keyboard.dismiss();
-                setReactionPlaceId(null);
-              }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="반응 닫기"
-            >
-              <Text style={styles.reactionCloseText}>✕</Text>
-            </Pressable>
-          </View>
-        </View>
+        <PlaceActionBar
+          key={reactionPlaceId}
+          placeId={reactionPlaceId}
+          kakaoPlaceId={reactionPlace ? kakaoPlaceIdOf(reactionPlace) : null}
+          reactions={reactions}
+          memos={memos}
+          actions={placeActions}
+          myId={myId}
+          partnerId={partnerId}
+          inks={inks}
+          keyboardHeight={keyboardHeight}
+          restingBottom={barBottom}
+          onClose={() => setReactionPlaceId(null)}
+        />
       ) : null}
 
-      {/* 스티커 도구 바(P0): 이모지 선택 + 종료. */}
-      {stickerMode ? (
-        <View
-          style={[styles.stickerBar, { bottom: insets.bottom + spacing.lg }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.stickerBarInner}>
-            {STICKER_EMOJIS.map((emoji) => (
-              <Pressable
-                key={emoji}
-                style={[
-                  styles.stickerEmojiBtn,
-                  stickerEmoji === emoji && styles.stickerEmojiSelected,
-                ]}
-                onPress={() => setStickerEmoji(emoji)}
-                accessibilityRole="button"
-                accessibilityLabel={`스티커 ${emoji}`}
-              >
-                <Text style={styles.stickerEmoji}>{emoji}</Text>
-              </Pressable>
-            ))}
-            <Pressable
-              style={styles.reactionClose}
-              onPress={() => setStickerMode(false)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="스티커 모드 종료"
-            >
-              <Text style={styles.reactionCloseText}>✕</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.stickerHint}>지도를 탭해 {stickerEmoji} 스티커를 놓으세요</Text>
-        </View>
+      {tools.stickerMode ? (
+        <StickerBar
+          bottom={barBottom}
+          emoji={tools.stickerEmoji}
+          onPick={tools.setStickerEmoji}
+          onClose={tools.toggleSticker}
+        />
       ) : null}
 
-      {/* 펜 바: 내 잉크 표시 + 되돌리기(이번 펜 모드에서 그린 선) + 종료. */}
-      {penMode ? (
-        <View
-          style={[styles.stickerBar, { bottom: insets.bottom + spacing.lg }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.stickerBarInner}>
-            <View
-              style={[styles.penInk, { backgroundColor: inks.me.soft, borderColor: inks.me.solid }]}
-            />
-            <Pressable
-              style={[styles.editBtn, drawnIds.length === 0 && styles.penUndoEmpty]}
-              onPress={undoDraw}
-              disabled={drawnIds.length === 0}
-              accessibilityRole="button"
-              accessibilityLabel="마지막 선 지우기"
-            >
-              <Text style={styles.editIcon}>↶</Text>
-            </Pressable>
-            <Pressable
-              style={styles.reactionClose}
-              onPress={togglePen}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="펜 끄기"
-            >
-              <Text style={styles.reactionCloseText}>✕</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.stickerHint}>손가락으로 그려요 · 지도를 움직이려면 펜을 꺼요</Text>
-        </View>
+      {tools.penMode ? (
+        <PenBar
+          bottom={barBottom}
+          ink={inks.me}
+          canUndo={tools.canUndo}
+          onUndo={tools.undoDraw}
+          onClose={tools.togglePen}
+        />
       ) : null}
 
-      {/* 편집 툴바(객체 선택 시): 크기 −/＋ · 삭제. 이동은 지도에서 객체를 드래그. */}
-      {selectedObject ? (
-        <View
-          style={[styles.editBar, { bottom: insets.bottom + spacing.lg }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.editBarInner}>
-            <Pressable
-              style={styles.editBtn}
-              onPress={() => resizeSelected(1 / 1.25)}
-              accessibilityRole="button"
-              accessibilityLabel="크기 줄이기"
-            >
-              <Text style={styles.editIcon}>➖</Text>
-            </Pressable>
-            <Pressable
-              style={styles.editBtn}
-              onPress={() => resizeSelected(1.25)}
-              accessibilityRole="button"
-              accessibilityLabel="크기 키우기"
-            >
-              <Text style={styles.editIcon}>➕</Text>
-            </Pressable>
-            <Pressable
-              style={styles.editBtn}
-              onPress={deleteSelected}
-              accessibilityRole="button"
-              accessibilityLabel="삭제"
-            >
-              <Text style={styles.editIcon}>🗑</Text>
-            </Pressable>
-            <Pressable
-              style={styles.reactionClose}
-              onPress={() => setSelectedObjectId(null)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="선택 해제"
-            >
-              <Text style={styles.reactionCloseText}>✕</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.stickerHint}>
-            {selectedObject.type === 'draw'
-              ? '굵기 조정은 자동 저장'
-              : '드래그로 이동 · 크기 조정은 자동 저장'}
-          </Text>
-        </View>
+      {tools.selectedObject ? (
+        <ObjectEditBar
+          bottom={barBottom}
+          object={tools.selectedObject}
+          onResize={tools.resizeSelected}
+          onDelete={tools.deleteSelected}
+          onClose={() => tools.selectObject(null)}
+        />
       ) : null}
     </View>
+  );
+
+  const list = (onAdd: () => void, onClose?: () => void) => (
+    <CanvasObjectList
+      places={listPlaces}
+      myId={myId}
+      partnerId={partnerId}
+      partnerLabel={partnerLabel}
+      highlightedId={highlightedId}
+      deletingId={deletingId}
+      onAdd={onAdd}
+      onDelete={confirmDelete}
+      onClose={onClose}
+    />
   );
 
   // 태블릿: 좌 지도 + 우 Side Panel(목록 상시)
@@ -965,61 +330,27 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         <View style={styles.tabletRow} pointerEvents="box-none">
           {mapArea}
           <View style={[styles.sidePanel, { paddingTop: insets.top + spacing.sm }]}>
-            <CanvasObjectList
-              places={listPlaces}
-              myId={myId}
-              partnerId={partnerId}
-              partnerLabel={partnerLabel}
-              highlightedId={highlightedId}
-              deletingId={deletingId}
-              onAdd={goAdd}
-              onDelete={confirmDelete}
-            />
+            {list(goAdd)}
           </View>
         </View>
       </View>
     );
   }
 
-  // 모바일: 지도 + (요청 시) Half Sheet
+  // 모바일: 지도 + (요청 시) Half Sheet / 핀 확정 카드 / 검색 결과 Sheet
   return (
     <View style={styles.surface} pointerEvents="box-none">
       {mapArea}
 
-      {/* Half Sheet: backdrop 없음 → 시트 미점유 영역의 지도는 계속 보이고 조작 가능(Surface First).
-          컨테이너 box-none + sheetCard만 터치 수신 → 상단 지도 팬/줌/마커탭 통과.
-          검색 Sheet 와 상호 배타(searchOpen 시 미표시). */}
       {sheetOpen && !searchOpen ? (
-        <View style={[styles.sheet, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
-          <Animated.View
-            style={[styles.sheetCard, { height: cardHeight, transform: [{ translateY }] }]}
-          >
-            {/* 드래그(아래로 끌어 닫기)는 외부 View가 move 시 responder 획득.
-                탭(닫기)은 내부 Pressable onPress가 처리 → 탭/드래그 자연 분기. */}
-            <View {...panResponder.panHandlers}>
-              <Pressable
-                style={styles.grabberHit}
-                onPress={dismiss}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="목록 닫기"
-              >
-                <View style={styles.grabber} />
-              </Pressable>
-            </View>
-            <CanvasObjectList
-              places={listPlaces}
-              myId={myId}
-              partnerId={partnerId}
-              partnerLabel={partnerLabel}
-              highlightedId={highlightedId}
-              deletingId={deletingId}
-              onAdd={openSearch}
-              onDelete={confirmDelete}
-              onClose={dismiss}
-            />
-          </Animated.View>
-        </View>
+        <HalfSheet
+          height={Math.round(height * 0.5)}
+          bottomInset={insets.bottom}
+          onDismissed={() => setSheetOpen(false)}
+          closeLabel="목록 닫기"
+        >
+          {(dismiss) => list(openSearch, dismiss)}
+        </HalfSheet>
       ) : null}
 
       {/* 핀 확정 모드: 가운데 고정 핀 + 이름 확인 카드(키보드 위로) */}
@@ -1028,13 +359,13 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           <CenterPin color={inks.me.solid} />
           <PlaceDraftCard
             kind={placing.kind}
-            name={draftName}
-            onChangeName={setDraftName}
-            saving={addPlace.isPending}
-            error={draftError}
-            onConfirm={confirmPlacing}
-            onCancel={cancelPlacing}
-            onSwitchOther={switchToOther}
+            name={placingFlow.draftName}
+            onChangeName={placingFlow.setDraftName}
+            saving={placingFlow.saving}
+            error={placingFlow.draftError}
+            onConfirm={placingFlow.confirm}
+            onCancel={placingFlow.cancel}
+            onSwitchOther={placingFlow.switchToOther}
             canSwitchToLive={!!placing.live}
             liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
             lift={keyboardHeight}
@@ -1055,9 +386,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             isFetching={search.isFetching}
             isError={search.isError}
             results={search.data ?? []}
-            onSelect={onSelectResult}
-            selecting={matchPlace.isPending}
-            onDirectPin={onDirectPin}
+            onSelect={(result) => placingFlow.selectResult(result, searchQuery)}
+            selecting={placingFlow.selecting}
+            onDirectPin={() => placingFlow.startDirect(searchText.trim())}
             assistEnabled={KAKAO_SEARCH_ASSIST}
             maxHeight={Math.max(200, height - keyboardHeight - insets.top - 80)}
             bottomInset={keyboardHeight > 0 ? spacing.sm : insets.bottom}
@@ -1097,312 +428,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Top Overlay
-  topOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  backIcon: { fontSize: 28, lineHeight: 30, color: colors.textStrong },
-  searchWrap: {
-    flex: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-
-  // 작성자 범례(상단 바 아래 좌측 작은 칩).
-  legend: {
-    position: 'absolute',
-    left: spacing.md,
-    maxWidth: 220,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.xs },
-  legendGap: { marginLeft: spacing.sm },
-  legendText: { ...typography.caption, color: colors.textStrong, flexShrink: 1 },
-
-  // Floating Actions (현재 목록 버튼 1개, 확장 대비 그룹 컨테이너)
-  fabGroup: {
-    position: 'absolute',
-    right: spacing.lg,
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-  },
-  // A-1+A-3: 중립색(흰 배경+보더) + 44 축소 + 약한 그림자. 색은 지도 위 잉크(사람) 전용으로 보존.
-  fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
-    height: 44,
-    borderRadius: 22,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  fabIcon: { fontSize: 16, color: colors.textStrong, marginRight: spacing.xs },
-  fabIconActive: { color: colors.onPrimary },
-  fabCount: { ...typography.label, color: colors.textStrong, fontWeight: '700' },
-
-  // Half Sheet (모바일, on-demand) — backdrop 없음(지도 가리지 않음)
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: spacing.md,
-  },
   // 검색 Sheet 래퍼: 화면 전체를 덮되 box-none(상단 지도 통과), 카드는 하단 정렬.
   searchSheetWrap: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
-    top: 0,
     bottom: 0,
     justifyContent: 'flex-end',
     paddingHorizontal: spacing.md,
-  },
-  sheetCard: {
-    // 높이는 인라인에서 Math.round(windowHeight * 0.5)로 확정 px 주입(퍼센트-of-불확정 회피).
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.card,
-    borderTopRightRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 4,
-  },
-  // grabber 탭/드래그 hit area. 시각 막대(36×4)만으로는 너무 작아 드래그가 거의 인식되지 않으므로
-  // 시트 상단 48px를 통째로 hit area로 확보(탭=닫기, 아래 드래그=dismiss 공용). 외부 panHandlers View가 감싼다.
-  grabberHit: {
-    alignSelf: 'stretch',
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  grabber: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-  },
-
-  // 반응 팔레트(핀 탭 시 하단 중앙). box-none 컨테이너 + 가운데 바만 터치 수신.
-  reactionBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  reactionBarInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  reactionEmojiBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // 내가 이미 누른 반응: 내 잉크 테두리 + 잉크 tint 배경(색은 mineInkStyle 로 각자 잉크).
-  reactionEmojiMine: {
-    borderRadius: radius.card,
-    borderWidth: 2,
-  },
-  reactionEmoji: { fontSize: 24 },
-  kakaoLinkBtn: {
-    height: 44,
-    paddingHorizontal: spacing.sm,
-    justifyContent: 'center',
-  },
-  kakaoLinkText: { ...typography.caption, fontWeight: '600', color: colors.textStrong },
-  reactionClose: {
-    width: 32,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reactionCloseText: { ...typography.body, color: colors.textMuted },
-
-  // 한 줄 메모 입력 카드(핀 바 위). 최근 대화 + 입력 줄. 반응 바와 같은 톤.
-  memoCard: {
-    alignSelf: 'stretch',
-    maxWidth: 480,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  memoRow: { flexDirection: 'row', alignItems: 'center' },
-  memoRowText: { ...typography.label, color: colors.textStrong, flex: 1 },
-  memoDelete: { ...typography.caption, color: colors.textMuted, paddingHorizontal: spacing.xs },
-  memoInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  memoInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.textStrong,
-    height: 40,
-    paddingVertical: 0,
-  },
-  memoSend: {
-    height: 32,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.button,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memoSendDisabled: { opacity: 0.4 },
-  memoSendText: { ...typography.label, color: colors.surface, fontWeight: '700' },
-
-  // 스티커 도구(P0) — 반응 팔레트와 구분되는 별도 바.
-  fabActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  stickerBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  stickerBarInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  stickerEmojiBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.card,
-  },
-  stickerEmojiSelected: {
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  stickerEmoji: { fontSize: 22 },
-
-  // 펜 바: 내 잉크 견본(soft 채움 + solid 테두리), 되돌릴 선이 없으면 흐리게.
-  penInk: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    marginHorizontal: spacing.xs,
-  },
-  penUndoEmpty: { opacity: 0.3 },
-
-  // 편집 툴바(객체 선택 시) — 반응/스티커 바와 동일 톤.
-  editBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  editBarInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  editBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  editIcon: { fontSize: 20 },
-  stickerHint: {
-    ...typography.caption,
-    color: colors.textStrong,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.card,
-    overflow: 'hidden',
   },
 });
