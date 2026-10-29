@@ -52,6 +52,7 @@ import type { Place, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
 import { kakaoPlaceIdOf, kakaoPlaceUrl } from '../utils/kakaoMap';
 import { applyLivePlaces } from '../utils/livePlaces';
+import { isSearchable } from '../utils/searchText';
 import {
   directDraft,
   draftFromMatch,
@@ -85,8 +86,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // places = 지도용(불러온 실시간 핀만), listPlaces = 목록용(전부, 못 찾은 핀은 알림 붙임).
   const livePlaces = useLivePlaces(storedPlaces);
   const { mapPlaces: places, listPlaces } = useMemo(
-    () => applyLivePlaces(storedPlaces, livePlaces.data),
-    [storedPlaces, livePlaces.data]
+    () => applyLivePlaces(storedPlaces, livePlaces),
+    [storedPlaces, livePlaces]
   );
 
   // 장소 반응(banter). 핀 위 이모지 배지로 표시. 재진입/앱 복귀 시 상대 반응 반영.
@@ -237,12 +238,16 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const deletingId = deletePlace.isPending ? (deletePlace.variables ?? null) : null;
 
   // Surface First Search(P2): 검색을 지도 위에서(상단 SearchBar + 하단 SearchSheet) 수행.
-  // 목록 Sheet 와 상호 배타. searchText(입력) → 300ms 디바운스 → searchQuery(제출).
+  // 목록 Sheet 와 상호 배타. searchText(입력) → 400ms 디바운스 → searchQuery(제출).
+  // 카카오 쿼터 절약: 두 글자 미만·조합 중인 한글("성수 ㅎ")에선 제출하지 않고 앞 결과를 그대로 둔다(지우면 비움).
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   useEffect(() => {
-    const id = setTimeout(() => setSearchQuery(searchText.trim()), 300);
+    const id = setTimeout(() => {
+      const t = searchText.trim();
+      if (t.length === 0 || isSearchable(t)) setSearchQuery(t);
+    }, 400);
     return () => clearTimeout(id);
   }, [searchText]);
   const search = usePlaceSearch(searchQuery);

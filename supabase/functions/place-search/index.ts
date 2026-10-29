@@ -8,8 +8,9 @@
 // 요청 2 — 매칭:  POST { action: 'match', name, latitude, longitude, jibunAddress? }  (사용자가 고른 결과 1건)
 //   응답: { match: { poiId, name, branch, category, address, latitude, longitude, confidence } | null,
 //           dong: { name, latitude, longitude } | null }   // dong = 우리 데이터의 동네 중심(실시간 핀의 자리표시 좌표)
-// 요청 3 — 실시간 핀 표시:  POST { action: 'resolve', items: { id: 카카오 장소 ID, query: 사용자가 친 검색어 }[] } (최대 50)
-//   응답: { places: { [id]: { name, address, latitude, longitude } }, missing: string[], failed: string[] }
+// 요청 3 — 실시간 핀 표시:  POST { action: 'resolve', items: { id: 카카오 장소 ID, query: 사용자가 친 검색어, near?: { lat, lng } }[] } (최대 50)
+//   응답: { places: { [id]: { name, address, latitude, longitude } }, missing: string[], failed: string[], kakaoCalls: number }
+//   쿼터 절약: 같은 검색어 핀은 카카오 1번으로 같이 찾고, 1쪽에 없을 때만 near(핀의 동네 중심) 반경 2km → 2·3쪽.
 //   그 검색어로 카카오를 다시 찾아 같은 ID 의 지금 좌표·이름을 돌려준다 — 화면 표시 전용, 저장하지 않는다(데브톡 151294).
 //   missing = 카카오에서 더는 안 나옴(폐업·이전 등), failed = 카카오 오류(다음에 다시).
 
@@ -18,6 +19,8 @@ import { parseDong, pickMatch, type PoiCandidate } from './match.ts';
 const KAKAO_KEYWORD = 'https://dapi.kakao.com/v2/local/search/keyword.json';
 const RESOLVE_MAX_ITEMS = 50;
 const RESOLVE_MAX_PAGES = 3; // 카카오 키워드 검색은 15건 × 3쪽(45건)까지
+const RESOLVE_NEAR_PAGES = 2;
+const RESOLVE_NEAR_RADIUS_M = 2000; // 동네 중심 → 실제 가게까지 여유
 const RESOLVE_CONCURRENCY = 5;
 
 const corsHeaders = {
@@ -138,9 +141,10 @@ async function match(body: Record<string, unknown>): Promise<Response> {
   return json({ match: null, dong: dongOut });
 }
 
-interface ResolveItem {
-  id: string;
+interface ResolveGroup {
   query: string;
+  ids: string[];
+  near: Map<string, { lat: number; lng: number }>; // 핀 ID → 저장된 동네 중심(우리 데이터)
 }
 
 async function resolve(body: Record<string, unknown>): Promise<Response> {
@@ -149,17 +153,26 @@ async function resolve(body: Record<string, unknown>): Promise<Response> {
     return json({ error: 'server not configured' }, 500);
   }
 
+  // 같은 검색어로 꽂은 핀들은 한 번의 카카오 호출로 같이 찾는다(실측: 핀 17개 → 호출 6번).
+  const groups = new Map<string, ResolveGroup>();
   const seen = new Set<string>();
-  const items: ResolveItem[] = [];
   for (const raw of Array.isArray(body.items) ? body.items : []) {
-    const id = (raw as ResolveItem)?.id;
-    const query = (raw as ResolveItem)?.query;
+    const item = raw as { id?: unknown; query?: unknown; near?: { lat?: unknown; lng?: unknown } };
+    const id = item?.id;
+    const query = item?.query;
     if (typeof id !== 'string' || !/^[0-9]{1,20}$/.test(id)) continue;
     if (typeof query !== 'string' || !query.trim() || query.length > 100) continue;
     if (seen.has(id)) continue;
     seen.add(id);
-    items.push({ id, query: query.trim() });
-    if (items.length >= RESOLVE_MAX_ITEMS) break;
+    const lat = Number(item.near?.lat);
+    const lng = Number(item.near?.lng);
+    const near = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    const q = query.trim();
+    const group: ResolveGroup = groups.get(q) ?? { query: q, ids: [], near: new Map() };
+    group.ids.push(id);
+    if (near) group.near.set(id, near);
+    groups.set(q, group);
+    if (seen.size >= RESOLVE_MAX_ITEMS) break;
   }
 
   const places: Record<
@@ -168,46 +181,76 @@ async function resolve(body: Record<string, unknown>): Promise<Response> {
   > = {};
   const missing: string[] = [];
   const failed: string[] = [];
+  let kakaoCalls = 0;
 
-  const one = async ({ id, query }: ResolveItem) => {
-    for (let page = 1; page <= RESOLVE_MAX_PAGES; page++) {
-      const res = await fetch(
-        `${KAKAO_KEYWORD}?query=${encodeURIComponent(query)}&size=15&page=${page}`,
-        {
-          headers: { Authorization: `KakaoAK ${restApiKey}` },
-        }
-      );
-      if (!res.ok) {
-        failed.push(id);
-        return;
-      }
-      const data = await res.json();
-      const documents: KakaoLocalDocument[] = data.documents ?? [];
-      const doc = documents.find((x) => x.id === id);
-      if (doc) {
-        places[id] = {
-          name: doc.place_name ?? '',
-          address: doc.road_address_name || doc.address_name || '',
-          latitude: Number(doc.y),
-          longitude: Number(doc.x),
-        };
-        return;
-      }
-      if (data.meta?.is_end) break;
+  const page = async (query: string, near: { lat: number; lng: number } | null, p: number) => {
+    kakaoCalls++;
+    const params = new URLSearchParams({ query, size: '15', page: String(p) });
+    if (near) {
+      params.set('x', String(near.lng));
+      params.set('y', String(near.lat));
+      params.set('radius', String(RESOLVE_NEAR_RADIUS_M));
     }
-    missing.push(id);
+    const res = await fetch(`${KAKAO_KEYWORD}?${params}`, {
+      headers: { Authorization: `KakaoAK ${restApiKey}` },
+    });
+    if (!res.ok) throw new Error(`kakao ${res.status}`);
+    return (await res.json()) as { documents?: KakaoLocalDocument[]; meta?: { is_end?: boolean } };
+  };
+
+  const take = (documents: KakaoLocalDocument[], left: Set<string>) => {
+    for (const doc of documents) {
+      if (!doc.id || !left.has(doc.id)) continue;
+      places[doc.id] = {
+        name: doc.place_name ?? '',
+        address: doc.road_address_name || doc.address_name || '',
+        latitude: Number(doc.y),
+        longitude: Number(doc.x),
+      };
+      left.delete(doc.id);
+    }
+  };
+
+  const oneGroup = async (group: ResolveGroup) => {
+    const left = new Set(group.ids);
+    try {
+      // 1) 처음 검색과 같은 방식(전국·정확도순) 1쪽 — 사용자는 이 목록에서 골랐으니 대개 여기서 끝난다
+      let ended = false;
+      const first = await page(group.query, null, 1);
+      take(first.documents ?? [], left);
+      ended = !!first.meta?.is_end;
+      // 2) 남은 핀은 저장된 동네 중심 반경 안에서(카카오 순위가 바뀌어 1쪽에서 밀려난 경우)
+      const nears = new Map<string, { lat: number; lng: number }>();
+      for (const id of left) {
+        const n = group.near.get(id);
+        if (n) nears.set(`${n.lat.toFixed(2)},${n.lng.toFixed(2)}`, n);
+      }
+      for (const n of nears.values()) {
+        for (let p = 1; p <= RESOLVE_NEAR_PAGES && left.size; p++) {
+          const data = await page(group.query, n, p);
+          take(data.documents ?? [], left);
+          if (data.meta?.is_end) break;
+        }
+      }
+      // 3) 그래도 남으면 처음 방식으로 2쪽부터
+      for (let p = 2; p <= RESOLVE_MAX_PAGES && left.size && !ended; p++) {
+        const data = await page(group.query, null, p);
+        take(data.documents ?? [], left);
+        ended = !!data.meta?.is_end;
+      }
+      missing.push(...left);
+    } catch {
+      failed.push(...left);
+    }
   };
 
   // 동시에 몇 개씩만(카카오 쿼터·속도 보호)
-  for (let i = 0; i < items.length; i += RESOLVE_CONCURRENCY) {
-    await Promise.all(
-      items
-        .slice(i, i + RESOLVE_CONCURRENCY)
-        .map((it) => one(it).catch(() => void failed.push(it.id)))
-    );
+  const list = [...groups.values()];
+  for (let i = 0; i < list.length; i += RESOLVE_CONCURRENCY) {
+    await Promise.all(list.slice(i, i + RESOLVE_CONCURRENCY).map(oneGroup));
   }
 
-  return json({ places, missing, failed });
+  return json({ places, missing, failed, kakaoCalls });
 }
 
 Deno.serve(async (req: Request) => {
