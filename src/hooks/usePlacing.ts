@@ -5,6 +5,7 @@ import { useMapHost } from '../components/MapHostContext';
 import type { PlaceDraftParam } from '../navigation/types';
 import type { PlaceDraft, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
+import { tapHaptic } from '../utils/haptics';
 import {
   directDraft,
   draftFromMatch,
@@ -19,11 +20,12 @@ type Placing = PlacingDraft & { key: number };
 // 핀 확정 모드(ADR-016 하이브리드): 검색 결과(카카오)는 저장하지 않는다. 고르면 공공데이터에서 같은 가게를 찾아
 // 그 레코드로 시작하고, 없으면 카카오 실시간 핀(장소 ID·검색어만 저장)으로 꽂는다(utils/placeDraft).
 // 모드에 들어갈 때 화면의 다른 UI(검색·목록·반응·펜·스티커)를 닫도록 onStart 를 부른다.
-// draftParam = 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안(nonce 당 1회).
+// draftParam = 태블릿 장소 찾기(PlaceAdd)에서 돌아온 핀 초안(nonce 당 1회). onSaved = 핀이 꽂힌 뒤(지도 연출용).
 export function usePlacing(
   boardId: string,
   draftParam: PlaceDraftParam | undefined,
-  onStart: () => void
+  onStart: () => void,
+  onSaved?: (placeId: string) => void
 ) {
   const map = useMapHost();
   const addPlace = useAddPlace(boardId);
@@ -91,7 +93,11 @@ export function usePlacing(
   const save = (draft: PlaceDraft) => {
     Keyboard.dismiss();
     addPlace.mutate(draft, {
-      onSuccess: () => setPlacing(null),
+      onSuccess: (saved) => {
+        tapHaptic(); // 핀이 꽂히는 손맛(지도에서는 '퐁' 떨어진다)
+        onSaved?.(saved.id);
+        setPlacing(null);
+      },
       onError: (e) => setDraftError(friendlyError(e)),
     });
   };

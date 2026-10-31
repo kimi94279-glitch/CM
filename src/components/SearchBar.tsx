@@ -11,7 +11,7 @@ interface SearchBarProps {
   autoFocus?: boolean;
 }
 
-// 활성 검색 입력(지도 위 상단 floating pill). 표시 전용 MapSearchBar 와 시각 토큰을 맞춘다.
+// 활성 검색 입력(지도 위 상단 floating pill). 🔍 를 누르면 종이 꼬리표 자리에 뜬다.
 // 좌측 ‹ = 검색 닫기, 우측 ✕ = 입력 지우기. 검색은 호출측에서 디바운스로 처리.
 export function SearchBar({
   value,

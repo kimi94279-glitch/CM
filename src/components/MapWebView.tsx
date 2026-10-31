@@ -12,7 +12,12 @@ import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react
 import { REACTION_EMOJI } from '../constants/reactions';
 import { colors } from '../constants/theme';
 import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models';
-import type { DrawStroke } from './MapHostContext';
+import {
+  isDrawTool,
+  type DrawStroke,
+  type DrawTool,
+  type ExportCardOptions,
+} from './MapHostContext';
 import type { PeopleInks } from '../hooks/useInks';
 import { whoOf, type Who } from '../utils/who';
 import { buildMapStyle, type MapStyleName } from './mapStyles';
@@ -27,7 +32,7 @@ interface MapWebViewProps {
   // 핀 외 빈 지도(배경) 탭. point(좌표/레벨)는 객체 배치용 — 없으면 단순 배경 탭(팔레트 닫기 등).
   onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
   // 객체(스티커) 탭 → 편집 선택. 드래그 이동 종료 → 새 좌표 저장.
-  onObjectPress?: (id: string) => void;
+  onObjectPress?: (id: string, point?: { lat: number; lng: number; level: number }) => void;
   onObjectMove?: (id: string, lat: number, lng: number) => void;
   // 현재 편집 선택된 객체 id(선택 링 표시). null = 해제.
   selectedObjectId?: string | null;
@@ -41,8 +46,8 @@ interface MapWebViewProps {
   mapStyle: MapStyleName;
   // 카메라가 멈출 때마다(보드별로 기억해 두었다가 다시 들어오면 그 자리로)
   onCamera?: (camera: MapCamera) => void;
-  // 펜 모드: 켜면 지도 제스처가 잠기고 손가락 선이 onDrawEnd 로 올라온다.
-  penMode?: boolean;
+  // 든 도구(null = 손): 들면 한 손가락 선이 onDrawEnd 로 올라오고, 두 손가락은 지도 이동.
+  drawTool?: DrawTool | null;
   onDrawEnd?: (stroke: DrawStroke) => void;
   // 지도가 처음 뜸 / 못 뜸. stage: style(오프라인·스타일 서버) · timeout · sdk · crash(WebView 프로세스 종료)
   onReady?: () => void;
@@ -56,11 +61,12 @@ export interface MapCamera {
   zoom: number;
 }
 
-// WebView 'drawEnd' 메시지 검증 → DrawStroke. 형식이 어긋나면 null.
+// WebView 'drawEnd' 메시지 검증 → DrawStroke. 형식이 어긋나면 null. 도구가 없으면(예전 WebView) 잉크.
 function toDrawStroke(msg: {
   points?: unknown;
   zoom?: unknown;
   width?: unknown;
+  kind?: unknown;
 }): DrawStroke | null {
   if (!Array.isArray(msg.points) || typeof msg.zoom !== 'number' || typeof msg.width !== 'number') {
     return null;
@@ -69,7 +75,8 @@ function toDrawStroke(msg: {
     (p): p is [number, number] =>
       Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && typeof p[1] === 'number'
   );
-  return points.length >= 2 ? { points, zoom: msg.zoom, width: msg.width } : null;
+  const kind = isDrawTool(msg.kind) ? msg.kind : 'ink';
+  return points.length >= 2 ? { points, zoom: msg.zoom, width: msg.width, kind } : null;
 }
 
 // 지리 객체 → WebView 렌더용 슬림 형태(필요 필드만).
@@ -147,6 +154,10 @@ export interface MapWebViewHandle {
   setFocus(point: { lat: number; lng: number } | null): void;
   // 보드의 마지막 카메라로 맞춘다(null = 장소 기준 자동). 사용자가 움직이기 전까지 장소가 바뀌어도 그대로.
   setCamera(camera: MapCamera | null): void;
+  // 지금 화면을 지도 한 장(9:16 jpeg base64)으로 굽는다. 지도가 아직 안 떴거나 실패하면 null.
+  exportCard(options: ExportCardOptions): Promise<string | null>;
+  // 방금 꽂은 핀이 '퐁' 떨어지게(아직 안 그려졌으면 그려질 때)
+  dropPin(placeId: string): void;
 }
 
 // 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap 벡터 + 지형 타일, 키리스 — 바탕은 mapStyles).
@@ -167,7 +178,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     inks,
     mapStyle,
     onCamera,
-    penMode = false,
+    drawTool = null,
     onDrawEnd,
     onReady,
     onFatal,
@@ -301,14 +312,19 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     if (readyRef.current && appliedStyleRef.current !== mapStyle) pushMapStyle(mapStyle);
   }, [mapStyle, pushMapStyle]);
 
-  // 펜 모드 → WebView 제스처 잠금/캔버스 표시. ready 이전 값은 ready 때 penMode 로 다시 맞춘다.
-  const penModeRef = useRef(penMode);
+  // 든 도구 → WebView 캔버스 표시·제스처. ready 이전 값은 ready 때 drawTool 로 다시 맞춘다.
+  const drawToolRef = useRef(drawTool);
   useEffect(() => {
-    penModeRef.current = penMode;
+    drawToolRef.current = drawTool;
     webRef.current?.injectJavaScript(
-      `window.setPenMode && window.setPenMode(${penMode ? 'true' : 'false'}); true;`
+      `window.setDrawTool && window.setDrawTool(${JSON.stringify(drawTool)}); true;`
     );
-  }, [penMode]);
+  }, [drawTool]);
+
+  // 지도 한 장 굽기: WebView 가 'exportCard' 메시지로 돌려줄 때까지 기다린다(8초 넘으면 포기).
+  // 요청마다 id 를 붙여, 늦게 온 이전 응답이 새 요청에 붙지 않게 한다.
+  const exportResolveRef = useRef<((data: string | null) => void) | null>(null);
+  const exportIdRef = useRef(0);
 
   // 편집 선택 변경 → WebView 선택 링 갱신. (선택은 ready 이후 사용자 상호작용이라 단순 주입)
   useEffect(() => {
@@ -337,6 +353,30 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         } else {
           cameraPendingRef.current = camera;
         }
+      },
+      dropPin(placeId) {
+        webRef.current?.injectJavaScript(
+          `window.dropPin && window.dropPin(${JSON.stringify(placeId)}); true;`
+        );
+      },
+      exportCard(options) {
+        if (!readyRef.current) return Promise.resolve(null);
+        exportResolveRef.current?.(null); // 앞선 요청은 포기
+        const reqId = ++exportIdRef.current;
+        return new Promise<string | null>((resolve) => {
+          const timer = setTimeout(() => {
+            if (exportResolveRef.current === finish) exportResolveRef.current = null;
+            resolve(null);
+          }, 8000);
+          const finish = (data: string | null) => {
+            clearTimeout(timer);
+            resolve(data);
+          };
+          exportResolveRef.current = finish;
+          webRef.current?.injectJavaScript(
+            `window.exportCard && window.exportCard(${safeJson(options)}, ${reqId}); true;`
+          );
+        });
       },
     }),
     [pushFocus, pushCamera]
@@ -378,8 +418,10 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           pushFocus(focusPendingRef.current);
           focusPendingRef.current = undefined;
         }
-        if (penModeRef.current) {
-          webRef.current?.injectJavaScript('window.setPenMode && window.setPenMode(true); true;');
+        if (drawToolRef.current) {
+          webRef.current?.injectJavaScript(
+            `window.setDrawTool && window.setDrawTool(${JSON.stringify(drawToolRef.current)}); true;`
+          );
         }
         if (appliedStyleRef.current !== mapStyleRef.current) pushMapStyle(mapStyleRef.current);
         onReady?.();
@@ -396,6 +438,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       }
       if (msg.type === 'fatal') {
         onFatal?.(typeof msg.stage === 'string' ? msg.stage : 'unknown');
+        return;
+      }
+      if (msg.type === 'exportCard') {
+        if (msg.id !== exportIdRef.current) return; // 포기한 이전 요청의 늦은 응답
+        const finish = exportResolveRef.current;
+        exportResolveRef.current = null;
+        finish?.(typeof msg.data === 'string' && msg.data.length > 0 ? msg.data : null);
         return;
       }
       if (msg.type === 'drawEnd') {
@@ -416,7 +465,14 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         return;
       }
       if (msg.type === 'objectTap' && typeof msg.id === 'string') {
-        onObjectPress?.(msg.id);
+        const hasPoint =
+          typeof msg.lat === 'number' &&
+          typeof msg.lng === 'number' &&
+          typeof msg.level === 'number';
+        onObjectPress?.(
+          msg.id,
+          hasPoint ? { lat: msg.lat, lng: msg.lng, level: msg.level } : undefined
+        );
         return;
       }
       if (

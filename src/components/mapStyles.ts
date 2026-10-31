@@ -24,6 +24,13 @@ export const TERRAIN_URL =
   'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 const TERRAIN_ATTRIBUTION = 'Terrain © Mapzen, AWS';
 
+// 지도 한 장(내보낸 이미지·인쇄물)에 반드시 넣는 출처 — OSM 은 ODbL 이라 저작권 페이지 주소를 읽히게 적어야 하고,
+// 지형 타일은 원천 데이터(SRTM·GMTED2010: USGS, ETOPO1: NOAA)를 밝힌다. 끌 수 없게 한다.
+export const PRINT_CREDIT_LINES = [
+  '© OpenStreetMap contributors (ODbL) · openstreetmap.org/copyright · © OpenMapTiles · OpenFreeMap',
+  '지형: Mapzen Terrain Tiles — SRTM·GMTED2010 (USGS), ETOPO1 (NOAA)',
+];
+
 type Json = Record<string, unknown>;
 // [색, 테두리색(없으면 null), 굵기 배수, 점선]
 type Road = [string, string | null, number, number[]?];

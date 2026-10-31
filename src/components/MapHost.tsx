@@ -11,6 +11,7 @@ import { Button } from './Button';
 import { MapWebView, type MapCamera, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
+  type DrawTool,
   type MapBoardData,
   type MapCallbacks,
   type MapHostController,
@@ -37,7 +38,8 @@ export function MapHost({ children }: { children: ReactNode }) {
   const [boardData, setBoardData] = useState<MapBoardData>(EMPTY_DATA);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
-  const [penMode, setPenMode] = useState(false);
+  // 필통에서 든 도구(null = 손 — 지도 이동)
+  const [drawTool, setDrawTool] = useState<DrawTool | null>(null);
   // 작성자 색 구분 기준(나 · 지금 상대 · 그 밖). MapHost 는 AuthProvider 안쪽에 있다(App.tsx).
   const { session, workspace } = useAuth();
   const myUserId = session?.user?.id ?? null;
@@ -128,7 +130,7 @@ export function MapHost({ children }: { children: ReactNode }) {
         boardIdRef.current = boardId;
         callbacksRef.current = {};
         setSelectedObjectId(null);
-        setPenMode(false); // 이전 보드의 펜 모드 해제.
+        setDrawTool(null); // 이전 보드에서 들고 있던 도구 내려놓기.
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         boardSwitchedAt.current = Date.now();
         mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardId)); // 이 보드에서 마지막으로 보던 자리(없으면 장소 기준).
@@ -153,9 +155,16 @@ export function MapHost({ children }: { children: ReactNode }) {
         if (boardIdRef.current !== boardId) return;
         mapRef.current?.setFocus({ lat, lng });
       },
-      setPenMode(boardId, on) {
+      setDrawTool(boardId, tool) {
         if (boardIdRef.current !== boardId) return;
-        setPenMode(on);
+        setDrawTool(tool);
+      },
+      exportCard(options) {
+        return mapRef.current?.exportCard(options) ?? Promise.resolve(null);
+      },
+      dropPin(boardId, placeId) {
+        if (boardIdRef.current !== boardId) return;
+        mapRef.current?.dropPin(placeId);
       },
       getCenter() {
         return lastCenterRef.current;
@@ -191,10 +200,10 @@ export function MapHost({ children }: { children: ReactNode }) {
             inks={inks}
             mapStyle={mapStyle}
             onCamera={onCamera}
-            penMode={penMode}
+            drawTool={drawTool}
             onMarkerPress={(id) => callbacksRef.current.onMarkerPress?.(id)}
             onMapPress={(p) => callbacksRef.current.onMapPress?.(p)}
-            onObjectPress={(id) => callbacksRef.current.onObjectPress?.(id)}
+            onObjectPress={(id, p) => callbacksRef.current.onObjectPress?.(id, p)}
             onObjectMove={(id, lat, lng) => callbacksRef.current.onObjectMove?.(id, lat, lng)}
             onDrawEnd={(stroke) => callbacksRef.current.onDrawEnd?.(stroke)}
             onReady={onMapReady}

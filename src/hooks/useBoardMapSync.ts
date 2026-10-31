@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import type { MapBoardData, MapHostController } from '../components/MapHostContext';
+import type { DrawTool, MapBoardData, MapHostController } from '../components/MapHostContext';
 
 // 싱글톤 MapHost(앱 수명 동안 WebView/MapLibre 1개)를 이 보드 화면 상태에 맞춘다. 컨트롤러의 토큰 가드가
 // 늦게 도착한 이전 보드 응답을 막는다. 콜백 등록(map.setCallbacks)은 화면 상태를 다루므로 화면에 둔다.
@@ -13,7 +13,7 @@ export function useBoardMapSync(
     focusTarget,
     focusNonce,
     selectedObjectId,
-    penMode,
+    drawTool,
   }: {
     isFocused: boolean;
     data: MapBoardData;
@@ -21,7 +21,7 @@ export function useBoardMapSync(
     focusTarget: { lat: number; lng: number } | null;
     focusNonce: number | null;
     selectedObjectId: string | null;
-    penMode: boolean;
+    drawTool: DrawTool | null;
   }
 ) {
   // 보드 진입(마운트/보드 변경) → 토큰 설정 + 이전 보드 오버레이 clear(잔상 가드). 보드당 1회.
@@ -54,8 +54,8 @@ export function useBoardMapSync(
     map.setSelectedObjectId(boardId, selectedObjectId);
   }, [boardId, selectedObjectId, map]);
 
-  // 펜 모드 → 지도 제스처 잠금. 다른 화면으로 가면(포커스 해제) 지도를 풀어 둔다.
+  // 든 도구 → 한 손가락은 그리기(지도 끌기 잠금). 다른 화면으로 가면(포커스 해제) 도구를 내려놓는다.
   useEffect(() => {
-    map.setPenMode(boardId, penMode && isFocused);
-  }, [boardId, penMode, isFocused, map]);
+    map.setDrawTool(boardId, isFocused ? drawTool : null);
+  }, [boardId, drawTool, isFocused, map]);
 }

@@ -10,18 +10,38 @@ export interface MapBoardData {
   objects: MapObject[];
 }
 
-// 펜으로 그린 한 획: 단순화된 지도 좌표 [lng, lat][], 그린 줌(소수), 그린 줌에서의 굵기(px).
+// 필통의 그리는 도구: 연필(아직 정하지 않은 길) · 잉크(정한 길) · 형광펜(이 동네 좋아) · 실 자(두 점 사이 거리감)
+export type DrawTool = 'pencil' | 'ink' | 'marker' | 'string';
+
+export function isDrawTool(v: unknown): v is DrawTool {
+  return v === 'pencil' || v === 'ink' || v === 'marker' || v === 'string';
+}
+
+// 손으로 그린 한 획: 단순화된 지도 좌표 [lng, lat][], 그린 줌(소수), 그린 줌에서의 굵기(px), 도구.
+// 실 자는 두 점(시작·끝)만 온다.
 export interface DrawStroke {
   points: [number, number][];
   zoom: number;
   width: number;
+  kind: DrawTool;
+}
+
+// 지도 한 장으로 접기(내보내기) 옵션 — 카드에 들어갈 글자. names 는 핀 이름(사용자가 붙인 이름만).
+export interface ExportCardOptions {
+  title: string;
+  dateText: string;
+  stampDate: string; // "2026 11.08"
+  people: { name: string; color: string }[];
+  names: Record<string, string>;
+  credit: string[];
 }
 
 // WebView 메시지가 현재 포커스된 보드로 라우팅될 콜백 집합.
 export interface MapCallbacks {
   onMarkerPress?: (id: string) => void;
   onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
-  onObjectPress?: (id: string) => void;
+  // 객체 탭. 그린 선을 탭했으면 그 자리(point)도 온다 — 스티커 도구면 선택 대신 그 자리에 붙인다.
+  onObjectPress?: (id: string, point?: { lat: number; lng: number; level: number }) => void;
   onObjectMove?: (id: string, lat: number, lng: number) => void;
   onDrawEnd?: (stroke: DrawStroke) => void;
 }
@@ -41,8 +61,12 @@ export interface MapHostController {
   recenter(): void;
   // 카메라를 좌표에 고정(알림 탭 진입, 토큰 일치 시에만). 사용자가 지도를 움직이면 풀린다.
   focus(boardId: string, lat: number, lng: number): void;
-  // 펜 모드(토큰 일치 시에만): 켜면 지도 이동·확대가 잠기고 손가락이 선을 그린다.
-  setPenMode(boardId: string, on: boolean): void;
+  // 든 도구(토큰 일치 시에만, null = 손): 들면 한 손가락은 그리기, 두 손가락은 지도 이동.
+  setDrawTool(boardId: string, tool: DrawTool | null): void;
+  // 지금 화면을 지도 한 장(9:16 jpeg base64)으로 굽는다. 실패하면 null.
+  exportCard(options: ExportCardOptions): Promise<string | null>;
+  // 방금 꽂은 핀 — 지도에서 '퐁' 떨어지는 연출(토큰 일치 시에만).
+  dropPin(boardId: string, placeId: string): void;
   // 지금 지도 가운데(마지막으로 보고된 카메라)와 보고 시각(ms). 핀 확정 모드에서 가운데 핀 자리로 쓴다.
   getCenter(): { lat: number; lng: number; at: number } | null;
   // 지도 표시/숨김(포커스 전환 시).

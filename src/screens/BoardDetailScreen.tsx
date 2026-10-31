@@ -12,16 +12,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BoardFabGroup } from '../components/BoardFabGroup';
 import { BoardTopOverlay } from '../components/BoardTopOverlay';
 import { Button } from '../components/Button';
 import { CanvasObjectList } from '../components/CanvasObjectList';
-import { ObjectEditBar, PenBar, StickerBar } from '../components/CanvasToolBars';
+import { ObjectEditBar } from '../components/CanvasToolBars';
 import { HalfSheet } from '../components/HalfSheet';
 import { useMapHost } from '../components/MapHostContext';
+import { PRINT_CREDIT_LINES } from '../components/mapStyles';
 import { PlaceActionBar, usePlaceActions } from '../components/PlaceActionBar';
 import { CenterPin, PlaceDraftCard } from '../components/PlaceDraftCard';
 import { SearchSheet } from '../components/SearchSheet';
+import { ToolTray } from '../components/ToolTray';
 import { KAKAO_SEARCH_ASSIST } from '../constants/config';
 import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
@@ -38,8 +39,10 @@ import { usePlacing } from '../hooks/usePlacing';
 import { useSubmittedQuery } from '../hooks/useSubmittedQuery';
 import type { RootStackParamList } from '../navigation/types';
 import type { Place } from '../types/models';
+import { friendlyError } from '../utils/errors';
 import { kakaoPlaceIdOf } from '../utils/kakaoMap';
 import { applyLivePlaces } from '../utils/livePlaces';
+import { shareJpegBase64 } from '../utils/shareImage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
@@ -47,10 +50,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 const TABLET_MIN = 600;
 const SIDE_PANEL_WIDTH = 320;
 
-// Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다.
-// 기본 상태는 지도만. 목록은 모바일=Floating 버튼→Half Sheet, 태블릿=Right Side Panel.
+// Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다 — 책상에 펼친 종이 지도 위의 물건들.
+// 위: 종이 꼬리표(지도 이름·사람) + 🔍 찾기 + 📮 한 장으로 접기. 아래: 필통(도구 줄) + 범례(모바일=Half Sheet, 태블릿=옆 패널).
 // 지도 자체는 네비게이터 뒤 싱글톤 MapHost 가 그리고, 이 화면은 데이터·콜백만 주입한다(useBoardMapSync).
-// 아래쪽 바(핀 반응 · 스티커 · 펜 · 편집)와 검색 · 목록 · 핀 확정은 서로 배타 — 하나를 열 때 나머지를 닫는다.
+// 아래쪽(필통 · 핀 쪽지 바 · 편집 바)과 검색 · 범례 · 핀 확정은 서로 배타 — 하나를 열 때 나머지를 닫는다.
 export function BoardDetailScreen({ route, navigation }: Props) {
   const { boardId, title } = route.params;
   const insets = useSafeAreaInsets();
@@ -105,6 +108,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setReactionPlaceId(null);
   });
 
+  // 싱글톤 지도(MapHost) 컨트롤러 — 데이터·콜백·카메라는 아래 useBoardMapSync 와 effect 에서 넣는다.
+  const map = useMapHost();
+
   const closeSearch = () => {
     setSearchOpen(false);
     setSearchText('');
@@ -121,12 +127,17 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const goAdd = () => navigation.navigate('PlaceAdd', { boardId, title });
 
   // 핀 확정 모드(검색 결과 · 직접 찍기 · 태블릿 PlaceAdd 에서 돌아온 초안). 펜·스티커가 켜 있으면 지도가 안 움직이므로 끈다.
-  const placingFlow = usePlacing(boardId, route.params.draft, () => {
-    closeSearch();
-    setSheetOpen(false);
-    setReactionPlaceId(null);
-    tools.stopTools();
-  });
+  const placingFlow = usePlacing(
+    boardId,
+    route.params.draft,
+    () => {
+      closeSearch();
+      setSheetOpen(false);
+      setReactionPlaceId(null);
+      tools.stopTools();
+    },
+    (placeId) => map.dropPin(boardId, placeId)
+  );
   const { placing } = placingFlow;
 
   // 알림 탭 진입(route.params.focus): 장소면 그 핀, 스티커처럼 장소가 없으면 좌표가 대상.
@@ -152,8 +163,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   }
 
   // ── 지도 ───────────────────────────────────────────────────────────────
-  const map = useMapHost();
   const isFocused = useIsFocused();
+  // 필통이 보일 때만 든 도구가 살아 있다(검색·범례·핀 쪽지·편집·핀 확정 중엔 한 손가락이 지도를 움직이고 스티커도 안 붙는다).
+  const toolsLive =
+    !sheetOpen && !searchOpen && !placing && !reactionPlaceId && !tools.selectedObject;
 
   // 새 흔적 표시(0009): 들어올 때와 나갈 때 "봤다"고 기록 → 머무는 동안 생긴 흔적도 본 것으로 친다.
   const markRead = useMarkBoardRead();
@@ -169,7 +182,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     focusTarget,
     focusNonce: focus?.nonce ?? null,
     selectedObjectId: tools.selectedObjectId,
-    penMode: tools.penMode,
+    drawTool: toolsLive ? tools.drawTool : null,
   });
 
   // WebView 메시지 콜백을 현재 보드로 등록. 스티커 모드·이모지 최신값 반영 위해 변경 시 재등록.
@@ -180,14 +193,19 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         setHighlightedId(id);
         setReactionPlaceId(id);
       },
-      onObjectPress: (id) => {
+      onObjectPress: (id, point) => {
+        // 스티커 도구로 그린 선(형광펜 등) 위를 탭 → 선 선택 대신 그 자리에 스티커
+        if (toolsLive && tools.stickerMode && point) {
+          tools.placeSticker(point);
+          return;
+        }
         setReactionPlaceId(null);
         setHighlightedId(null);
         tools.selectObject(id);
       },
       onObjectMove: tools.moveObject,
       onMapPress: (point) => {
-        if (tools.stickerMode && point) {
+        if (toolsLive && tools.stickerMode && point) {
           tools.placeSticker(point);
           return;
         }
@@ -200,7 +218,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       onDrawEnd: tools.saveStroke,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, tools.stickerMode, tools.stickerEmoji, map]);
+  }, [boardId, tools.stickerMode, tools.stickerEmoji, toolsLive, map]);
 
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
@@ -214,8 +232,47 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     ? listPlaces.find((p) => p.id === reactionPlaceId)
     : undefined;
   const mobileSearching = !isTablet && searchOpen;
+  // 함께 그리는 사람(꼬리표·지도 한 장 범례). 솔로면 나만.
+  const people = [
+    { name: '나', color: inks.me.solid },
+    ...(partnerLabel !== null ? [{ name: partnerLabel, color: inks.partner.solid }] : []),
+  ];
 
-  // 지도 영역(로딩/에러 + 상단 Overlay + 모바일 FAB + 아래쪽 바들). 투명 + box-none 으로 지도 터치를 통과시킨다.
+  // 📮 지도 한 장으로 접기: 지금 보이는 지도를 9:16 한 장으로 굽고 공유 창을 연다(인스타 스토리·저장·카톡).
+  // 핀 이름은 저장된 이름(사용자가 붙인 이름·공공데이터 이름)만 — 카카오 실시간 이름은 이미지에 남기지 않는다(ADR-016).
+  const [exporting, setExporting] = useState(false);
+  const exportOnePage = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const who = people.map((p) => p.name).join(' · ');
+      const data = await map.exportCard({
+        title,
+        dateText: `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 · ${who}`,
+        stampDate: `${now.getFullYear()} ${mm}.${dd}`,
+        people,
+        names: Object.fromEntries(storedPlaces.map((p) => [p.id, p.name])),
+        credit: PRINT_CREDIT_LINES,
+      });
+      if (!data) {
+        Alert.alert('지도 한 장을 만들지 못했어요', '지도가 다 뜬 뒤에 다시 눌러 주세요.');
+        return;
+      }
+      const shared = await shareJpegBase64(data, `map-${Date.now()}.jpg`);
+      if (!shared) {
+        Alert.alert('새 버전에서 열려요', '지도 한 장 공유는 앱을 업데이트한 뒤에 쓸 수 있어요.');
+      }
+    } catch (e) {
+      Alert.alert('지도 한 장을 만들지 못했어요', friendlyError(e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 지도 영역(로딩/에러 + 상단 꼬리표 + 필통 + 아래쪽 바들). 투명 + box-none 으로 지도 터치를 통과시킨다.
   const mapArea = (
     <View style={styles.mapArea} pointerEvents="box-none">
       {placesQuery.isError ? (
@@ -234,6 +291,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       {/* 모바일 검색은 지도 위에서(openSearch), 태블릿은 PlaceAdd 화면. */}
       <BoardTopOverlay
         topInset={insets.top}
+        title={title}
+        people={people}
         search={
           mobileSearching
             ? { text: searchText, onChangeText: setSearchText, onClose: closeSearch }
@@ -241,23 +300,25 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         }
         onBack={() => navigation.goBack()}
         onPressSearch={isTablet ? goAdd : openSearch}
-        legend={
-          partnerLabel !== null
-            ? { meColor: inks.me.solid, partnerColor: inks.partner.solid, partnerLabel }
-            : null
-        }
+        onPressExport={exportOnePage}
+        exporting={exporting}
       />
 
-      {!isTablet && !sheetOpen && !searchOpen && !placing ? (
-        <BoardFabGroup
-          bottom={barBottom}
-          penMode={tools.penMode}
-          stickerMode={tools.stickerMode}
-          count={listPlaces.length}
-          onTogglePen={tools.togglePen}
-          onToggleSticker={tools.toggleSticker}
+      {/* 필통: 핀 쪽지 바·편집 바·검색·범례·핀 확정 중에는 비켜 준다 */}
+      {toolsLive ? (
+        <ToolTray
+          bottom={insets.bottom + spacing.sm}
+          ink={inks.me}
+          tool={tools.tool}
+          onPick={tools.pickTool}
+          onPin={() => placingFlow.startDirect('')}
+          stickerEmoji={tools.stickerEmoji}
+          onPickEmoji={tools.setStickerEmoji}
+          canUndo={tools.canUndo}
+          onUndo={tools.undoDraw}
+          placeCount={listPlaces.length}
+          onOpenLegend={isTablet ? undefined : openSheet}
           onRecenter={() => map.recenter()}
-          onOpenList={openSheet}
         />
       ) : null}
 
@@ -278,25 +339,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         />
       ) : null}
 
-      {tools.stickerMode ? (
-        <StickerBar
-          bottom={barBottom}
-          emoji={tools.stickerEmoji}
-          onPick={tools.setStickerEmoji}
-          onClose={tools.toggleSticker}
-        />
-      ) : null}
-
-      {tools.penMode ? (
-        <PenBar
-          bottom={barBottom}
-          ink={inks.me}
-          canUndo={tools.canUndo}
-          onUndo={tools.undoDraw}
-          onClose={tools.togglePen}
-        />
-      ) : null}
-
       {tools.selectedObject ? (
         <ObjectEditBar
           bottom={barBottom}
@@ -308,6 +350,28 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       ) : null}
     </View>
   );
+
+  // 핀 확정 모드: 가운데 고정 핀 + 이름 확인 카드(키보드 위로). 지도 가운데 = 화면 가운데라 화면 전체에 띄운다
+  // (태블릿도 — PlaceAdd 초안·📌 핀으로 들어온다).
+  const placingUI = placing ? (
+    <>
+      <CenterPin color={inks.me.solid} />
+      <PlaceDraftCard
+        kind={placing.kind}
+        name={placingFlow.draftName}
+        onChangeName={placingFlow.setDraftName}
+        saving={placingFlow.saving}
+        error={placingFlow.draftError}
+        onConfirm={placingFlow.confirm}
+        onCancel={placingFlow.cancel}
+        onSwitchOther={placingFlow.switchToOther}
+        canSwitchToLive={!!placing.live}
+        liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
+        lift={keyboardHeight}
+        bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
+      />
+    </>
+  ) : null;
 
   const list = (onAdd: () => void, onClose?: () => void) => (
     <CanvasObjectList
@@ -333,6 +397,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             {list(goAdd)}
           </View>
         </View>
+        {placingUI}
       </View>
     );
   }
@@ -347,32 +412,13 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           height={Math.round(height * 0.5)}
           bottomInset={insets.bottom}
           onDismissed={() => setSheetOpen(false)}
-          closeLabel="목록 닫기"
+          closeLabel="범례 닫기"
         >
           {(dismiss) => list(openSearch, dismiss)}
         </HalfSheet>
       ) : null}
 
-      {/* 핀 확정 모드: 가운데 고정 핀 + 이름 확인 카드(키보드 위로) */}
-      {placing ? (
-        <>
-          <CenterPin color={inks.me.solid} />
-          <PlaceDraftCard
-            kind={placing.kind}
-            name={placingFlow.draftName}
-            onChangeName={placingFlow.setDraftName}
-            saving={placingFlow.saving}
-            error={placingFlow.draftError}
-            onConfirm={placingFlow.confirm}
-            onCancel={placingFlow.cancel}
-            onSwitchOther={placingFlow.switchToOther}
-            canSwitchToLive={!!placing.live}
-            liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
-            lift={keyboardHeight}
-            bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
-          />
-        </>
-      ) : null}
+      {placingUI}
 
       {/* 검색 결과 Sheet: keyboardHeight 만큼 위로 올림(양 플랫폼 결정적).
           box-none → 시트 미점유 상단 지도는 계속 보이고 조작 가능(Surface First). */}
