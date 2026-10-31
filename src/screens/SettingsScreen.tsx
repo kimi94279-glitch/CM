@@ -5,6 +5,7 @@ import React from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { MAP_STYLE_OPTIONS } from '../components/mapStyles';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SocialButtons } from '../components/SocialButtons';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useInks } from '../hooks/useInks';
+import { useMapStyle, useSetMapStyle } from '../hooks/useMapStyle';
 import { usePartnerProfile } from '../hooks/usePartnerProfile';
 import {
   deleteMyAccount,
@@ -41,6 +43,8 @@ export function SettingsScreen({ navigation }: Props) {
   const partnerQuery = usePartnerProfile();
   const queryClient = useQueryClient();
   const inks = useInks();
+  const mapStyle = useMapStyle();
+  const setMapStyle = useSetMapStyle();
 
   // 내 잉크 바꾸기(0012) — 바로 보이게 먼저 바꿔 두고, 실패하면 되돌린다. 지도는 useInks 로 다시 칠해진다.
   const inkMutation = useMutation({
@@ -186,6 +190,30 @@ export function SettingsScreen({ navigation }: Props) {
           {isActive ? ' 상대와 같은 색을 고르면 내 화면에선 상대가 다른 색으로 보여요.' : ''}
         </Text>
 
+        {/* 종이 지도 3종 비교(시험 중) — 이 기기에만 저장. 정해지면 기본값만 남기거나 지도마다 고르게 바꾼다. */}
+        <Text style={styles.section}>지도 바탕 (시험 중)</Text>
+        <View style={styles.styleRow}>
+          {MAP_STYLE_OPTIONS.map((o) => {
+            const selected = mapStyle === o.name;
+            return (
+              <Pressable
+                key={o.name}
+                onPress={() => setMapStyle(o.name)}
+                disabled={selected}
+                accessibilityRole="button"
+                accessibilityLabel={`지도 바탕 ${o.label}`}
+                accessibilityState={{ selected }}
+                style={[styles.styleOption, selected && styles.styleOptionOn]}
+              >
+                <Text style={[styles.styleLabel, selected && styles.styleLabelOn]}>{o.label}</Text>
+                <Text style={styles.styleHint} numberOfLines={2}>
+                  {o.hint}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {isActive || isSolo ? (
           <>
             <Text style={styles.section}>같이 그리기</Text>
@@ -275,7 +303,12 @@ const CREDITS: { label: string; text: string; url?: string }[] = [
     text: '© OpenStreetMap contributors · © OpenMapTiles · OpenFreeMap',
     url: 'https://www.openstreetmap.org/copyright',
   },
-  { label: '지도 엔진', text: 'MapLibre GL JS (BSD 3-Clause)' },
+  {
+    label: '지형(산 음영·등고선)',
+    text: 'Mapzen Terrain Tiles · AWS Open Data (SRTM·GMTED·ETOPO1 등)',
+    url: 'https://github.com/tilezen/joerd/blob/master/docs/attribution.md',
+  },
+  { label: '지도 엔진', text: 'MapLibre GL JS · maplibre-contour (BSD 3-Clause)' },
 ];
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -358,6 +391,35 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: spacing.sm,
+  },
+  styleRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  styleOption: {
+    flex: 1,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.card,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  styleOptionOn: {
+    borderColor: colors.textStrong,
+  },
+  styleLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  styleLabelOn: {
+    color: colors.textStrong,
+    fontWeight: '700',
+  },
+  styleHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   guestBox: {
     marginTop: spacing.md,

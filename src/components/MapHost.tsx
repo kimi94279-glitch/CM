@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useInks } from '../hooks/useInks';
+import { useMapStyle } from '../hooks/useMapStyle';
 import { reportMessage } from '../services/monitoring';
 import { Button } from './Button';
 import { MapWebView, type MapCamera, type MapWebViewHandle } from './MapWebView';
@@ -48,6 +49,8 @@ export function MapHost({ children }: { children: ReactNode }) {
       : null;
   // 각자 고른 잉크(나 · 지금 상대 · 그 밖=회색)
   const inks = useInks();
+  // 지도 바탕(종이 지도) — 설정에서 바꾸면 바로 갈아 끼운다
+  const mapStyle = useMapStyle();
 
   // 현재 보드 토큰(잔상 가드)과 콜백(ref 라우팅 — 재렌더 없이 최신 콜백 호출).
   const boardIdRef = useRef<string | null>(null);
@@ -186,6 +189,7 @@ export function MapHost({ children }: { children: ReactNode }) {
             myUserId={myUserId}
             partnerUserId={partnerUserId}
             inks={inks}
+            mapStyle={mapStyle}
             onCamera={onCamera}
             penMode={penMode}
             onMarkerPress={(id) => callbacksRef.current.onMarkerPress?.(id)}

@@ -2,7 +2,13 @@ import { colors } from '../constants/theme';
 import type { PeopleInks } from '../hooks/useInks';
 import type { Place } from '../types/models';
 import { whoOf, type Who } from '../utils/who';
-import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_VERSION } from './vendor/maplibreAssets';
+import { buildMapStyle, TERRAIN_URL, type MapStyleName } from './mapStyles';
+import {
+  MAPLIBRE_CONTOUR_JS,
+  MAPLIBRE_CSS,
+  MAPLIBRE_JS,
+  MAPLIBRE_VERSION,
+} from './vendor/maplibreAssets';
 
 // WebView 에 전달할 최소 장소 정보
 export interface MapPlace {
@@ -40,9 +46,7 @@ export function safeJson(data: unknown): string {
 
 // 기본 중심(서울시청)
 const DEFAULT_CENTER = { lat: 37.5666, lng: 126.9784 };
-// 시작 지도 스타일 — OpenFreeMap positron(무료·키리스, OSM/OpenMapTiles). Light/미니멀이라 캔버스 위 요소가 돋보인다.
-// 추후 CM Style V1(자체 style.json)로 교체 예정 — source URL만 바꾸면 PMTiles 자가호스팅으로도 전환 가능(ADR-013).
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+// 지도 바탕 스타일은 mapStyles.ts(종이 지도 3종, OpenFreeMap 벡터 + 지형 타일). 바꾸면 setMapStyle 로 갈아 끼운다.
 // 카메라 줌(GL zoom, 높을수록 확대). Kakao level 대체값 — 디바이스에서 미세조정 가능.
 const EMPTY_ZOOM = 11; // 핀 0개: 도시 레벨
 const SINGLE_ZOOM = 14; // 핀 1개: 동네 레벨
@@ -57,10 +61,11 @@ export function toMapInks(inks: PeopleInks) {
   return { me: pick('me'), partner: pick('partner'), other: pick('other') };
 }
 
-export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
+export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: MapStyleName): string {
   const placesJson = safeJson(places);
   const inksJson = safeJson(toMapInks(inks));
   const centerJson = safeJson(DEFAULT_CENTER);
+  const styleJson = safeJson(buildMapStyle(mapStyle));
 
   return `<!DOCTYPE html>
 <html>
@@ -72,6 +77,18 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
     html,body,#map{margin:0;padding:0;width:100%;height:100%;}
     /* 펜 모드 전용 투명 캔버스: 지도 위를 덮고 손가락 선을 받는다(평소 숨김). */
     #pen{position:absolute;left:0;top:0;width:100%;height:100%;display:none;touch-action:none;z-index:5;}
+    /* 종이 효과: 지도 그림 바로 위, 핀·스티커 아래(캔버스 바로 뒤에 끼운다). 손가락은 지도로 통과. */
+    #paper{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+    #paper .grain{position:absolute;left:0;top:0;width:100%;height:100%;mix-blend-mode:multiply;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.36  0 0 0 0 0.26  0 0 0 0 0.13  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");}
+    /* 접는 지도의 접힌 자국(세로 3단 · 가로 2단) — 화면에 붙어 있다(지도와 같이 움직이지 않음) */
+    #paper .creases{position:absolute;left:0;top:0;width:100%;height:100%;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,0.035) 0%, rgba(255,255,255,0.05) 33%, rgba(0,0,0,0.07) 33.33%, rgba(255,255,255,0.05) 66.6%, rgba(0,0,0,0.07) 66.66%, rgba(255,255,255,0.04) 100%),
+        linear-gradient(90deg, transparent calc(33.33% - 1px), rgba(120,100,70,0.28) calc(33.33% - 1px), rgba(255,255,255,0.55) calc(33.33% + 1px), transparent calc(33.33% + 2px)),
+        linear-gradient(90deg, transparent calc(66.66% - 1px), rgba(120,100,70,0.28) calc(66.66% - 1px), rgba(255,255,255,0.55) calc(66.66% + 1px), transparent calc(66.66% + 2px)),
+        linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.06) 50%, rgba(255,255,255,0.03) 100%),
+        linear-gradient(180deg, transparent calc(50% - 1px), rgba(120,100,70,0.28) calc(50% - 1px), rgba(255,255,255,0.55) calc(50% + 1px), transparent calc(50% + 2px));}
     /* 지도를 앱처럼: 텍스트/번호 핀 선택 및 long-press 콜아웃/하이라이트 차단 (지도 제스처에는 영향 없음) */
     *{
       -webkit-user-select:none;
@@ -85,6 +102,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
   <div id="map"></div>
   <canvas id="pen"></canvas>
   <script>${MAPLIBRE_JS}</script>
+  <script>${MAPLIBRE_CONTOUR_JS}</script>
   <script>
     function send(o){ try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }catch(e){} }
     // 보강: long-press 텍스트 선택/컨텍스트 메뉴 차단 (CSS user-select가 놓치는 잔여 케이스 대비)
@@ -105,6 +123,10 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
     // 사용자가 지도를 직접 움직였으면 장소가 바뀌어도 카메라를 건드리지 않는다(Recenter 전까지).
     var USER_MOVED = false;
     var PEN_WIDTH = ${PEN_WIDTH}, DRAW_CAP = ${DRAW_CAP};
+    // 지도 바탕 스타일(mapStyles.ts) — '@dem'·'@contours' 타일 자리는 resolveStyle 이 채운다.
+    var STYLE = ${styleJson};
+    var TERRAIN_URL = '${TERRAIN_URL}';
+    var SWITCHING = false;     // 스타일을 갈아 끼우는 중(새 스타일 로드 전엔 우리 레이어를 건드리지 않는다)
     var map, bounds;
     var styleLoaded = false;   // 'load' 이후에만 source/layer 추가 가능
     var drawReady = false;     // 그림 source/layer 1회 생성 여부
@@ -155,7 +177,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
       for (var i = 0; i < markers.length; i++){ markers[i].remove(); }
       markers = [];
       // 경로는 layer를 유지하고 데이터만 비운다(스타일 재생성 비용 회피).
-      if (routeReady && map.getSource('route')){
+      if (routeReady && !SWITCHING && map.getSource('route')){
         map.getSource('route').setData({ type:'FeatureCollection', features:[] });
       }
     }
@@ -236,7 +258,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
       });
 
       // order_index 순서대로 폴리라인 (2개 이상일 때)
-      if (coords.length >= 2) {
+      if (coords.length >= 2 && !SWITCHING) {
         ensureRoute();
         map.getSource('route').setData({
           type:'Feature', properties:{},
@@ -396,7 +418,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
       };
     }
     function applyDrawings(){
-      if (!map || !styleLoaded) return;
+      if (!map || !styleLoaded || SWITCHING) return;
       ensureDrawLayers();
       var feats = [];
       OBJECTS.forEach(function(o){
@@ -528,8 +550,111 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
     // 편집 선택 갱신: 선택 id 설정 후 diff 재적용(선택 링/드래그가능만 UPDATE, 재빌드 없음). null 이면 해제.
     window.selectObject = function(id){ SELECTED_ID = id; applyObjects(OBJECTS); };
 
+    // ── 지도 바탕(종이 지도) ─────────────────────────────────────
+    // 지형 타일 → 산 음영·높이 색(raster-dem)과 등고선(maplibre-contour 가 기기에서 계산)을 같은 캐시로 쓴다.
+    var demSource = null, contourUrl = null;
+    function setupTerrain(thresholds){
+      try {
+        if (!demSource && window.mlcontour){
+          demSource = new mlcontour.DemSource({ url: TERRAIN_URL, encoding:'terrarium', maxzoom: 13, worker: true });
+          demSource.setupMaplibre(maplibregl);
+        }
+        if (demSource) contourUrl = demSource.contourProtocolUrl({ thresholds: thresholds, contourLayer:'contours', elevationKey:'ele', levelKey:'level' });
+      } catch (e) { demSource = null; contourUrl = null; }
+    }
+    // '@dem' → 지형 타일, '@contours' → 등고선 프로토콜. 플러그인이 없으면 등고선만 빼고 그린다.
+    function resolveStyle(s){
+      var out = JSON.parse(JSON.stringify(s));
+      setupTerrain((out.metadata || {})['cm:contourThresholds'] || {});
+      Object.keys(out.sources).forEach(function(k){
+        var src = out.sources[k];
+        if (!src.tiles) return;
+        if (src.tiles[0] === '@dem') src.tiles = [demSource ? demSource.sharedDemProtocolUrl : TERRAIN_URL];
+        else if (src.tiles[0] === '@contours'){
+          if (contourUrl) src.tiles = [contourUrl];
+          else { delete out.sources[k]; out.layers = out.layers.filter(function(l){ return l.source !== k; }); }
+        }
+      });
+      return out;
+    }
+    // 스타일이 쓰는 무늬·아이콘은 캔버스로 그려 넣는다(스프라이트 파일 없음).
+    function canvasImage(w, h, draw){
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var g = c.getContext('2d'); draw(g);
+      return g.getImageData(0, 0, w, h);
+    }
+    function roundRect(g, x, y, w, h, r){
+      g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+      g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+    }
+    var IMAGES = {
+      // 지형도 숲 점무늬
+      dots: function(){ return canvasImage(16, 16, function(g){
+        g.fillStyle = 'rgba(70,140,70,0.85)';
+        [[4, 4], [12, 12]].forEach(function(p){ g.beginPath(); g.arc(p[0], p[1], 1.4, 0, Math.PI * 2); g.fill(); });
+      }); },
+      // 산꼭대기 ▲
+      peak: function(){ return canvasImage(18, 16, function(g){
+        g.fillStyle = '#5A3A1E'; g.beginPath(); g.moveTo(9, 2); g.lineTo(16, 14); g.lineTo(2, 14); g.closePath(); g.fill();
+      }); },
+      // 도로 번호 방패(초록 바탕 흰 테두리)
+      shield: function(){ return canvasImage(40, 28, function(g){
+        g.fillStyle = '#FFFFFF'; roundRect(g, 0, 0, 40, 28, 7); g.fill();
+        g.fillStyle = '#1F6B3A'; roundRect(g, 2.5, 2.5, 35, 23, 5); g.fill();
+      }); }
+    };
+    // 종이 효과(결·접힌 자국)를 캔버스 바로 뒤에 둔다 → 핀·스티커 마커는 그 위에 온다.
+    function applyPaper(){
+      var meta = STYLE.metadata || {};
+      var paper = document.getElementById('paper');
+      if (!paper){
+        paper = document.createElement('div'); paper.id = 'paper';
+        var canvas = map.getCanvas();
+        canvas.parentNode.insertBefore(paper, canvas.nextSibling);
+      }
+      paper.innerHTML = (meta['cm:paper'] === 'creases' ? '<div class="creases"></div>' : '') +
+        '<div class="grain" style="opacity:' + (meta['cm:grain'] || 0) + '"></div>';
+    }
+    // 경위선 격자: 지금 보이는 범위만 만든다(0.1° 굵은 선, 확대하면 0.01° 가는 선 — 멀리선 1°).
+    function updateGrid(){
+      var src = map && map.getSource('grid');
+      if (!src) return;
+      var b = map.getBounds(), z = map.getZoom();
+      var major = z >= 7 ? 0.1 : 1, step = z >= 11.5 ? 0.01 : major;
+      var w = Math.max(-180, b.getWest() - major), e = Math.min(180, b.getEast() + major);
+      var s = Math.max(-85, b.getSouth() - major), n = Math.min(85, b.getNorth() + major);
+      var f = [], k, v;
+      function isMajor(x){ return Math.abs(x / major - Math.round(x / major)) < 1e-6; }
+      for (k = Math.ceil(w / step); k * step <= e; k++){
+        v = Math.round(k * step * 100) / 100;
+        f.push({ type:'Feature', properties:{ major: isMajor(v) }, geometry:{ type:'LineString', coordinates:[[v, s], [v, n]] } });
+      }
+      for (k = Math.ceil(s / step); k * step <= n; k++){
+        v = Math.round(k * step * 100) / 100;
+        f.push({ type:'Feature', properties:{ major: isMajor(v) }, geometry:{ type:'LineString', coordinates:[[w, v], [e, v]] } });
+      }
+      src.setData({ type:'FeatureCollection', features: f });
+    }
+    // RN → WebView 진입점: 지도 바탕 바꾸기. 경로·그림 레이어는 새 스타일이 뜬 뒤 다시 만든다(카메라·마커는 그대로).
+    window.setMapStyle = function(next){
+      if (!next) return;
+      STYLE = next;
+      if (!map || !styleLoaded) return;
+      SWITCHING = true;
+      map.once('style.load', function(){
+        SWITCHING = false;
+        routeReady = false;
+        drawReady = false;
+        applyPlaces(PLACES, true);
+        applyDrawings();
+        applyPaper();
+        updateGrid();
+      });
+      map.setStyle(resolveStyle(STYLE), { diff: false });
+    };
+
     // 지도를 못 띄우는 오류 → RN 이 실패 화면(다시 시도)을 보여준다(MapHost).
-    // 첫 스타일 로드 전 오류는 잠깐 기다려 본다 — 스프라이트 하나가 늦는 정도면 곧 load 가 온다.
+    // 첫 스타일 로드 전 오류는 잠깐 기다려 본다 — 타일 하나가 늦는 정도면 곧 load 가 온다.
     var fatalTimer = null;
     function failSoon(stage, message){
       if (styleLoaded || fatalTimer) return;
@@ -540,13 +665,17 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
     (function init(){
       if(!window.maplibregl){ send({ type:'fatal', stage:'sdk', message:'maplibregl undefined' }); return; }
       try {
-        // MapLibre는 access token이 없다(OpenFreeMap 키리스). 스타일 JSON URL만 지정.
+        // MapLibre는 access token이 없다(OpenFreeMap·지형 타일 모두 키리스). 스타일 JSON 은 앱이 만든다(mapStyles.ts).
         map = new maplibregl.Map({
           container: 'map',
-          style: '${MAP_STYLE}',
+          style: resolveStyle(STYLE),
           center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
           zoom: EMPTY_ZOOM,
           attributionControl: true
+        });
+        map.on('styleimagemissing', function(e){
+          var make = IMAGES[e.id];
+          if (make && !map.hasImage(e.id)) map.addImage(e.id, make(), { pixelRatio: 2 });
         });
         // 캔버스 앱 느낌: 회전/피치 비활성(평면 유지).
         map.dragRotate.disable();
@@ -577,6 +706,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
         var cameraTimer = null;
         map.on('moveend', function(){
           if (!styleLoaded) return;
+          updateGrid();
           clearTimeout(cameraTimer);
           cameraTimer = setTimeout(function(){
             var c = map.getCenter();
@@ -589,12 +719,16 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks): string {
           // 초기 마커/폴리라인/카메라: 증분 갱신과 동일 경로(applyPlaces) 사용.
           applyPlaces(PLACES);
           applyDrawings();
+          applyPaper();
+          updateGrid();
           send({ type:'ready', count: PLACES.length });
         });
         map.on('error', function(ev){
           var message = ev && ev.error ? String(ev.error.message || ev.error) : 'map error';
-          // 첫 로드 전(오프라인·스타일 서버 장애)이면 치명, 이후(타일 하나 실패 등)는 진단용.
-          if (!styleLoaded) failSoon('style', message);
+          // 지형(산 음영·등고선)이 안 와도 지도는 쓸 수 있다 → 치명으로 치지 않는다.
+          var terrain = ev && (ev.sourceId === 'dem' || ev.sourceId === 'contours');
+          // 첫 로드 전(오프라인·타일 서버 장애)이면 치명, 이후(타일 하나 실패 등)는 진단용.
+          if (!styleLoaded && !terrain) failSoon('style', message);
           else send({ type:'error', stage:'map', message: message });
         });
         // 느린 망 대비 30초. 실패 화면이 뜬 뒤라도 늦게 load 되면 ready 가 화면을 걷는다(MapHost).

@@ -15,6 +15,7 @@ import type { MapObject, Place, PlaceMemo, PlaceReaction } from '../types/models
 import type { DrawStroke } from './MapHostContext';
 import type { PeopleInks } from '../hooks/useInks';
 import { whoOf, type Who } from '../utils/who';
+import { buildMapStyle, type MapStyleName } from './mapStyles';
 import { buildMapHtml, safeJson, toMapInks, toMapPlaces, type MapPlace } from './mapWebViewHtml';
 
 interface MapWebViewProps {
@@ -36,6 +37,8 @@ interface MapWebViewProps {
   partnerUserId?: string | null;
   // 사람 구분별 잉크(각자 고른 색, useInks). 바뀌면 지도를 다시 칠한다.
   inks: PeopleInks;
+  // 지도 바탕(종이 지도 3종, mapStyles). 바뀌면 카메라·핀은 그대로 두고 바탕만 갈아 끼운다.
+  mapStyle: MapStyleName;
   // 카메라가 멈출 때마다(보드별로 기억해 두었다가 다시 들어오면 그 자리로)
   onCamera?: (camera: MapCamera) => void;
   // 펜 모드: 켜면 지도 제스처가 잠기고 손가락 선이 onDrawEnd 로 올라온다.
@@ -146,7 +149,7 @@ export interface MapWebViewHandle {
   setCamera(camera: MapCamera | null): void;
 }
 
-// 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap positron, 키리스).
+// 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap 벡터 + 지형 타일, 키리스 — 바탕은 mapStyles).
 // places 는 order_index 기준으로 정렬되어 마커/폴리라인으로 렌더된다.
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function MapWebView(
   {
@@ -162,6 +165,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
     myUserId = null,
     partnerUserId = null,
     inks,
+    mapStyle,
     onCamera,
     penMode = false,
     onDrawEnd,
@@ -182,6 +186,8 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   // 카메라 큐: undefined = 대기 없음. ready 전에 보드에 들어오면 여기 두었다가 맞춘다.
   const cameraPendingRef = useRef<MapCamera | null | undefined>(undefined);
   const inksPendingRef = useRef<PeopleInks | null>(null);
+  // 처음 HTML 에 구운 바탕 — 이것과 같으면 다시 넣지 않는다(ready 직후 불필요한 스타일 재로드 방지).
+  const appliedStyleRef = useRef<MapStyleName>(mapStyle);
 
   const pushCamera = useCallback((camera: MapCamera | null) => {
     webRef.current?.injectJavaScript(
@@ -203,8 +209,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
 
   // P1: html 은 마운트 1회만 생성(이후 source 불변 → places 변경 시 WebView 전체 reload 방지).
   // 초기 places 는 베이크되어 첫 페인트에 반영되고, 이후 변경은 injectJavaScript 증분 갱신.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const html = useMemo(() => buildMapHtml(toMapPlaces(places, myUserId, partnerUserId), inks), []);
+  const html = useMemo(
+    () => buildMapHtml(toMapPlaces(places, myUserId, partnerUserId), inks, mapStyle),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // places → WebView 증분 반영(마커/폴리라인/카메라만 갱신). ready 이전이면 최신값만 큐에 보관.
   const pushPlaces = useCallback((arr: MapPlace[]) => {
@@ -278,6 +287,19 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       inksPendingRef.current = inks;
     }
   }, [inks, pushInks]);
+
+  // 지도 바탕 변경 → 스타일만 갈아 끼우기. ready 전이면 ready 때 맞춘다.
+  const pushMapStyle = useCallback((name: MapStyleName) => {
+    appliedStyleRef.current = name;
+    webRef.current?.injectJavaScript(
+      `window.setMapStyle && window.setMapStyle(${safeJson(buildMapStyle(name))}); true;`
+    );
+  }, []);
+  const mapStyleRef = useRef(mapStyle);
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+    if (readyRef.current && appliedStyleRef.current !== mapStyle) pushMapStyle(mapStyle);
+  }, [mapStyle, pushMapStyle]);
 
   // 펜 모드 → WebView 제스처 잠금/캔버스 표시. ready 이전 값은 ready 때 penMode 로 다시 맞춘다.
   const penModeRef = useRef(penMode);
@@ -359,6 +381,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         if (penModeRef.current) {
           webRef.current?.injectJavaScript('window.setPenMode && window.setPenMode(true); true;');
         }
+        if (appliedStyleRef.current !== mapStyleRef.current) pushMapStyle(mapStyleRef.current);
         onReady?.();
         return;
       }
