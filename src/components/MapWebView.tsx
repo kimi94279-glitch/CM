@@ -159,8 +159,10 @@ export interface MapWebViewHandle {
   exportCard(options: ExportCardOptions): Promise<string | null>;
   // 방금 꽂은 핀이 '퐁' 떨어지게(아직 안 그려졌으면 그려질 때)
   dropPin(placeId: string): void;
-  // 지도를 열 때 종이 지도 펼치기 연출(지도가 다 그려질 때까지 접힌 종이로 가리고 있다가 펼친다). 지도가 아직 안 떴으면 뜰 때.
+  // 지도를 열 때 종이 지도 펼치기 연출: 접힌 종이로 바로 덮는다. 지도가 아직 안 떴으면 뜰 때.
   unfold(): void;
+  // 화면 전환이 끝났으니 펴도 된다(지도가 다 그려지면 그때 펴진다)
+  unfoldGo(): void;
 }
 
 // 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap 벡터 + 지형 타일, 키리스 — 바탕은 mapStyles).
@@ -370,6 +372,9 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         } else {
           unfoldPendingRef.current = true;
         }
+      },
+      unfoldGo() {
+        webRef.current?.injectJavaScript('window.unfoldGo && window.unfoldGo(); true;');
       },
       exportCard(options) {
         if (!readyRef.current) return Promise.resolve(null);

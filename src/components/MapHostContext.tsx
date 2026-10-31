@@ -65,6 +65,8 @@ export interface MapHostController {
   setDrawTool(boardId: string, tool: DrawTool | null): void;
   // 이 보드의 바탕(boards.map_style). null = 기기 기본 바탕(설정).
   setMapStyle(boardId: string, style: MapStyleName | null): void;
+  // 화면 전환이 끝났다 — 펼치기 연출 중이면 이제 편다(지도가 다 그려지면). 연출이 없으면 아무 일 없음.
+  unfoldGo(boardId: string): void;
   // 지금 화면을 지도 한 장(9:16 jpeg base64)으로 굽는다. 실패하면 null.
   exportCard(options: ExportCardOptions): Promise<string | null>;
   // 방금 꽂은 핀 — 지도에서 '퐁' 떨어지는 연출(토큰 일치 시에만).

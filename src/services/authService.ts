@@ -222,7 +222,17 @@ export async function updateMyInk(ink: string): Promise<void> {
   if (error) throw error;
 }
 
-// 닉네임으로 프로필 생성 (클라이언트 방식 - FLOW_AUTH.md)
+// 내 이름(닉네임) 바꾸기 (users_update 정책: 본인만)
+export async function updateMyNickname(nickname: string): Promise<void> {
+  const uid = await requireUserId();
+  const { error } = await supabase
+    .from('users')
+    .update({ nickname: nickname.trim() })
+    .eq('id', uid);
+  if (error) throw error;
+}
+
+// 닉네임으로 프로필 생성 (클라이언트 방식 - FLOW_AUTH.md). 빈 이름도 된다(로그인 없이 시작 — 같이 그리기 전엔 보이지 않음).
 export async function createProfile(nickname: string): Promise<UserProfile> {
   const uid = await requireUserId();
   const { data, error } = await supabase

@@ -16,7 +16,7 @@ import { Icon } from '../components/Icon';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
-import { useBoardActivity, useBoards, useDeleteBoard } from '../hooks/useBoards';
+import { useBoardActivity, useBoards, useCreateBoard, useDeleteBoard } from '../hooks/useBoards';
 import { useInks } from '../hooks/useInks';
 import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
@@ -32,6 +32,20 @@ export function BoardListScreen({ navigation }: Props) {
   const boardsQuery = useBoards(workspace?.id);
   const activityQuery = useBoardActivity(workspace?.id);
   const deleteMutation = useDeleteBoard(workspace?.id);
+  const createMutation = useCreateBoard(workspace?.id);
+
+  // 새 지도: 이름 짓는 화면을 거치지 않고 바로 만들어 연다(이름은 지도 위 꼬리표를 눌러 언제든 바꾼다).
+  // 기본 이름은 만든 날 — 서랍에서 서로 구분된다.
+  const openNewMap = () => {
+    if (createMutation.isPending) return;
+    const now = new Date();
+    createMutation.mutate(`${now.getMonth() + 1}월 ${now.getDate()}일 지도`, {
+      onSuccess: (board) =>
+        navigation.navigate('BoardDetail', { boardId: board.id, title: board.title }),
+      onError: () =>
+        Alert.alert('지도를 만들지 못했어요', '인터넷 연결을 확인하고 다시 눌러 주세요.'),
+    });
+  };
 
   // 최근에 흔적이 생긴 지도가 위로 (흔적이 없으면 만든 시각)
   const activity = activityQuery.data;
@@ -82,7 +96,7 @@ export function BoardListScreen({ navigation }: Props) {
           {isSolo ? '내 지도' : '우리 지도'}
         </Text>
         <View style={styles.headerActions}>
-          {isSolo ? (
+          {isSolo && !guest ? (
             <Pressable
               onPress={() => navigation.navigate('InviteCreate')}
               hitSlop={8}
@@ -141,8 +155,9 @@ export function BoardListScreen({ navigation }: Props) {
             지도 한 장에 가고 싶은 곳을 꽂고, 가 볼 길을 연필로 그어 봐요.
           </Text>
           <Button
-            title="새 지도 만들기"
-            onPress={() => navigation.navigate('CreateBoard')}
+            title="첫 지도 펼치기"
+            onPress={openNewMap}
+            loading={createMutation.isPending}
             style={styles.emptyCta}
           />
         </View>
@@ -164,7 +179,7 @@ export function BoardListScreen({ navigation }: Props) {
           // 새 지도는 떠 있는 동그란 버튼 대신 서랍 맨 위 빈칸 한 줄
           ListHeaderComponent={
             <Pressable
-              onPress={() => navigation.navigate('CreateBoard')}
+              onPress={openNewMap}
               style={({ pressed }) => [styles.newRow, pressed && styles.pressed]}
               accessibilityRole="button"
             >

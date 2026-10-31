@@ -16,6 +16,7 @@ export function BoardTopOverlay({
   people,
   search,
   onBack,
+  onPressTitle,
   onPressSearch,
   onPressExport,
   exporting,
@@ -26,6 +27,8 @@ export function BoardTopOverlay({
   // 지도 위 검색 입력 중(모바일)이면 그 값. null = 검색 닫힘.
   search: { text: string; onChangeText: (t: string) => void; onClose: () => void } | null;
   onBack: () => void;
+  // 꼬리표를 누르면 지도 이름 바꾸기
+  onPressTitle: () => void;
   onPressSearch: () => void;
   onPressExport: () => void;
   exporting: boolean;
@@ -49,7 +52,12 @@ export function BoardTopOverlay({
           >
             <Icon name="back" size={22} />
           </Pressable>
-          <View style={styles.tag}>
+          <Pressable
+            onPress={onPressTitle}
+            style={({ pressed }) => [styles.tag, pressed && styles.tagPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`${title}, 이름 바꾸기`}
+          >
             <Text style={styles.title} numberOfLines={1}>
               {title}
             </Text>
@@ -63,7 +71,7 @@ export function BoardTopOverlay({
                 </View>
               ))}
             </View>
-          </View>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [styles.round, pressed && styles.pressed]}
             onPress={onPressSearch}
@@ -124,6 +132,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-0.8deg' }],
     ...shadows.paper,
   },
+  tagPressed: { backgroundColor: colors.surfaceMuted },
   title: {
     ...typography.label,
     fontSize: 16,

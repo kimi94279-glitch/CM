@@ -21,13 +21,12 @@ export type RootStackParamList = {
   // unauthenticated
   Login: undefined;
   Signup: undefined;
-  // no_profile
+  // no_profile(이메일 가입만)
   ProfileSetup: undefined;
-  // no_couple
-  CoupleConnect: undefined;
+  // 초대 보내기·받기 (solo)
   InviteCreate: undefined;
   InviteJoin: { token?: string } | undefined;
-  // 계정·연결 설정 (no_workspace | solo | active)
+  // 계정·연결 설정 (no_profile | solo | active)
   Settings: undefined;
   // 워크스페이스 보유 (solo | active)
   BoardList: undefined;

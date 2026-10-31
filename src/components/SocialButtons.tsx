@@ -81,7 +81,7 @@ export function SocialButtons({ mode, disabled = false, onSuccess }: SocialButto
   );
 }
 
-const BUTTON_HEIGHT = 50;
+const BUTTON_HEIGHT = 48; // 앱 버튼(Button)과 같은 높이
 
 const styles = StyleSheet.create({
   kakao: {

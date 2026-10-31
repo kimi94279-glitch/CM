@@ -305,10 +305,14 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       startDrop(el);
     };
     // RN → WebView: 지도를 열 때 종이 지도 펼치기(docs/Experience Design.md ② 펼친다 — 하루 한 번은 RN 이 정한다).
-    // 1) 접힌 종이(가운데 폭 + 그 위에 접힌 양 날개)로 화면을 덮고 — 타일이 뜨는 동안을 가려 준다.
-    // 2) 지도가 다 그려지면(idle, 늦어도 1.6초) 지금 그림을 세 폭에 나눠 담고 날개를 편다(0.68초, 오른쪽 먼저).
+    // 1) 보드를 열자마자 접힌 종이(가운데 폭 + 그 위에 접힌 양 날개)로 화면을 덮는다 — 화면이 밀려 들어오는 동안과
+    //    타일이 뜨는 동안을 가려 준다.
+    // 2) 화면 전환이 끝났다는 신호(window.unfoldGo)와 지도가 다 그려졌다는 신호(idle)가 둘 다 오면 지금 그림을 세 폭에
+    //    나눠 담고 날개를 편다(0.68초, 오른쪽 먼저). 신호가 안 와도 2.4초 뒤엔 편다.
+    //    (처음엔 idle 만 기다렸더니, 느린 기기에서 화면이 밀려 들어오는 동안 다 펴져 버려 아무도 못 봤다.)
     // 3) 다 펴지면 덮개를 걷는다 — 아래 살아 있는 지도와 그림이 같아서 이음매가 없고, 핀·쪽지는 이때 드러난다.
     // 탭하면 바로 건너뛴다. 동작 줄이기면 접고 펴지 않고 종이 덮개가 짧게 사라지기만.
+    window.unfoldGo = function(){};
     window.unfold = function(){
       if (!map) return;
       var old = document.getElementById('unfold');
@@ -361,9 +365,12 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
         });
         map.triggerRepaint();
       }
-      map.once('idle', open);
+      var go = false, drawn = false;
+      function tryOpen(){ if (go && drawn) open(); }
+      window.unfoldGo = function(){ go = true; tryOpen(); };
+      map.once('idle', function(){ drawn = true; tryOpen(); });
       map.triggerRepaint();
-      setTimeout(open, 1600);
+      setTimeout(function(){ go = true; drawn = true; tryOpen(); }, 2400);
     };
     // '퐁' 0.32초. 바늘이 종이에 닿는 순간(60%, 약 0.19초)에 RN 이 진동을 울린다 — 보이는 것과 손에 오는 것이 같은 순간.
     // 동작 줄이기면 떨어지지 않고 나타나기만 하고, 진동은 바로.

@@ -91,7 +91,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const partnerId = usePartnerId();
   const inks = useInks();
   const partnerLabel =
-    workspace?.status === 'active' ? (partnerQuery.data?.nickname ?? '상대') : null;
+    workspace?.status === 'active' ? partnerQuery.data?.nickname || '상대' : null;
 
   // ── 화면 상태 ──────────────────────────────────────────────────────────
   // 반응 바가 열린 핀 id (null = 닫힘), 지도에서 강조된 핀 id(시트 자동 오픈 안 함, Surface First).
@@ -187,6 +187,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   // 이 지도의 바탕(boards.map_style, 0017) — 같이 그리는 사람에게도 같은 바탕. 고르지 않았으면 기기 기본 바탕.
   const boardsQuery = useBoards(workspace?.id);
   const boardRow = boardsQuery.data?.find((b) => b.id === boardId);
+  // 지도 이름: 꼬리표를 눌러 바꾸면 목록이 갱신되므로 목록 쪽 이름이 최신이다(들어올 때 받은 이름은 처음 한 번만).
+  const shownTitle = boardRow?.title ?? title;
   const boardStyle = isMapStyleName(boardRow?.map_style) ? boardRow.map_style : null;
   const deviceStyle = useMapStyle();
   const setBoardStyle = useSetBoardMapStyle(workspace?.id);
@@ -213,6 +215,19 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     drawTool: toolsLive ? tools.drawTool : null,
     mapStyle: boardStyle,
   });
+
+  // 지도 펼치기: 화면이 다 밀려 들어온 뒤에 편다(그 전엔 접힌 종이). 전환 이벤트가 안 오는 경우(바로 열린 첫 화면 등)를 위해
+  // 1.2초 뒤에도 한 번 알린다 — 이미 폈거나 연출이 없으면 아무 일 없다.
+  useEffect(() => {
+    const unsub = navigation.addListener('transitionEnd', (e) => {
+      if (!e.data.closing) map.unfoldGo(boardId);
+    });
+    const fallback = setTimeout(() => map.unfoldGo(boardId), 1200);
+    return () => {
+      unsub();
+      clearTimeout(fallback);
+    };
+  }, [navigation, map, boardId]);
 
   // WebView 메시지 콜백을 현재 보드로 등록. 스티커 모드·이모지 최신값 반영 위해 변경 시 재등록.
   useEffect(() => {
@@ -277,7 +292,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       const now = new Date();
       // 함께 그린 사람은 표제란 범례에 잉크와 같이 나오므로 날짜 줄에는 날짜만
       const data = await map.exportCard({
-        title,
+        title: shownTitle,
         dateText: `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`,
         people,
         names: Object.fromEntries(storedPlaces.map((p) => [p.id, p.name])),
@@ -317,8 +332,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       {/* 모바일 검색은 지도 위에서(openSearch), 태블릿은 PlaceAdd 화면. */}
       <BoardTopOverlay
         topInset={insets.top}
-        title={title}
+        title={shownTitle}
         people={people}
+        onPressTitle={() => navigation.navigate('CreateBoard', { boardId, title: shownTitle })}
         search={
           mobileSearching
             ? { text: searchText, onChangeText: setSearchText, onClose: closeSearch }

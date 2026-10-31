@@ -1,8 +1,9 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
 import { colors, spacing, typography } from '../constants/theme';
@@ -40,6 +41,15 @@ export function CreateBoardScreen({ navigation, route }: Props) {
 
   return (
     <ScreenContainer>
+      <Pressable
+        onPress={() => navigation.goBack()}
+        hitSlop={8}
+        style={styles.back}
+        accessibilityRole="button"
+        accessibilityLabel="뒤로"
+      >
+        <Icon name="back" size={24} />
+      </Pressable>
       <Text style={styles.title}>{editing ? '지도 이름 바꾸기' : '새 지도에 이름을 붙여요'}</Text>
 
       <TextField
@@ -68,10 +78,11 @@ export function CreateBoardScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  back: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
   title: {
     ...typography.title,
     color: colors.textStrong,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
     marginBottom: spacing.lg,
   },
   error: {

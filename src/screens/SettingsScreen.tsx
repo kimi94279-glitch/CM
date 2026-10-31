@@ -66,7 +66,7 @@ export function SettingsScreen({ navigation }: Props) {
 
   const isActive = workspace?.status === 'active';
   const isSolo = workspace?.status === 'solo';
-  const partnerName = partnerQuery.data?.nickname ?? '상대';
+  const partnerName = partnerQuery.data?.nickname || '상대';
 
   // 연결 끊기 → 나는 공간 없는 상태로(게이팅이 첫 화면으로 전환), 지도는 상대에게 남는다
   const leave = useMutation({
@@ -139,7 +139,7 @@ export function SettingsScreen({ navigation }: Props) {
 
         <Text style={styles.section}>계정</Text>
         <View style={styles.card}>
-          <Row label="이름" value={profileQuery.data?.nickname ?? ''} />
+          <Row label="이름" value={profileQuery.data?.nickname || '정하지 않음'} />
           <View style={styles.divider} />
           {guest ? (
             <Row label="로그인" value="안 함" />

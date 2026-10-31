@@ -158,7 +158,8 @@ export function MapHost({ children }: { children: ReactNode }) {
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         boardSwitchedAt.current = Date.now();
         mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardId)); // 이 보드에서 마지막으로 보던 자리(없으면 장소 기준).
-        // 오늘 처음 여는 보드면 종이 지도 펼치기(타일이 뜨는 동안 접힌 종이로 가려 준다). 카메라를 맞춘 다음에.
+        // 오늘 처음 여는 보드면 종이 지도 펼치기: 지금 접힌 종이로 덮고(화면이 밀려 들어오는 동안·타일이 뜨는 동안 가림),
+        // 펴는 건 화면 전환이 끝났을 때(unfoldGo — BoardDetail 의 transitionEnd). 카메라를 맞춘 다음에.
         const today = todayKey();
         if (unfoldedRef.current[boardId] !== today) {
           unfoldedRef.current[boardId] = today;
@@ -195,6 +196,10 @@ export function MapHost({ children }: { children: ReactNode }) {
       setMapStyle(boardId, style) {
         if (boardIdRef.current !== boardId) return;
         setBoardStyle(style);
+      },
+      unfoldGo(boardId) {
+        if (boardIdRef.current !== boardId) return;
+        mapRef.current?.unfoldGo();
       },
       exportCard(options) {
         return mapRef.current?.exportCard(options) ?? Promise.resolve(null);

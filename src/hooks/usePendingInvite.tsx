@@ -11,7 +11,7 @@ import { useAuth } from './useAuthState';
 
 // 받은 초대 코드 보존 (FLOW_AUTH.md §5-4)
 // 로그인 전·가입 중에 연 초대 링크의 코드를 기억해 두었다가(앱을 껐다 켜도 유지),
-// 지도를 쓸 수 있는 단계(no_workspace / solo)가 되면 초대 화면으로 이어 준다.
+// 지도를 쓸 수 있는 단계(solo — 처음 들어오면 모두 혼자 쓰는 공간부터)가 되면 초대 화면으로 이어 준다.
 // 수락은 자동으로 하지 않는다 — 혼자 그리던 지도가 합쳐지므로 화면에서 한 번 확인받는다.
 const STORAGE_KEY = 'pending-invite';
 const MAX_AGE_MS = INVITE_EXPIRY_HOURS * 60 * 60 * 1000;
@@ -108,7 +108,7 @@ export function usePendingInviteRouting(
       Alert.alert('이미 같이 그리는 사람이 있어요', '지금은 한 사람과만 지도를 함께 쓸 수 있어요.');
       return;
     }
-    if (status !== 'no_workspace' && status !== 'solo') return; // 로그인·프로필 단계 — 기다린다
+    if (status !== 'solo') return; // 로그인·프로필 단계 — 기다린다
 
     const routeNames = navigationRef.getRootState()?.routeNames ?? [];
     if (!routeNames.includes('InviteJoin')) return;
