@@ -8,7 +8,9 @@ import {
   listBoards,
   markBoardRead,
   renameBoard,
+  setBoardMapStyle,
 } from '../services/boardService';
+import type { Board } from '../types/models';
 
 // 워크스페이스의 보드 목록 조회
 export function useBoards(coupleId: string | undefined) {
@@ -38,6 +40,30 @@ export function useRenameBoard(coupleId: string | undefined) {
       renameBoard(boardId, title),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boards', coupleId] });
+    },
+  });
+}
+
+// 보드 바탕 바꾸기. 고르자마자 지도가 바뀌도록 목록 캐시를 먼저 고치고(낙관), 실패하면 되돌린다.
+export function useSetBoardMapStyle(coupleId: string | undefined) {
+  const queryClient = useQueryClient();
+  const key = ['boards', coupleId];
+  return useMutation({
+    mutationFn: ({ boardId, mapStyle }: { boardId: string; mapStyle: string }) =>
+      setBoardMapStyle(boardId, mapStyle),
+    onMutate: async ({ boardId, mapStyle }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<Board[]>(key);
+      queryClient.setQueryData<Board[]>(key, (list) =>
+        list?.map((b) => (b.id === boardId ? { ...b, map_style: mapStyle } : b))
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(key, ctx.prev);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }

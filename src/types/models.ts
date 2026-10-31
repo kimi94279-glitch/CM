@@ -138,6 +138,8 @@ export interface Board {
   id: string;
   couple_id: string;
   title: string;
+  // 이 지도의 바탕(0017, mapStyles.ts MapStyleName). null·없음 = 기기 기본 바탕. 0017 적용 전 DB 면 필드 자체가 없다.
+  map_style?: string | null;
   created_at: string;
   updated_at: string;
 }

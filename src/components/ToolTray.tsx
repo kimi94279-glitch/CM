@@ -46,6 +46,7 @@ export function ToolTray({
   onUndo,
   placeCount,
   onOpenLegend,
+  onOpenStyles,
   onRecenter,
 }: {
   bottom: number;
@@ -59,6 +60,7 @@ export function ToolTray({
   onUndo: () => void;
   placeCount: number;
   onOpenLegend?: () => void; // 태블릿은 옆 패널이 늘 목록이라 없음
+  onOpenStyles: () => void; // 이 지도의 바탕 고르기
   onRecenter: () => void;
 }) {
   const hint = HINTS[tool];
@@ -114,14 +116,24 @@ export function ToolTray({
           ) : (
             <View />
           )}
-          <Pressable
-            style={({ pressed }) => [styles.round, pressed && styles.pressed]}
-            onPress={onRecenter}
-            accessibilityRole="button"
-            accessibilityLabel="장소 전체 보기"
-          >
-            <Icon name="compass" size={22} />
-          </Pressable>
+          <View style={styles.roundGroup}>
+            <Pressable
+              style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+              onPress={onOpenStyles}
+              accessibilityRole="button"
+              accessibilityLabel="지도 바탕 고르기"
+            >
+              <Icon name="layers" size={22} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+              onPress={onRecenter}
+              accessibilityRole="button"
+              accessibilityLabel="장소 전체 보기"
+            >
+              <Icon name="compass" size={22} />
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -277,6 +289,7 @@ const styles = StyleSheet.create({
   },
   legendText: { ...typography.label, color: colors.tagInk },
   legendCount: { ...typography.caption, ...numeric, color: colors.textMuted },
+  roundGroup: { flexDirection: 'row', gap: spacing.sm },
   round: {
     width: 44,
     height: 44,

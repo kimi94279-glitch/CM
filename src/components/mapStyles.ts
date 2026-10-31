@@ -1,22 +1,26 @@
 // 지도 바탕 스타일 — "내비게이션 이전의 종이 지도 위에 지금의 UI"(2026-10-31 방향, docs/design/map-style-drafts.html).
-// 3종을 같은 데이터(OpenFreeMap 벡터 타일 + 지형 타일)로 그린다. 핀·말풍선·펜 선·스티커는 그 위에 따로 얹는다(mapWebViewHtml).
-// 지금은 설정의 비교 스위치로 고른다(시험). 정해지면 기본값만 남기거나 지도마다 고르게 한다.
+// 모두 같은 데이터(OpenFreeMap 벡터 타일 + 지형 타일)로 그린다. 핀·쪽지·펜 선·스티커는 그 위에 따로 얹는다(mapWebViewHtml).
+// 지도마다 고른다(boards.map_style, 지도 화면의 바탕 고르기 판). 고르지 않은 지도는 이 기기의 기본 바탕(설정).
+// 새 바탕은 멋지고 · 편하고 · 깔끔하고 · 잘 보여야 한다. 미리보기 그림은 assets/map-styles/<이름>.jpg(240×320).
 //
 // 스타일은 MapLibre style JSON 그대로다. 지형(산 음영·높이 색)과 등고선 소스는 WebView 안에서만 만들 수 있어서
 // 타일 주소 자리에 '@dem' · '@contours' 를 두고 WebView 가 채운다. metadata 의 cm:* 는 지도 위 종이 효과·격자 설정.
 
-export type MapStyleName = 'roadmap' | 'atlas' | 'topo';
+export type MapStyleName = 'roadmap' | 'atlas' | 'topo' | 'relief' | 'city';
 
 export const DEFAULT_MAP_STYLE: MapStyleName = 'roadmap';
 
+// 고르는 순서 = 이 순서. 이름(키)은 boards.map_style(0017)에 저장된다 — 바꾸지 말고 더하기만.
 export const MAP_STYLE_OPTIONS: { name: MapStyleName; label: string; hint: string }[] = [
   { name: 'roadmap', label: '도로지도', hint: '90년대 도로지도' },
   { name: 'atlas', label: '지도책', hint: '높이에 따라 색을 칠한 사회과부도' },
   { name: 'topo', label: '지형도', hint: '등고선과 방안 격자' },
+  { name: 'relief', label: '입체 지도', hint: '산이 은은하게 도드라지는 스위스식 지도' },
+  { name: 'city', label: '시가지도', hint: '골목과 건물까지 또렷한 도시 지도' },
 ];
 
 export function isMapStyleName(v: unknown): v is MapStyleName {
-  return v === 'roadmap' || v === 'atlas' || v === 'topo';
+  return MAP_STYLE_OPTIONS.some((o) => o.name === v);
 }
 
 // 지형 타일(Mapzen Terrain Tiles, AWS Open Data — 무료·키리스, terrarium 인코딩). 출처는 설정 "정보"와 지도 출처 표시.
@@ -193,6 +197,81 @@ const THEMES: Record<MapStyleName, Theme> = {
     waterText: '#1F6FB0',
     spacing: 0,
     grain: 0.16,
+  },
+  // 새 바탕의 기준(2026-10-31): 멋지고 · 오래 봐도 편하고 · 깔끔하고 · 잘 보여야 한다. 일부러 흐리거나 낡게 만들지 않는다.
+  // 입체 지도: 스위스 지형도처럼 북서쪽 빛의 산 음영(푸른 그늘·따뜻한 볕)이 은은하게 도드라지고,
+  // 그 위 길·물·글자는 또렷하게. 격자 없이, 등고선은 아주 옅게.
+  relief: {
+    paper: '#F7F6F1',
+    urban: ['#ECE6DD', 1],
+    wood: ['#CFE3BC', 1],
+    park: ['#C7E0AE', 1],
+    pattern: null,
+    hillshade: {
+      shadow: 'rgba(52,68,98,0.38)',
+      highlight: 'rgba(255,248,226,0.45)',
+      accent: 'rgba(40,52,80,0.2)',
+      ex: 0.55,
+    },
+    contours: { color: 'rgba(150,118,84,0.22)', index: 'rgba(140,104,68,0.45)', label: '#86654A' },
+    water: '#A6D2F0',
+    coast: ['#2F7DC0', 0.9],
+    ripples: null,
+    waterway: '#3F8FD0',
+    building: ['#DCD4C9', 1, 14],
+    roads: {
+      motorway: ['#E5533D', '#932A1C', 1.1],
+      major: ['#F3A23E', '#A2611C', 1],
+      secondary: ['#FCE38A', '#A69046', 0.95],
+      tertiary: ['#FFFFFF', '#9C978F', 0.9],
+      minor: ['#FFFFFF', '#B9B3A8', 0.85],
+      path: ['#7C7468', null, 0.9, [2, 1.5]],
+    },
+    rail: ['#2E2E2E', 'ticks'],
+    grid: null,
+    peaks: true,
+    text: '#161616',
+    halo: 'rgba(255,255,255,0.95)',
+    waterText: '#1C5E99',
+    spacing: 0,
+    grain: 0.12,
+  },
+  // 시가지도: 일본 도시지도처럼 건물·골목까지 또렷하게 — 데이트·동네 산책 계획용. 산 음영은 거의 없이 평평하게,
+  // 고속도로 초록 · 큰길 빨강 · 지방도 노랑으로 길 등급이 한눈에, 건물은 낮은 줌부터 옅게 보인다.
+  city: {
+    paper: '#F5F2EB',
+    urban: null,
+    wood: ['#C6E1B0', 1],
+    park: ['#BCDDA0', 1],
+    pattern: null,
+    hillshade: {
+      shadow: 'rgba(90,80,60,0.12)',
+      highlight: 'rgba(255,255,255,0.12)',
+      accent: 'rgba(0,0,0,0)',
+      ex: 0.15,
+    },
+    contours: null,
+    water: '#9FD0EF',
+    coast: ['#4C98D4', 0.9],
+    ripples: null,
+    waterway: '#5AA2DA',
+    building: ['#E2DACE', 1, 13],
+    roads: {
+      motorway: ['#3F9F60', '#1E5C36', 1.1],
+      major: ['#E5533F', '#922E22', 1],
+      secondary: ['#F8D65E', '#A3882D', 0.95],
+      tertiary: ['#FFFFFF', '#A39C92', 0.9],
+      minor: ['#FFFFFF', '#C3BCB1', 0.85],
+      path: ['#8A8276', null, 0.9, [2, 1.5]],
+    },
+    rail: ['#2A2A2A', 'dashes'],
+    grid: null,
+    shields: true,
+    text: '#1A1A18',
+    halo: 'rgba(255,255,255,0.95)',
+    waterText: '#2370B0',
+    spacing: 0,
+    grain: 0.1,
   },
 };
 

@@ -24,6 +24,7 @@ export const iconAssets = {
   sliders: require('../../assets/icons/sliders.png'),
   paste: require('../../assets/icons/paste.png'),
   stamp: require('../../assets/icons/stamp.png'),
+  layers: require('../../assets/icons/layers.png'),
 } as const;
 
 export type IconName = keyof typeof iconAssets;

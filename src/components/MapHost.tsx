@@ -9,6 +9,7 @@ import { useMapStyle } from '../hooks/useMapStyle';
 import { reportMessage } from '../services/monitoring';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import type { MapStyleName } from './mapStyles';
 import { MapWebView, type MapCamera, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
@@ -60,8 +61,10 @@ export function MapHost({ children }: { children: ReactNode }) {
       : null;
   // 각자 고른 잉크(나 · 지금 상대 · 그 밖=회색)
   const inks = useInks();
-  // 지도 바탕(종이 지도) — 설정에서 바꾸면 바로 갈아 끼운다
-  const mapStyle = useMapStyle();
+  // 지도 바탕(종이 지도): 이 보드가 고른 바탕(boards.map_style) → 없으면 이 기기의 기본 바탕(설정). 바뀌면 바로 갈아 끼운다.
+  const deviceStyle = useMapStyle();
+  const [boardStyle, setBoardStyle] = useState<MapStyleName | null>(null);
+  const mapStyle = boardStyle ?? deviceStyle;
 
   // 현재 보드 토큰(잔상 가드)과 콜백(ref 라우팅 — 재렌더 없이 최신 콜백 호출).
   const boardIdRef = useRef<string | null>(null);
@@ -151,6 +154,7 @@ export function MapHost({ children }: { children: ReactNode }) {
         callbacksRef.current = {};
         setSelectedObjectId(null);
         setDrawTool(null); // 이전 보드에서 들고 있던 도구 내려놓기.
+        setBoardStyle(null); // 이전 보드의 바탕 — 새 보드의 바탕은 화면이 바로 이어서 알려 준다(같은 렌더에 묶임).
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         boardSwitchedAt.current = Date.now();
         mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardId)); // 이 보드에서 마지막으로 보던 자리(없으면 장소 기준).
@@ -187,6 +191,10 @@ export function MapHost({ children }: { children: ReactNode }) {
       setDrawTool(boardId, tool) {
         if (boardIdRef.current !== boardId) return;
         setDrawTool(tool);
+      },
+      setMapStyle(boardId, style) {
+        if (boardIdRef.current !== boardId) return;
+        setBoardStyle(style);
       },
       exportCard(options) {
         return mapRef.current?.exportCard(options) ?? Promise.resolve(null);

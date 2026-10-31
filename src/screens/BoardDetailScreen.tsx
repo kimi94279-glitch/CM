@@ -18,7 +18,8 @@ import { CanvasObjectList } from '../components/CanvasObjectList';
 import { ObjectEditBar } from '../components/CanvasToolBars';
 import { HalfSheet } from '../components/HalfSheet';
 import { useMapHost } from '../components/MapHostContext';
-import { PRINT_CREDIT_LINES } from '../components/mapStyles';
+import { isMapStyleName, PRINT_CREDIT_LINES, type MapStyleName } from '../components/mapStyles';
+import { MapStylePicker } from '../components/MapStylePicker';
 import { PlaceActionBar, usePlaceActions } from '../components/PlaceActionBar';
 import { CenterPin, PlaceDraftCard } from '../components/PlaceDraftCard';
 import { SearchSheet } from '../components/SearchSheet';
@@ -27,10 +28,11 @@ import { KAKAO_SEARCH_ASSIST } from '../constants/config';
 import { colors, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useBoardMapSync } from '../hooks/useBoardMapSync';
-import { useMarkBoardRead } from '../hooks/useBoards';
+import { useBoards, useMarkBoardRead, useSetBoardMapStyle } from '../hooks/useBoards';
 import { useCanvasTools } from '../hooks/useCanvasTools';
 import { useInks } from '../hooks/useInks';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
+import { useMapStyle } from '../hooks/useMapStyle';
 import { usePartnerId, usePartnerProfile } from '../hooks/usePartnerProfile';
 import { usePlaceMemos } from '../hooks/usePlaceMemos';
 import { usePlaceReactions } from '../hooks/usePlaceReactions';
@@ -97,6 +99,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   // 모바일 Half Sheet 표시 여부 (기본 닫힘 → 기본 화면은 지도만)
   const [sheetOpen, setSheetOpen] = useState(false);
+  // 이 지도의 바탕 고르기 판
+  const [stylesOpen, setStylesOpen] = useState(false);
   // 지도 위 검색(모바일, 상단 SearchBar + 하단 SearchSheet). 입력 → 400ms 뒤 제출된 검색어로 카카오 검색.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -122,7 +126,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   };
   const openSheet = () => {
     setSearchOpen(false);
+    setStylesOpen(false);
     setSheetOpen(true);
+  };
+  const openStyles = () => {
+    closeSearch();
+    setSheetOpen(false);
+    setReactionPlaceId(null);
+    setStylesOpen(true);
   };
   const goAdd = () => navigation.navigate('PlaceAdd', { boardId, title });
 
@@ -166,7 +177,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const isFocused = useIsFocused();
   // 필통이 보일 때만 든 도구가 살아 있다(검색·범례·핀 쪽지·편집·핀 확정 중엔 한 손가락이 지도를 움직이고 스티커도 안 붙는다).
   const toolsLive =
-    !sheetOpen && !searchOpen && !placing && !reactionPlaceId && !tools.selectedObject;
+    !sheetOpen &&
+    !stylesOpen &&
+    !searchOpen &&
+    !placing &&
+    !reactionPlaceId &&
+    !tools.selectedObject;
+
+  // 이 지도의 바탕(boards.map_style, 0017) — 같이 그리는 사람에게도 같은 바탕. 고르지 않았으면 기기 기본 바탕.
+  const boardsQuery = useBoards(workspace?.id);
+  const boardRow = boardsQuery.data?.find((b) => b.id === boardId);
+  const boardStyle = isMapStyleName(boardRow?.map_style) ? boardRow.map_style : null;
+  const deviceStyle = useMapStyle();
+  const setBoardStyle = useSetBoardMapStyle(workspace?.id);
+  const pickStyle = (mapStyle: MapStyleName) =>
+    setBoardStyle.mutate(
+      { boardId, mapStyle },
+      { onError: (e) => Alert.alert('바탕을 바꾸지 못했어요', friendlyError(e)) }
+    );
 
   // 새 흔적 표시(0009): 들어올 때와 나갈 때 "봤다"고 기록 → 머무는 동안 생긴 흔적도 본 것으로 친다.
   const markRead = useMarkBoardRead();
@@ -183,6 +211,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     focusNonce: focus?.nonce ?? null,
     selectedObjectId: tools.selectedObjectId,
     drawTool: toolsLive ? tools.drawTool : null,
+    mapStyle: boardStyle,
   });
 
   // WebView 메시지 콜백을 현재 보드로 등록. 스티커 모드·이모지 최신값 반영 위해 변경 시 재등록.
@@ -315,6 +344,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           onUndo={tools.undoDraw}
           placeCount={listPlaces.length}
           onOpenLegend={isTablet ? undefined : openSheet}
+          onOpenStyles={openStyles}
           onRecenter={() => map.recenter()}
         />
       ) : null}
@@ -384,6 +414,29 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     />
   );
 
+  // 이 지도의 바탕 고르기 판(아래 시트). 고르면 바로 지도가 바뀌고(낙관 반영) 같이 그리는 사람에게도 저장된다.
+  // 시트가 낮아 지도가 보이므로, 넘겨 보며 바로 비교할 수 있다.
+  const stylesUI = stylesOpen ? (
+    <HalfSheet
+      height={300 + insets.bottom}
+      bottomInset={0}
+      onDismissed={() => setStylesOpen(false)}
+      closeLabel="바탕 고르기 닫기"
+    >
+      {() => (
+        <View style={[styles.stylesBody, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Text style={styles.stylesTitle} accessibilityRole="header">
+            이 지도의 바탕
+          </Text>
+          <Text style={styles.stylesNote}>
+            {partnerLabel ? `${partnerLabel}에게도 이 바탕으로 보여요.` : '이 지도에만 적용돼요.'}
+          </Text>
+          <MapStylePicker value={boardStyle ?? deviceStyle} onPick={pickStyle} />
+        </View>
+      )}
+    </HalfSheet>
+  ) : null;
+
   // 태블릿: 좌 지도 + 우 Side Panel(목록 상시)
   if (isTablet) {
     return (
@@ -395,6 +448,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
         {placingUI}
+        {stylesUI}
       </View>
     );
   }
@@ -414,6 +468,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           {(dismiss) => list(openSearch, dismiss)}
         </HalfSheet>
       ) : null}
+
+      {stylesUI}
 
       {placingUI}
 
@@ -461,6 +517,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg, // 오류 시 지도를 가린다(absoluteFill 위).
   },
   errorText: { ...typography.body, color: colors.danger, marginBottom: spacing.md },
+  stylesBody: { paddingHorizontal: spacing.md, gap: spacing.xs },
+  stylesTitle: { ...typography.title, fontSize: 18, lineHeight: 24, color: colors.textStrong },
+  stylesNote: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
   loadingOverlay: {
     position: 'absolute',
     top: 0,

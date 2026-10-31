@@ -5,7 +5,7 @@ import React from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
-import { MAP_STYLE_OPTIONS } from '../components/mapStyles';
+import { MapStylePicker } from '../components/MapStylePicker';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SocialButtons } from '../components/SocialButtons';
 import {
@@ -191,29 +191,10 @@ export function SettingsScreen({ navigation }: Props) {
           {isActive ? ' 상대와 같은 색을 고르면 내 화면에선 상대가 다른 색으로 보여요.' : ''}
         </Text>
 
-        {/* 종이 지도 3종 비교(시험 중) — 이 기기에만 저장. 정해지면 기본값만 남기거나 지도마다 고르게 바꾼다. */}
-        <Text style={styles.section}>지도 바탕</Text>
-        <View style={styles.styleRow}>
-          {MAP_STYLE_OPTIONS.map((o) => {
-            const selected = mapStyle === o.name;
-            return (
-              <Pressable
-                key={o.name}
-                onPress={() => setMapStyle(o.name)}
-                disabled={selected}
-                accessibilityRole="button"
-                accessibilityLabel={`지도 바탕 ${o.label}`}
-                accessibilityState={{ selected }}
-                style={[styles.styleOption, selected && styles.styleOptionOn]}
-              >
-                <Text style={[styles.styleLabel, selected && styles.styleLabelOn]}>{o.label}</Text>
-                <Text style={styles.styleHint} numberOfLines={2}>
-                  {o.hint}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* 바탕을 따로 고르지 않은 지도에 쓰는 기본 바탕 — 이 기기에만 저장. 지도마다는 지도 화면에서 고른다(boards.map_style). */}
+        <Text style={styles.section}>새 지도 기본 바탕</Text>
+        <MapStylePicker value={mapStyle} onPick={setMapStyle} />
+        <Text style={styles.inkHint}>지도마다 지도 화면에서 따로 고를 수 있어요.</Text>
 
         {isActive || isSolo ? (
           <>
@@ -396,36 +377,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: spacing.sm,
-  },
-  styleRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  styleOption: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.field,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-  },
-  styleOptionOn: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  styleLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
-  styleLabelOn: {
-    color: colors.textStrong,
-    fontWeight: '700',
-  },
-  styleHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   guestBox: {
     marginTop: spacing.md,

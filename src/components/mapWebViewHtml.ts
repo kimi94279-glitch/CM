@@ -343,6 +343,8 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       root.addEventListener('pointerdown', function(e){ e.stopPropagation(); finish(); });
       function open(){
         if (opened || finished) return;
+        // 바탕을 갈아 끼우는 중이면(보드 바탕이 막 정해짐) 새 바탕이 다 그려진 뒤에 편다
+        if (SWITCHING){ map.once('idle', open); return; }
         opened = true;
         if (reduce){ finish(); return; }
         // 지금 지도 그림을 세 폭에 나눠 담는다(그림 버퍼가 살아 있는 render 순간에)

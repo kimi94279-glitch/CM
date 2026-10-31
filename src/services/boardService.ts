@@ -38,6 +38,12 @@ export async function renameBoard(boardId: string, title: string): Promise<Board
   return data;
 }
 
+// 보드 바탕 바꾸기(0017 boards.map_style, boards_update 정책: 같은 공간 멤버 — 같이 그리는 사람에게도 같은 바탕)
+export async function setBoardMapStyle(boardId: string, mapStyle: string): Promise<void> {
+  const { error } = await supabase.from('boards').update({ map_style: mapStyle }).eq('id', boardId);
+  if (error) throw error;
+}
+
 // 보드 삭제 — 장소·메모·반응·스티커·그림·읽음 기록이 함께 지워진다(on delete cascade).
 export async function deleteBoard(boardId: string): Promise<void> {
   const { error } = await supabase.from('boards').delete().eq('id', boardId);

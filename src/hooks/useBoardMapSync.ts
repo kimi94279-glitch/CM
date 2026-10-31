@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { DrawTool, MapBoardData, MapHostController } from '../components/MapHostContext';
+import type { MapStyleName } from '../components/mapStyles';
 
 // 싱글톤 MapHost(앱 수명 동안 WebView/MapLibre 1개)를 이 보드 화면 상태에 맞춘다. 컨트롤러의 토큰 가드가
 // 늦게 도착한 이전 보드 응답을 막는다. 콜백 등록(map.setCallbacks)은 화면 상태를 다루므로 화면에 둔다.
@@ -14,6 +15,7 @@ export function useBoardMapSync(
     focusNonce,
     selectedObjectId,
     drawTool,
+    mapStyle,
   }: {
     isFocused: boolean;
     data: MapBoardData;
@@ -22,12 +24,19 @@ export function useBoardMapSync(
     focusNonce: number | null;
     selectedObjectId: string | null;
     drawTool: DrawTool | null;
+    // 이 보드의 바탕(boards.map_style). null = 기기 기본 바탕.
+    mapStyle: MapStyleName | null;
   }
 ) {
   // 보드 진입(마운트/보드 변경) → 토큰 설정 + 이전 보드 오버레이 clear(잔상 가드). 보드당 1회.
   useEffect(() => {
     map.beginBoard(boardId);
   }, [boardId, map]);
+
+  // 이 보드의 바탕. beginBoard 바로 뒤에 두어 같은 렌더에 묶인다(이전 보드 바탕이 잠깐 비치지 않게).
+  useEffect(() => {
+    map.setMapStyle(boardId, mapStyle);
+  }, [boardId, mapStyle, map]);
 
   // 포커스 전환 → 표시/숨김만. 데이터/카메라와 분리 → PlaceAdd 왕복 시 팬/줌 보존.
   useEffect(() => {
