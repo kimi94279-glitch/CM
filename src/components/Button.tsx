@@ -28,6 +28,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,
         variantStyles[variant],
@@ -60,12 +63,14 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
+  // 누르면 살짝 눌린다(종이 버튼을 누르는 손맛). 크기 변화가 작아 동작 줄이기 설정과 부딪히지 않는다.
   pressed: {
-    opacity: 0.85,
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
 
-// Primary = 검정 채움, Secondary = 연회색 채움(테두리 없음), Ghost = 글자만 (DESIGN.md B+).
+// Primary = 군청 채움, Secondary = 종이색 채움(테두리 없음), Ghost = 글자만.
 const variantStyles: Record<ButtonVariant, ViewStyle> = {
   primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.surfaceMuted },

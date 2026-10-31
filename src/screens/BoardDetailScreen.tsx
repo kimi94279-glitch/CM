@@ -222,9 +222,9 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
-    Alert.alert('장소 삭제', `'${place.name}'을(를) 삭제할까요?`, [
+    Alert.alert(`${place.name} 핀을 뺄까요?`, '이 핀에 남긴 반응과 쪽지도 같이 지워져요.', [
       { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => deletePlace.mutate(place.id) },
+      { text: '빼기', style: 'destructive', onPress: () => deletePlace.mutate(place.id) },
     ]);
   };
 
@@ -238,7 +238,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     ...(partnerLabel !== null ? [{ name: partnerLabel, color: inks.partner.solid }] : []),
   ];
 
-  // 📮 지도 한 장으로 접기: 지금 보이는 지도를 9:16 한 장으로 굽고 공유 창을 연다(인스타 스토리·저장·카톡).
+  // 지도 한 장으로 접기: 지금 보이는 지도를 9:16 한 장으로 굽고 공유 창을 연다(인스타 스토리·저장·카톡).
   // 핀 이름은 저장된 이름(사용자가 붙인 이름·공공데이터 이름)만 — 카카오 실시간 이름은 이미지에 남기지 않는다(ADR-016).
   const [exporting, setExporting] = useState(false);
   const exportOnePage = async () => {
@@ -246,13 +246,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     setExporting(true);
     try {
       const now = new Date();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const who = people.map((p) => p.name).join(' · ');
+      // 함께 그린 사람은 표제란 범례에 잉크와 같이 나오므로 날짜 줄에는 날짜만
       const data = await map.exportCard({
         title,
-        dateText: `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 · ${who}`,
-        stampDate: `${now.getFullYear()} ${mm}.${dd}`,
+        dateText: `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`,
         people,
         names: Object.fromEntries(storedPlaces.map((p) => [p.id, p.name])),
         credit: PRINT_CREDIT_LINES,

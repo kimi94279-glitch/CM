@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { MEMO_MAX_LENGTH } from '../constants/config';
-import { REACTION_EMOJI, REACTION_ORDER } from '../constants/reactions';
+import { REACTION_EMOJI, REACTION_LABEL, REACTION_ORDER } from '../constants/reactions';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import type { PeopleInks } from '../hooks/useInks';
 import { useAddMemo, useRemoveMemo } from '../hooks/usePlaceMemos';
@@ -21,6 +21,7 @@ import { friendlyError } from '../utils/errors';
 import { kakaoPlaceUrl } from '../utils/kakaoMap';
 import { whoOf } from '../utils/who';
 import { FloatingBar, floatingShadow } from './FloatingBar';
+import { Icon } from './Icon';
 
 export interface PlaceActions {
   toggleReaction: (placeId: string, type: ReactionType, mine: boolean) => void;
@@ -38,24 +39,24 @@ export function usePlaceActions(boardId: string): PlaceActions {
   const removeMemo = useRemoveMemo(boardId);
   return {
     toggleReaction: (placeId, type, mine) => {
-      const onError = (e: unknown) => Alert.alert('반응 저장 실패', friendlyError(e));
+      const onError = (e: unknown) => Alert.alert('반응을 남기지 못했어요', friendlyError(e));
       if (mine) removeReaction.mutate({ placeId, type }, { onError });
       else addReaction.mutate({ placeId, type }, { onError });
     },
     sendMemo: (placeId, content) =>
       addMemo.mutate(
         { placeId, content },
-        { onError: (e) => Alert.alert('메모 저장 실패', friendlyError(e)) }
+        { onError: (e) => Alert.alert('쪽지를 남기지 못했어요', friendlyError(e)) }
       ),
     removeMemo: (memoId) =>
       removeMemo.mutate(memoId, {
-        onError: (e) => Alert.alert('메모 삭제 실패', friendlyError(e)),
+        onError: (e) => Alert.alert('쪽지를 지우지 못했어요', friendlyError(e)),
       }),
   };
 }
 
-// 핀을 탭하면 뜨는 바(ADR-014 대화): 반응(banter) 토글 + 💬 한 줄 메모 + 카카오맵 링크.
-// 💬 로 입력창(+ 이 핀의 최근 대화)을 바 위에 열고, 입력 중에는 키보드 위로 올린다.
+// 핀을 탭하면 뜨는 바(ADR-014 대화): 반응(banter) 토글 + 한 줄 쪽지 + 카카오맵 링크.
+// 쪽지 버튼으로 입력창(+ 이 핀의 최근 대화)을 바 위에 열고, 입력 중에는 키보드 위로 올린다.
 // 화면에서 핀마다 key 를 달아 쓰므로 다른 핀으로 바뀌면 입력창은 닫힌 채로 새로 시작한다.
 // 반응·메모 목록은 화면이 지도에 주입하는 것을 그대로 받는다(바가 열릴 때마다 다시 불러오지 않게).
 export function PlaceActionBar({
@@ -137,9 +138,10 @@ export function PlaceActionBar({
                 onPress={() => actions.removeMemo(m.id)}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="메모 삭제"
+                accessibilityLabel="이 쪽지 지우기"
+                style={styles.memoDelete}
               >
-                <Text style={styles.memoDelete}>✕</Text>
+                <Icon name="close" size={14} color={colors.textMuted} />
               </Pressable>
             ) : null}
           </View>
@@ -162,9 +164,9 @@ export function PlaceActionBar({
           onPress={sendMemo}
           disabled={!memoText.trim()}
           accessibilityRole="button"
-          accessibilityLabel="메모 보내기"
+          accessibilityLabel="쪽지 보내기"
         >
-          <Text style={styles.memoSendText}>보내기</Text>
+          <Text style={styles.memoSendText}>남기기</Text>
         </Pressable>
       </View>
     </View>
@@ -178,7 +180,7 @@ export function PlaceActionBar({
         Keyboard.dismiss();
         onClose();
       }}
-      closeLabel="반응 닫기"
+      closeLabel="핀 쪽지 닫기"
     >
       {REACTION_ORDER.map((type) => (
         <Pressable
@@ -186,7 +188,7 @@ export function PlaceActionBar({
           style={[styles.emojiBtn, myReactionTypes.has(type) && [styles.emojiMine, mineInkStyle]]}
           onPress={() => toggleReaction(type)}
           accessibilityRole="button"
-          accessibilityLabel={`반응 ${type}`}
+          accessibilityLabel={`반응 ${REACTION_LABEL[type]}`}
           accessibilityState={{ selected: myReactionTypes.has(type) }}
         >
           <Text style={styles.emoji}>{REACTION_EMOJI[type]}</Text>
@@ -197,10 +199,10 @@ export function PlaceActionBar({
         style={[styles.emojiBtn, memoOpen && [styles.emojiMine, mineInkStyle]]}
         onPress={toggleMemo}
         accessibilityRole="button"
-        accessibilityLabel="한 줄 메모"
+        accessibilityLabel="한 줄 쪽지"
         accessibilityState={{ selected: memoOpen }}
       >
-        <Text style={styles.emoji}>💬</Text>
+        <Icon name="memo" size={24} color={memoOpen ? inks.me.solid : colors.textStrong} />
       </Pressable>
       {kakaoPlaceId ? (
         <Pressable
@@ -210,6 +212,7 @@ export function PlaceActionBar({
           accessibilityLabel="카카오맵에서 보기"
         >
           <Text style={styles.kakaoLinkText}>카카오맵</Text>
+          <Icon name="forward" size={14} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </FloatingBar>
@@ -225,26 +228,28 @@ const styles = StyleSheet.create({
   },
   // 내가 이미 누른 반응: 내 잉크 테두리 + 잉크 tint 배경(색은 mineInkStyle 로 각자 잉크).
   emojiMine: {
-    borderRadius: radius.card,
-    borderWidth: 2,
+    borderRadius: radius.field,
+    borderWidth: 1.5,
   },
   emoji: { fontSize: 24 },
   kakaoLinkBtn: {
     height: 44,
-    paddingHorizontal: spacing.sm,
-    justifyContent: 'center',
+    paddingLeft: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   kakaoLinkText: { ...typography.caption, fontWeight: '600', color: colors.textStrong },
 
-  // 한 줄 메모 입력 카드(바 위). 최근 대화 + 입력 줄. 바와 같은 톤.
+  // 한 줄 쪽지 카드(바 위). 최근 대화 + 입력 줄. 지도 위 쪽지와 같은 꼬리표 종이.
   memoCard: {
     alignSelf: 'stretch',
     maxWidth: 480,
     marginHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
+    backgroundColor: colors.tag,
+    borderRadius: radius.tag,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.tagRule,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.xs,
@@ -252,13 +257,14 @@ const styles = StyleSheet.create({
   },
   memoRow: { flexDirection: 'row', alignItems: 'center' },
   memoDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.xs },
-  memoRowText: { ...typography.label, color: colors.textStrong, flex: 1 },
-  memoDelete: { ...typography.caption, color: colors.textMuted, paddingHorizontal: spacing.xs },
+  memoRowText: { ...typography.label, fontWeight: '400', color: colors.tagInk, flex: 1 },
+  memoDelete: { paddingHorizontal: spacing.xs, paddingVertical: 2 },
   memoInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   memoInput: {
     flex: 1,
     ...typography.body,
-    color: colors.textStrong,
+    lineHeight: undefined, // 한 줄 입력칸은 줄 간격 없이(iOS 에서 글자가 아래로 치우친다)
+    color: colors.tagInk,
     height: 40,
     paddingVertical: 0,
   },
@@ -271,5 +277,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   memoSendDisabled: { opacity: 0.4 },
-  memoSendText: { ...typography.label, color: colors.surface, fontWeight: '700' },
+  memoSendText: { ...typography.label, color: colors.onPrimary },
 });

@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
 import { LoginRequired } from '../components/LoginRequired';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { TextField } from '../components/TextField';
@@ -111,8 +112,9 @@ function InviteJoinContent({ route }: Props) {
         autoCapitalize="characters"
         autoFocus={!paramToken}
       />
-      <Pressable onPress={onPaste} hitSlop={8} style={styles.pasteRow}>
-        <Text style={styles.paste}>📋 붙여넣기</Text>
+      <Pressable onPress={onPaste} hitSlop={8} style={styles.pasteRow} accessibilityRole="button">
+        <Icon name="paste" size={18} color={colors.primary} />
+        <Text style={styles.paste}>붙여넣기</Text>
       </Pressable>
       {pasteMiss ? (
         <Text style={styles.hint}>복사한 내용에서 초대 코드를 찾지 못했어요.</Text>
@@ -125,7 +127,7 @@ function InviteJoinContent({ route }: Props) {
           ) : preview.data?.state === 'ok' ? (
             <>
               <Text style={styles.previewTitle}>
-                ✏️ {preview.data.inviter_name ?? '상대'}님이 같이 그리자고 해요
+                {preview.data.inviter_name ?? '상대'}님이 같이 그리자고 해요
               </Text>
               {isSolo && myBoardCount > 0 ? (
                 <Text style={styles.previewNote}>
@@ -168,6 +170,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   pasteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     alignSelf: 'flex-start',
     marginTop: -spacing.xs,
     marginBottom: spacing.md,

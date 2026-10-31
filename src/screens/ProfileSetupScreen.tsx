@@ -45,11 +45,13 @@ export function ProfileSetupScreen() {
         placeholder="지민"
         autoCapitalize="words"
         autoFocus
-        error={tooLong ? `${NICKNAME_MAX}자 이내로 입력해주세요.` : null}
+        error={tooLong ? `${NICKNAME_MAX}자까지 쓸 수 있어요.` : null}
       />
 
       {mutation.isError ? (
-        <Text style={styles.error}>저장에 실패했어요. 다시 시도해주세요.</Text>
+        <Text style={styles.error}>
+          이름을 저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.
+        </Text>
       ) : null}
 
       <Button

@@ -1,13 +1,14 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
+import { Icon } from './Icon';
 import { SearchBar } from './SearchBar';
 
 const BAR_HEIGHT = 44;
 
 // 보드 지도 위 상단. 첫 행동이 "검색"이 아니라 "지도 보기"가 되도록, 검색창 대신 지도에 붙인 종이 꼬리표(지도 이름 ·
-// 함께 그리는 사람)를 두고 검색은 🔍 도구로 뺐다(2026-10-31 경험 설계). 📮 = 지도 한 장으로 접기(내보내기).
+// 함께 그리는 사람)를 두고 검색은 돋보기 버튼으로 뺐다(2026-10-31 경험 설계). 접힌 지도 버튼 = 지도 한 장으로 접기(내보내기).
 // 지도 위 검색 중(모바일)이면 SearchBar(전체폭).
 export function BoardTopOverlay({
   topInset,
@@ -40,13 +41,13 @@ export function BoardTopOverlay({
       ) : (
         <>
           <Pressable
-            style={styles.round}
+            style={({ pressed }) => [styles.round, pressed && styles.pressed]}
             onPress={onBack}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="지도 서랍으로"
           >
-            <Text style={styles.backIcon}>‹</Text>
+            <Icon name="back" size={22} />
           </Pressable>
           <View style={styles.tag}>
             <Text style={styles.title} numberOfLines={1}>
@@ -64,37 +65,30 @@ export function BoardTopOverlay({
             </View>
           </View>
           <Pressable
-            style={styles.round}
+            style={({ pressed }) => [styles.round, pressed && styles.pressed]}
             onPress={onPressSearch}
             hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel="장소 찾기"
           >
-            <Text style={styles.icon}>🔍</Text>
+            <Icon name="search" size={21} />
           </Pressable>
           <Pressable
-            style={[styles.round, exporting && styles.busy]}
+            style={({ pressed }) => [styles.round, (exporting || pressed) && styles.pressed]}
             onPress={onPressExport}
             disabled={exporting}
             hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel="지도 한 장으로 접기"
+            accessibilityState={{ busy: exporting }}
           >
-            <Text style={styles.icon}>📮</Text>
+            <Icon name="fold" size={22} />
           </Pressable>
         </>
       )}
     </View>
   );
 }
-
-const shadow = {
-  shadowColor: '#000',
-  shadowOpacity: 0.14,
-  shadowRadius: 6,
-  shadowOffset: { width: 0, height: 2 },
-  elevation: 3,
-} as const;
 
 const styles = StyleSheet.create({
   bar: {
@@ -110,30 +104,35 @@ const styles = StyleSheet.create({
   round: {
     width: BAR_HEIGHT,
     height: BAR_HEIGHT,
-    borderRadius: BAR_HEIGHT / 2,
+    borderRadius: radius.round,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow,
+    ...shadows.paper,
   },
-  busy: { opacity: 0.5 },
-  backIcon: { fontSize: 28, lineHeight: 30, color: colors.textStrong },
-  icon: { fontSize: 18 },
-  // 종이 꼬리표: 크림색 종이, 살짝 기울게
+  pressed: { opacity: 0.6 },
+  // 종이 꼬리표: 지도에 붙인 종이 조각, 살짝 기울게. 지도 이름은 인쇄 지도 제목처럼 굵은 고딕.
   tag: {
     flex: 1,
-    backgroundColor: '#FFFAF0',
+    backgroundColor: colors.tag,
     borderWidth: 1,
-    borderColor: '#E3D6BD',
-    borderRadius: 6,
+    borderColor: colors.tagRule,
+    borderRadius: radius.tag,
     paddingHorizontal: spacing.md,
-    paddingVertical: 5,
+    paddingTop: 4,
+    paddingBottom: 5,
     transform: [{ rotate: '-0.8deg' }],
-    ...shadow,
+    ...shadows.paper,
   },
-  title: { ...typography.body, fontWeight: '800', color: '#3A2F22' },
-  people: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 1 },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: 110 },
+  title: {
+    ...typography.label,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: colors.tagInk,
+  },
+  people: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 110 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  personName: { ...typography.caption, fontSize: 11, color: '#8A7A62', flexShrink: 1 },
+  personName: { ...typography.caption, fontSize: 11, color: colors.textMuted, flexShrink: 1 },
 });

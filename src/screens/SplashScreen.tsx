@@ -1,25 +1,15 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { colors, spacing, typography } from '../constants/theme';
+import { Icon } from '../components/Icon';
+import { colors, spacing } from '../constants/theme';
 
-// 같이 갈 곳·같이 그릴 것을 떠올리게 하는 랜덤 문구 (UX_AUTH.md)
-// 앱 로드 시 1회 선택한다. (렌더 순수성 유지)
-const TAGLINES = [
-  '이번 주말 어디 갈까?',
-  '꽃 보러 갈까?',
-  '새 카페 가볼까?',
-  '야경 보러 갈까?',
-  '지도에 낙서해 볼까?',
-];
-const TAGLINE = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
-
+// 앱을 여는 동안(로그인 상태 확인). 영문 로고·따옴표 친 랜덤 문구 대신 접힌 지도 하나만 — 앱 이름은 아직 정하지 않았다.
 export function SplashScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.logo}>Couple Map</Text>
-      <Text style={styles.tagline}>{`"${TAGLINE}"`}</Text>
-      <ActivityIndicator style={styles.loader} color={colors.primary} />
+    <View style={styles.container} accessible accessibilityLabel="여는 중">
+      <Icon name="fold" size={40} color={colors.textStrong} />
+      <ActivityIndicator style={styles.loader} color={colors.textMuted} />
     </View>
   );
 }
@@ -31,16 +21,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: {
-    ...typography.display,
-    color: colors.primary,
-  },
-  tagline: {
-    ...typography.body,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-  },
   loader: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
 });

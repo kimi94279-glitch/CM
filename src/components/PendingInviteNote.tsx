@@ -10,7 +10,7 @@ export function PendingInviteNote() {
   if (!token) return null;
   return (
     <View style={styles.box}>
-      <Text style={styles.text}>✏️ 받은 초대를 기억해 둘게요. 시작하면 바로 이어서 연결돼요.</Text>
+      <Text style={styles.text}>받은 초대를 기억해 둘게요. 시작하면 바로 이어서 연결돼요.</Text>
     </View>
   );
 }

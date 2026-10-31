@@ -40,19 +40,20 @@ export function CreateBoardScreen({ navigation, route }: Props) {
 
   return (
     <ScreenContainer>
-      <Text style={styles.title}>{editing ? '지도 이름 바꾸기' : '어떤 지도를 그려 볼까요?'}</Text>
+      <Text style={styles.title}>{editing ? '지도 이름 바꾸기' : '새 지도에 이름을 붙여요'}</Text>
 
       <TextField
         value={title}
         onChangeText={setTitle}
         placeholder="예: 토요일 성수 산책"
         autoFocus
-        error={tooLong ? `${TITLE_MAX}자 이내로 입력해주세요.` : null}
+        error={tooLong ? `${TITLE_MAX}자까지 쓸 수 있어요.` : null}
       />
 
       {mutation.isError ? (
         <Text style={styles.error}>
-          {editing ? '이름을 바꾸지 못했어요.' : '만들지 못했어요.'} 다시 시도해 주세요.
+          {editing ? '이름을 바꾸지 못했어요.' : '지도를 만들지 못했어요.'} 인터넷 연결을 확인하고
+          다시 눌러 주세요.
         </Text>
       ) : null}
 

@@ -10,9 +10,9 @@ export type MapStyleName = 'roadmap' | 'atlas' | 'topo';
 export const DEFAULT_MAP_STYLE: MapStyleName = 'roadmap';
 
 export const MAP_STYLE_OPTIONS: { name: MapStyleName; label: string; hint: string }[] = [
-  { name: 'roadmap', label: '도로지도', hint: '90년대 접는 도로지도' },
-  { name: 'atlas', label: '지도책', hint: '사회과부도 — 높이에 따라 색' },
-  { name: 'topo', label: '지형도', hint: '등고선·방안 격자' },
+  { name: 'roadmap', label: '도로지도', hint: '90년대 도로지도' },
+  { name: 'atlas', label: '지도책', hint: '높이에 따라 색을 칠한 사회과부도' },
+  { name: 'topo', label: '지형도', hint: '등고선과 방안 격자' },
 ];
 
 export function isMapStyleName(v: unknown): v is MapStyleName {
@@ -60,12 +60,12 @@ interface Theme {
   halo: string;
   waterText: string;
   spacing: number;
-  paperFx: 'creases' | null;
   grain: number;
 }
 
 const THEMES: Record<MapStyleName, Theme> = {
-  // 주유소에서 받던 접는 도로지도: 빨강·주황·노랑 도로에 테두리, 연한 주황 시가지, 도로 번호 방패, 접힌 자국
+  // 주유소에서 받던 도로지도: 빨강·주황·노랑 도로에 테두리, 연한 주황 시가지, 도로 번호 방패
+  // (접힌 자국은 2026-10-31 뺐다 — 접힌 느낌은 내지 않는다)
   roadmap: {
     paper: '#FBF6E9',
     urban: ['#F6E2C2', 1],
@@ -99,7 +99,6 @@ const THEMES: Record<MapStyleName, Theme> = {
     halo: 'rgba(255,255,255,0.92)',
     waterText: '#2D6E9E',
     spacing: 0,
-    paperFx: 'creases',
     grain: 0.25,
   },
   // 학교 지도책(사회과부도): 높이에 따라 초록→노랑→갈색 + 산 음영, 붉은 시가지, 큰 길만 빨간 선, 산 이름·높이
@@ -156,7 +155,6 @@ const THEMES: Record<MapStyleName, Theme> = {
     halo: 'rgba(255,255,255,0.75)',
     waterText: '#1F5F94',
     spacing: 0.04,
-    paperFx: null,
     grain: 0.18,
   },
   // 1:25,000 지형도: 갈색 등고선(계곡선에 높이), 점무늬 숲, 가는 테두리 도로, 파란 방안 격자 — 선은 가늘게(2026-10-31)
@@ -194,7 +192,6 @@ const THEMES: Record<MapStyleName, Theme> = {
     halo: 'rgba(246,243,234,0.9)',
     waterText: '#1F6FB0',
     spacing: 0,
-    paperFx: null,
     grain: 0.16,
   },
 };
@@ -736,7 +733,6 @@ export function buildMapStyle(name: MapStyleName): Json {
     version: 8,
     name: `cm-${name}`,
     metadata: {
-      'cm:paper': t.paperFx,
       'cm:grain': t.grain,
       'cm:contourThresholds': CONTOUR_THRESHOLDS,
     },

@@ -26,18 +26,18 @@ export function CoupleConnectScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>누구랑 같이 그릴까요?</Text>
         <Text style={styles.subtitle}>
-          지도 위에 같이 그릴 사람을 불러 보세요.{'\n'}혼자 먼저 그려도 괜찮아요. 초대는 언제든 할
-          수 있어요.
+          지도 위에 같이 그릴 사람을 불러 보세요. 혼자 먼저 그려도 괜찮아요. 초대는 나중에 해도
+          돼요.
         </Text>
       </View>
 
       <View style={styles.actions}>
         <Button
-          title="✏️  같이 그릴 사람 초대하기"
+          title="같이 그릴 사람 초대하기"
           onPress={() => navigation.navigate('InviteCreate')}
         />
         <Button
-          title="🧭  혼자 먼저 그려 보기"
+          title="혼자 먼저 그려 보기"
           variant="secondary"
           onPress={() => soloMutation.mutate()}
           loading={soloMutation.isPending}
@@ -45,7 +45,9 @@ export function CoupleConnectScreen({ navigation }: Props) {
         />
 
         {soloMutation.isError ? (
-          <Text style={styles.error}>시작에 실패했어요. 잠시 후 다시 시도해주세요.</Text>
+          <Text style={styles.error}>
+            혼자 시작하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.
+          </Text>
         ) : null}
 
         <Pressable onPress={() => navigation.navigate('InviteJoin')} style={styles.linkRow}>
@@ -59,6 +61,7 @@ export function CoupleConnectScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('Settings')}
         hitSlop={8}
         style={styles.settingsRow}
+        accessibilityRole="button"
       >
         <Text style={styles.linkMuted}>설정</Text>
       </Pressable>
@@ -79,7 +82,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     marginTop: spacing.sm,
-    lineHeight: 22,
   },
   actions: {
     marginTop: spacing.lg,

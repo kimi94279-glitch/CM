@@ -68,7 +68,7 @@ export function PlaceAddScreen({ route, navigation }: Props) {
           <TextField
             value={text}
             onChangeText={setText}
-            placeholder="장소를 검색해보세요"
+            placeholder="가고 싶은 곳 이름"
             autoFocus
           />
         </View>
@@ -76,14 +76,14 @@ export function PlaceAddScreen({ route, navigation }: Props) {
       </View>
 
       <Button
-        title="📍 지도에 직접 핀 찍기"
+        title="지도에 직접 꽂기"
         variant="secondary"
         onPress={onDirectPin}
         style={styles.directPin}
       />
       {KAKAO_SEARCH_ASSIST && (search.data?.length ?? 0) > 0 ? (
         <Text style={styles.muted}>
-          {matchPlace.isPending ? '장소 정보를 확인하는 중…' : '검색 제공: 카카오'}
+          {matchPlace.isPending ? '장소 정보를 맞춰 보는 중이에요' : '검색 제공: 카카오'}
         </Text>
       ) : null}
 
@@ -93,11 +93,15 @@ export function PlaceAddScreen({ route, navigation }: Props) {
         </View>
       ) : search.isError ? (
         <View style={styles.center}>
-          <Text style={styles.error}>검색에 문제가 생겼어요. 잠시 후 다시 시도해주세요.</Text>
+          <Text style={styles.error}>
+            지금은 찾기가 안 돼요. 인터넷 연결을 확인하고 다시 찾아 주세요.
+          </Text>
         </View>
       ) : query.length > 0 && (search.data?.length ?? 0) === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.muted}>검색 결과가 없어요. 다른 키워드로 찾아보세요.</Text>
+          <Text style={styles.muted}>
+            찾지 못했어요. 이름을 줄여 쓰거나, 지도로 돌아가 직접 꽂아 보세요.
+          </Text>
         </View>
       ) : (
         <FlatList

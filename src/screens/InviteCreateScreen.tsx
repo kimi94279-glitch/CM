@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'rea
 import { Button } from '../components/Button';
 import { LoginRequired } from '../components/LoginRequired';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, numeric, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { createInvite, getMyWorkspace } from '../services/coupleService';
 import { isGuest } from '../services/authService';
@@ -67,7 +67,7 @@ function InviteCreateContent({ navigation }: Props) {
   const onShare = async () => {
     if (!link) return;
     await Share.share({
-      message: `나랑 지도에 같이 그릴래? ✏️\n${link}\n\n앱에서 코드 입력: ${formatInviteCode(token)}`,
+      message: `나랑 지도에 같이 그릴래?\n${link}\n\n앱에서 코드 입력: ${formatInviteCode(token)}`,
     });
   };
 
@@ -113,7 +113,7 @@ function InviteCreateContent({ navigation }: Props) {
       <Button title="초대 링크 보내기" onPress={onShare} />
       <Button title="코드 복사" variant="secondary" onPress={onCopy} style={styles.gap} />
 
-      <Text style={styles.waiting}>⏳ 상대가 초대를 받으면 여기서 바로 이어져요</Text>
+      <Text style={styles.waiting}>상대가 초대를 받으면 여기서 바로 이어져요</Text>
 
       <View style={styles.checkArea}>
         <Button title="연결 확인" variant="ghost" onPress={onCheckConnection} loading={checking} />
@@ -154,6 +154,7 @@ const styles = StyleSheet.create({
   },
   code: {
     ...typography.display,
+    ...numeric,
     color: colors.primary,
     letterSpacing: 4,
   },

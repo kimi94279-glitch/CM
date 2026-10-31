@@ -1,85 +1,97 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, inks, spacing, typography, type Ink } from '../constants/theme';
+import { colors, inkOther, spacing, typography, type Ink } from '../constants/theme';
 import type { Place } from '../types/models';
+import { Icon } from './Icon';
 
 interface PlaceCardProps {
   place: Place;
-  index: number; // 표시용 순번 (1부터)
-  ink?: Ink; // 장소를 추가한 사람의 잉크(나 · 지금 상대 · 그 밖=회색)
+  ink?: Ink; // 장소를 추가한 사람의 잉크(나 · 지금 상대 · 그 밖=흑연)
   authorLabel?: string | null; // 작성자 표기('나' / 상대 이름). null 이면 생략(솔로)
   highlighted?: boolean; // 지도에서 마커 클릭 시 강조
   onDelete?: () => void; // 삭제 요청 (확인은 호출 측에서)
   deleting?: boolean; // 삭제 진행 중
 }
 
+// 범례 한 줄: 압정 머리(꽂은 사람 잉크) + 장소 이름 + 꽂은 사람. 지도 핀이 번호 없는 압정이라 목록도 순번을 쓰지 않는다.
 export function PlaceCard({
   place,
-  index,
-  ink = inks.lilac,
+  ink = inkOther,
   authorLabel = null,
   highlighted = false,
   onDelete,
   deleting = false,
 }: PlaceCardProps) {
-  // 배지 = 잉크 solid(흰 숫자), 작성자 글자 = 잉크 text(흰 바탕 가독성).
-  const badgeColor = ink.solid;
-  const authorTextColor = ink.text;
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
-      <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-        <Text style={styles.badgeText}>{index}</Text>
+      <View style={[styles.tack, { backgroundColor: ink.solid }]}>
+        <View style={styles.tackShine} />
       </View>
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>
           {place.name}
         </Text>
         {authorLabel ? (
-          <Text style={[styles.author, { color: authorTextColor }]} numberOfLines={1}>
+          <Text style={[styles.author, { color: ink.text }]} numberOfLines={1}>
             {authorLabel}
           </Text>
         ) : null}
       </View>
       {onDelete ? (
-        <Pressable onPress={onDelete} disabled={deleting} hitSlop={8} style={styles.delete}>
-          <Text style={styles.deleteText}>{deleting ? '…' : '삭제'}</Text>
+        <Pressable
+          onPress={onDelete}
+          disabled={deleting}
+          hitSlop={8}
+          style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`${place.name} 지우기`}
+          accessibilityState={{ busy: deleting }}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : (
+            <Icon name="trash" size={20} color={colors.textMuted} />
+          )}
         </Pressable>
       ) : null}
     </View>
   );
 }
 
+const TACK = 16;
+
 const styles = StyleSheet.create({
-  // 리스트 row: 카드 느낌(테두리/라운드/그림자/카드 간격)을 제거하고 divider 기반으로 단순화.
-  // 단, 충분한 행 높이(60dp)와 번호 배지를 유지해 flat text 목록처럼 보이지 않게 한다.
+  // 범례 줄: 카드 대신 괘선으로 나눈 줄(종이 지도 범례처럼).
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 60,
-    backgroundColor: 'transparent',
+    minHeight: 56,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  // highlight: 보더 강조 대신 행 배경 틴트(primarySoft).
+  // 지도에서 고른 핀: 형광펜 한 줄 그은 듯한 노랑 바탕
   cardHighlighted: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: '#FFF3C2',
   },
-  // 지도 번호핀과 동일한 배지(흰 숫자) → 핀-목록 연계. 배경은 작성자 색(인라인: you / partner).
-  badge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // 압정 머리(지도 압정과 같은 모양을 작게)
+  tack: {
+    width: TACK,
+    height: TACK,
+    borderRadius: TACK / 2,
     marginRight: spacing.md,
+    marginLeft: 2,
   },
-  badgeText: {
-    ...typography.label,
-    fontWeight: '700',
-    color: colors.onPrimary,
+  tackShine: {
+    position: 'absolute',
+    top: 3,
+    left: 3.5,
+    width: 5,
+    height: 4,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   body: {
     flex: 1,
@@ -92,15 +104,14 @@ const styles = StyleSheet.create({
   author: {
     ...typography.caption,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
   },
   delete: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginLeft: spacing.sm,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.xs,
   },
-  deleteText: {
-    ...typography.label,
-    color: colors.danger,
-  },
+  pressed: { opacity: 0.6 },
 });

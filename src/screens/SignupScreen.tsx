@@ -16,9 +16,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>;
 function mapSignupError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.toLowerCase().includes('already registered')) {
-    return '이미 가입된 이메일이에요. 로그인해주세요.';
+    return '이미 가입된 이메일이에요. 로그인해 주세요.';
   }
-  return '가입에 실패했어요. 잠시 후 다시 시도해주세요.';
+  return '가입하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.';
 }
 
 export function SignupScreen({ navigation }: Props) {

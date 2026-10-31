@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
 import { PendingInviteNote } from '../components/PendingInviteNote';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SocialButtons } from '../components/SocialButtons';
@@ -33,9 +34,11 @@ export function LoginScreen({ navigation }: Props) {
   return (
     <ScreenContainer>
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* 영문 로고 대신(앱 이름은 아직 정하지 않았다) 이 앱이 무엇인지 한 줄 */}
         <View style={styles.header}>
-          <Text style={styles.title}>Couple Map</Text>
-          <Text style={styles.subtitle}>지도 위에 같이 그려요</Text>
+          <Icon name="fold" size={32} color={colors.textStrong} />
+          <Text style={styles.title}>지도 위에 같이 그려요</Text>
+          <Text style={styles.subtitle}>갈 곳을 꽂고, 가 볼 길을 그어 보는 종이 지도예요.</Text>
         </View>
 
         <PendingInviteNote />
@@ -74,7 +77,9 @@ export function LoginScreen({ navigation }: Props) {
             />
 
             {mutation.isError ? (
-              <Text style={styles.error}>이메일 또는 비밀번호를 확인해주세요.</Text>
+              <Text style={styles.error}>
+                이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요.
+              </Text>
             ) : null}
 
             <Button
@@ -107,7 +112,8 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.display,
-    color: colors.primary,
+    color: colors.textStrong,
+    marginTop: spacing.md,
   },
   subtitle: {
     ...typography.body,

@@ -19,6 +19,7 @@ import {
   type ExportCardOptions,
 } from './MapHostContext';
 import type { PeopleInks } from '../hooks/useInks';
+import { tapHaptic } from '../utils/haptics';
 import { whoOf, type Who } from '../utils/who';
 import { buildMapStyle, type MapStyleName } from './mapStyles';
 import { buildMapHtml, safeJson, toMapInks, toMapPlaces, type MapPlace } from './mapWebViewHtml';
@@ -158,6 +159,8 @@ export interface MapWebViewHandle {
   exportCard(options: ExportCardOptions): Promise<string | null>;
   // 방금 꽂은 핀이 '퐁' 떨어지게(아직 안 그려졌으면 그려질 때)
   dropPin(placeId: string): void;
+  // 지도를 열 때 종이 지도 펼치기 연출(지도가 다 그려질 때까지 접힌 종이로 가리고 있다가 펼친다). 지도가 아직 안 떴으면 뜰 때.
+  unfold(): void;
 }
 
 // 프로덕션 지도 컴포넌트: WebView + MapLibre GL JS (OpenFreeMap 벡터 + 지형 타일, 키리스 — 바탕은 mapStyles).
@@ -196,6 +199,8 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
   const focusPendingRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined);
   // 카메라 큐: undefined = 대기 없음. ready 전에 보드에 들어오면 여기 두었다가 맞춘다.
   const cameraPendingRef = useRef<MapCamera | null | undefined>(undefined);
+  // ready 전에 들어온 펼치기 요청
+  const unfoldPendingRef = useRef(false);
   const inksPendingRef = useRef<PeopleInks | null>(null);
   // 처음 HTML 에 구운 바탕 — 이것과 같으면 다시 넣지 않는다(ready 직후 불필요한 스타일 재로드 방지).
   const appliedStyleRef = useRef<MapStyleName>(mapStyle);
@@ -359,6 +364,13 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           `window.dropPin && window.dropPin(${JSON.stringify(placeId)}); true;`
         );
       },
+      unfold() {
+        if (readyRef.current) {
+          webRef.current?.injectJavaScript('window.unfold && window.unfold(); true;');
+        } else {
+          unfoldPendingRef.current = true;
+        }
+      },
       exportCard(options) {
         if (!readyRef.current) return Promise.resolve(null);
         exportResolveRef.current?.(null); // 앞선 요청은 포기
@@ -424,6 +436,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           );
         }
         if (appliedStyleRef.current !== mapStyleRef.current) pushMapStyle(mapStyleRef.current);
+        // 카메라를 맞춘 뒤에 펼친다(펼쳐지는 그림 = 그 보드의 자리)
+        if (unfoldPendingRef.current) {
+          unfoldPendingRef.current = false;
+          webRef.current?.injectJavaScript('window.unfold && window.unfold(); true;');
+        }
         onReady?.();
         return;
       }
@@ -445,6 +462,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
         const finish = exportResolveRef.current;
         exportResolveRef.current = null;
         finish?.(typeof msg.data === 'string' && msg.data.length > 0 ? msg.data : null);
+        return;
+      }
+      // 새 핀의 바늘이 지도에 닿은 순간 — 진동은 보이는 것과 같은 순간에(저장 성공 때가 아니라)
+      if (msg.type === 'pinLanded') {
+        tapHaptic();
         return;
       }
       if (msg.type === 'drawEnd') {

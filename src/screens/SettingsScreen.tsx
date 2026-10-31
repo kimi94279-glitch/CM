@@ -13,6 +13,7 @@ import {
   INK_ORDER,
   inkLabels,
   inks as palette,
+  numeric,
   radius,
   spacing,
   typography,
@@ -186,12 +187,12 @@ export function SettingsScreen({ navigation }: Props) {
           })}
         </View>
         <Text style={styles.inkHint}>
-          내 핀·메모·그림이 {inkLabels[inks.myInk]} 색으로 보여요.
+          내가 꽂은 핀과 쪽지, 그린 선이 {inkLabels[inks.myInk]} 색으로 보여요.
           {isActive ? ' 상대와 같은 색을 고르면 내 화면에선 상대가 다른 색으로 보여요.' : ''}
         </Text>
 
         {/* 종이 지도 3종 비교(시험 중) — 이 기기에만 저장. 정해지면 기본값만 남기거나 지도마다 고르게 바꾼다. */}
-        <Text style={styles.section}>지도 바탕 (시험 중)</Text>
+        <Text style={styles.section}>지도 바탕</Text>
         <View style={styles.styleRow}>
           {MAP_STYLE_OPTIONS.map((o) => {
             const selected = mapStyle === o.name;
@@ -279,7 +280,7 @@ export function SettingsScreen({ navigation }: Props) {
           style={styles.deleteRow}
         >
           <Text style={styles.delete}>
-            {remove.isPending ? '지우는 중…' : guest ? '기록 지우고 처음으로' : '계정 삭제'}
+            {remove.isPending ? '지우는 중' : guest ? '기록 지우고 처음으로' : '계정 삭제'}
           </Text>
         </Pressable>
       </ScrollView>
@@ -296,7 +297,7 @@ const CREDITS: { label: string; text: string; url?: string }[] = [
   },
   {
     label: '장소 검색',
-    text: '카카오 — 검색 결과와 카카오 위치로 꽂은 핀의 위치는 저장하지 않고 볼 때마다 불러와요',
+    text: '카카오: 검색 결과와 카카오 위치로 꽂은 핀의 위치는 저장하지 않고 볼 때마다 불러와요',
   },
   {
     label: '지도',
@@ -334,13 +335,17 @@ const styles = StyleSheet.create({
   },
   section: {
     ...typography.caption,
+    fontWeight: '600',
     color: colors.textMuted,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+  // 설정 묶음: 둥근 회색 카드 대신 흰 종이에 괘선(지도책 차례처럼)
   card: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+    borderRadius: radius.field,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: spacing.md,
   },
   row: {
@@ -398,15 +403,16 @@ const styles = StyleSheet.create({
   },
   styleOption: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+    borderRadius: radius.field,
     borderWidth: 2,
     borderColor: 'transparent',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
   styleOptionOn: {
-    borderColor: colors.textStrong,
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   styleLabel: {
     ...typography.label,
@@ -427,7 +433,6 @@ const styles = StyleSheet.create({
   guestText: {
     ...typography.caption,
     color: colors.textMuted,
-    lineHeight: 18,
     marginBottom: spacing.md,
   },
   switchRow: {
@@ -456,6 +461,7 @@ const styles = StyleSheet.create({
   },
   version: {
     ...typography.caption,
+    ...numeric,
     color: colors.textMuted,
     marginTop: spacing.sm,
     textAlign: 'center',

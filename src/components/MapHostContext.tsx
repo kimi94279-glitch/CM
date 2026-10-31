@@ -29,8 +29,7 @@ export interface DrawStroke {
 // 지도 한 장으로 접기(내보내기) 옵션 — 카드에 들어갈 글자. names 는 핀 이름(사용자가 붙인 이름만).
 export interface ExportCardOptions {
   title: string;
-  dateText: string;
-  stampDate: string; // "2026 11.08"
+  dateText: string; // "2026년 11월 8일"
   people: { name: string; color: string }[];
   names: Record<string, string>;
   credit: string[];

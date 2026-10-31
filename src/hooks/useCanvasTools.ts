@@ -11,8 +11,8 @@ import {
   useUpdateMapObject,
 } from './useMapObjects';
 
-// P0 스티커 이모지 셋(지리 고정 객체). Text/Arrow 는 P0 범위 밖.
-export const STICKER_EMOJIS = ['❤️', '😂', '👀', '🤮', '☕', '🌳', '📸'];
+// 스티커 셋(지리 고정 객체 — 지도에 붙이는 것들). 저장은 이모지 문자열이라 예전에 붙인 것(🤮 등)도 그대로 보인다.
+export const STICKER_EMOJIS = ['❤️', '⭐', '☕', '🍜', '🌳', '📸', '⛺'];
 
 // 필통의 도구: 손(지도 이동, 기본) · 연필 · 잉크 · 형광펜 · 실 자 · 스티커. 한 번에 하나만 든다.
 export type CanvasTool = 'hand' | DrawTool | 'sticker';
@@ -78,7 +78,7 @@ export function useCanvasTools(boardId: string, onToolOn: () => void) {
         zoomLevel: point.level,
         payload: { emoji: stickerEmoji },
       })
-      .catch((e) => Alert.alert('스티커 저장 실패', friendlyError(e)));
+      .catch((e) => Alert.alert('스티커를 붙이지 못했어요', friendlyError(e)));
   };
   // 한 획 → map_objects(draw) 저장. 앵커 = 첫 점, 굵기 스케일 기준 = 그린 줌(payload.z), 도구 = payload.k.
   // 저장 결과는 호출마다 받는다(mutate 의 onSuccess 는 연달아 그으면 마지막 획에만 불린다).
@@ -96,19 +96,19 @@ export function useCanvasTools(boardId: string, onToolOn: () => void) {
       .then((saved) => {
         if (session === drawSession.current) setDrawnIds((ids) => [...ids, saved.id]);
       })
-      .catch((e) => Alert.alert('그림 저장 실패', friendlyError(e)));
+      .catch((e) => Alert.alert('그은 선을 저장하지 못했어요', friendlyError(e)));
   };
   const moveObject = (id: string, lat: number, lng: number) =>
     updateMapObject.mutate(
       { id, patch: { latitude: lat, longitude: lng } },
-      { onError: (e) => Alert.alert('이동 저장 실패', friendlyError(e)) }
+      { onError: (e) => Alert.alert('옮긴 자리를 저장하지 못했어요', friendlyError(e)) }
     );
   const undoDraw = () => {
     const last = drawnIds[drawnIds.length - 1];
     if (!last) return;
     setDrawnIds((ids) => ids.slice(0, -1));
     removeMapObject.mutate(last, {
-      onError: (e) => Alert.alert('되돌리기 실패', friendlyError(e)),
+      onError: (e) => Alert.alert('선을 지우지 못했어요', friendlyError(e)),
     });
   };
   // 선택 객체 크기 조정(payload.scale 배수). 거대/화면밖 객체도 항상 동작(툴바 방식).
@@ -120,14 +120,14 @@ export function useCanvasTools(boardId: string, onToolOn: () => void) {
         id: selectedObject.id,
         patch: { payload: { ...(selectedObject.payload ?? {}), scale: prev * factor } },
       },
-      { onError: (e) => Alert.alert('크기 저장 실패', friendlyError(e)) }
+      { onError: (e) => Alert.alert('바꾼 크기를 저장하지 못했어요', friendlyError(e)) }
     );
   };
   const deleteSelected = () => {
     if (!selectedObject) return;
     removeMapObject.mutate(selectedObject.id, {
       onSuccess: () => setSelectedObjectId(null),
-      onError: (e) => Alert.alert('삭제 실패', friendlyError(e)),
+      onError: (e) => Alert.alert('지우지 못했어요', friendlyError(e)),
     });
   };
 

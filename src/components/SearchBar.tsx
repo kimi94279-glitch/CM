@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
+import { Icon } from './Icon';
 
 interface SearchBarProps {
   value: string;
@@ -11,13 +12,13 @@ interface SearchBarProps {
   autoFocus?: boolean;
 }
 
-// 활성 검색 입력(지도 위 상단 floating pill). 🔍 를 누르면 종이 꼬리표 자리에 뜬다.
-// 좌측 ‹ = 검색 닫기, 우측 ✕ = 입력 지우기. 검색은 호출측에서 디바운스로 처리.
+// 활성 검색 입력(지도 위 상단에 뜬 판). 돋보기를 누르면 종이 꼬리표 자리에 뜬다.
+// 왼쪽 뒤로 = 검색 닫기, 오른쪽 닫기 = 입력 지우기. 검색은 호출측에서 디바운스로 처리.
 export function SearchBar({
   value,
   onChangeText,
   onClose,
-  placeholder = '어디 가고 싶어?',
+  placeholder = '가고 싶은 곳 이름',
   autoFocus = true,
 }: SearchBarProps) {
   return (
@@ -27,8 +28,9 @@ export function SearchBar({
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="검색 닫기"
+        style={styles.side}
       >
-        <Text style={styles.back}>‹</Text>
+        <Icon name="back" size={22} />
       </Pressable>
       <TextInput
         style={styles.input}
@@ -46,8 +48,9 @@ export function SearchBar({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="입력 지우기"
+          style={styles.side}
         >
-          <Text style={styles.clear}>✕</Text>
+          <Icon name="close" size={18} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </View>
@@ -55,23 +58,25 @@ export function SearchBar({
 }
 
 const styles = StyleSheet.create({
-  // Floating pill: 보더 대신 그림자 중심 + 큰 라운드로 "지도 위에 떠 있는 탐색 도구" 인상.
+  // 입력칸 판: 지도 위에 떠 있는 판(그림자 lifted), 입력칸 둥글기.
   bar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     height: 48,
-    borderRadius: radius.card,
+    borderRadius: radius.field,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
     gap: spacing.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    ...shadows.lifted,
   },
-  back: { fontSize: 26, lineHeight: 28, color: colors.textStrong, paddingHorizontal: spacing.xs },
-  input: { flex: 1, ...typography.body, color: colors.textStrong, paddingVertical: 0 },
-  clear: { fontSize: 16, color: colors.textMuted, paddingHorizontal: spacing.xs },
+  side: { padding: spacing.xs },
+  // 한 줄 입력칸은 줄 간격 없이(iOS 에서 글자가 아래로 치우친다)
+  input: {
+    flex: 1,
+    ...typography.body,
+    lineHeight: undefined,
+    color: colors.textStrong,
+    paddingVertical: 0,
+  },
 });

@@ -12,6 +12,7 @@ import {
 
 import { BoardCard } from '../components/BoardCard';
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
@@ -44,8 +45,8 @@ export function BoardListScreen({ navigation }: Props) {
     Alert.alert(
       '이 지도를 지울까요?',
       isSolo
-        ? '이 지도에 남긴 장소·메모·그림이 모두 지워져요.'
-        : '같이 남긴 장소·메모·그림이 모두 지워지고, 상대 화면에서도 사라져요.',
+        ? '이 지도에 꽂은 핀과 쪽지, 그린 선이 모두 지워져요.'
+        : '같이 꽂은 핀과 쪽지, 그린 선이 모두 지워지고 상대 화면에서도 사라져요.',
       [
         { text: '취소', style: 'cancel' },
         {
@@ -60,7 +61,7 @@ export function BoardListScreen({ navigation }: Props) {
     );
   };
 
-  // ⋯ 메뉴: 이름 바꾸기 / 지우기 (Android Alert 버튼 최대 3개)
+  // 줄 끝 메뉴: 이름 바꾸기 / 지우기 (Android Alert 버튼 최대 3개)
   const openMenu = (board: Board) => {
     Alert.alert(board.title, undefined, [
       {
@@ -77,24 +78,41 @@ export function BoardListScreen({ navigation }: Props) {
     <ScreenContainer style={styles.container}>
       {/* 헤더 (초대는 솔로일 때만, 작은 단일 링크로 유지) */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{isSolo ? '내 지도' : '우리 지도'}</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">
+          {isSolo ? '내 지도' : '우리 지도'}
+        </Text>
         <View style={styles.headerActions}>
           {isSolo ? (
-            <Pressable onPress={() => navigation.navigate('InviteCreate')} hitSlop={8}>
+            <Pressable
+              onPress={() => navigation.navigate('InviteCreate')}
+              hitSlop={8}
+              accessibilityRole="button"
+            >
               <Text style={styles.headerLink}>같이 그릴 사람 초대</Text>
             </Pressable>
           ) : null}
-          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
-            <Text style={styles.settings}>설정</Text>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            hitSlop={8}
+            style={styles.settings}
+            accessibilityRole="button"
+            accessibilityLabel="설정"
+          >
+            <Icon name="sliders" size={22} color={colors.textStrong} />
           </Pressable>
         </View>
       </View>
 
       {/* 로그인 없이 쓰는 중: 지도를 지키려면 로그인하라는 작은 안내(설정에서 로그인 → 지도 그대로) */}
       {guest ? (
-        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.guestBanner}>
-          <Text style={styles.guestText}>🔒 로그인해 두면 폰을 바꿔도 지도가 남아요</Text>
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          style={styles.guestBanner}
+          accessibilityRole="button"
+        >
+          <Text style={styles.guestText}>로그인해 두면 폰을 바꿔도 지도가 남아요</Text>
           <Text style={styles.guestLink}>로그인</Text>
+          <Icon name="forward" size={16} color={colors.textStrong} />
         </Pressable>
       ) : null}
 
@@ -104,16 +122,23 @@ export function BoardListScreen({ navigation }: Props) {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : boardsQuery.isError ? (
-        <View style={styles.fill}>
-          <Text style={styles.errorText}>목록을 불러오지 못했어요.</Text>
-          <Button title="다시 시도" variant="secondary" onPress={() => boardsQuery.refetch()} />
+        <View style={styles.empty}>
+          <Text style={styles.errorText}>
+            지도 목록을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 불러와 주세요.
+          </Text>
+          <Button
+            title="다시 불러오기"
+            variant="secondary"
+            onPress={() => boardsQuery.refetch()}
+            style={styles.emptyCta}
+          />
         </View>
       ) : boards.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🗺️</Text>
-          <Text style={styles.emptyTitle}>첫 지도를 만들어 볼까요?</Text>
+          <Icon name="fold" size={32} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>아직 펼친 지도가 없어요</Text>
           <Text style={styles.emptyDesc}>
-            가고 싶은 곳을 찍고, 지도 위에 같이 그리고, 서로의 흔적에 반응해요.
+            지도 한 장에 가고 싶은 곳을 꽂고, 가 볼 길을 연필로 그어 봐요.
           </Text>
           <Button
             title="새 지도 만들기"
@@ -136,17 +161,21 @@ export function BoardListScreen({ navigation }: Props) {
               onMore={() => openMenu(item)}
             />
           )}
+          // 새 지도는 떠 있는 동그란 버튼 대신 서랍 맨 위 빈칸 한 줄
+          ListHeaderComponent={
+            <Pressable
+              onPress={() => navigation.navigate('CreateBoard')}
+              style={({ pressed }) => [styles.newRow, pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Icon name="plus" size={20} color={colors.primary} />
+              <Text style={styles.newText}>새 지도 만들기</Text>
+            </Pressable>
+          }
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
         />
       )}
-
-      {/* 새 보드 FAB (목록이 있을 때만) */}
-      {boards.length > 0 ? (
-        <Pressable style={styles.fab} onPress={() => navigation.navigate('CreateBoard')}>
-          <Text style={styles.fabText}>＋</Text>
-        </Pressable>
-      ) : null}
     </ScreenContainer>
   );
 }
@@ -158,7 +187,7 @@ const styles = StyleSheet.create({
   guestBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 2,
     backgroundColor: colors.surfaceMuted,
     borderRadius: radius.field,
     paddingVertical: spacing.sm,
@@ -195,8 +224,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   settings: {
-    ...typography.label,
-    color: colors.textMuted,
+    padding: spacing.xs,
   },
   fill: {
     flex: 1,
@@ -206,57 +234,42 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.danger,
-    marginBottom: spacing.md,
   },
+  // 빈 서랍·불러오기 실패: 가운데 큰 그림 + 제목 + 회색 줄(흔한 틀) 대신 위쪽 왼쪽 정렬 한 덩어리
   empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  emptyEmoji: {
-    fontSize: 44,
-    marginBottom: spacing.md,
+    paddingTop: spacing.xl,
   },
   emptyTitle: {
     ...typography.title,
     color: colors.textStrong,
-    textAlign: 'center',
+    marginTop: spacing.md,
   },
   emptyDesc: {
     ...typography.body,
     color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: 22,
+    marginTop: spacing.xs,
   },
   emptyCta: {
     marginTop: spacing.lg,
-    alignSelf: 'stretch',
+    alignSelf: 'flex-start',
   },
   list: {
-    paddingTop: spacing.xs,
     paddingBottom: spacing.xl * 2,
   },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
+  newRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    gap: spacing.sm,
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  fabText: {
-    color: colors.onPrimary,
-    fontSize: 28,
-    lineHeight: 32,
+  newText: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

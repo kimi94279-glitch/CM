@@ -57,6 +57,8 @@ const styles = StyleSheet.create({
   },
   input: {
     ...typography.body,
+    // 한 줄 입력칸에 줄 간격을 주면 iOS 에서 글자가 아래로 치우친다 — 입력칸은 줄 간격 없이
+    lineHeight: undefined,
     color: colors.textStrong,
     backgroundColor: colors.surface,
     borderWidth: 1,

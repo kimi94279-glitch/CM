@@ -35,10 +35,12 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.body}>
-          <Text style={styles.emoji}>🫠</Text>
-          <Text style={styles.title}>잠깐 문제가 생겼어요</Text>
-          <Text style={styles.desc}>다시 시도하면 대부분 괜찮아져요.</Text>
-          <Button title="다시 시도" onPress={this.reset} style={styles.button} />
+          <Text style={styles.title}>화면을 그리다 멈췄어요</Text>
+          <Text style={styles.desc}>
+            다시 열면 대부분 돌아와요. 그래도 같은 화면이 나오면 앱을 껐다 켜 주세요. 그린 지도는
+            지워지지 않아요.
+          </Text>
+          <Button title="다시 열기" onPress={this.reset} style={styles.button} />
         </View>
       </SafeAreaView>
     );
@@ -50,29 +52,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  // 가운데 큰 이모지 + 제목 + 회색 줄(흔한 틀) 대신 위쪽 왼쪽 정렬
   body: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     padding: spacing.lg,
-  },
-  emoji: {
-    fontSize: 44,
-    marginBottom: spacing.md,
+    paddingTop: spacing.xl * 2,
   },
   title: {
     ...typography.title,
     color: colors.textStrong,
-    textAlign: 'center',
   },
   desc: {
     ...typography.body,
     color: colors.textMuted,
-    textAlign: 'center',
     marginTop: spacing.sm,
   },
   button: {
-    alignSelf: 'stretch',
+    alignSelf: 'flex-start',
     marginTop: spacing.lg,
   },
 });

@@ -1,9 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography, type Ink } from '../constants/theme';
+import { colors, numeric, spacing, typography, type Ink } from '../constants/theme';
 import type { Board, BoardActivity } from '../types/models';
 import { timeAgo } from '../utils/time';
+import { Icon } from './Icon';
 
 interface BoardCardProps {
   board: Board;
@@ -17,12 +18,22 @@ interface BoardCardProps {
 
 const UNREAD_CAP = 99;
 
+// 지도 서랍의 한 줄. 똑같은 둥근 카드를 쌓지 않고 괘선으로 나눈 차례(지도책 차례처럼).
 export function BoardCard({ board, activity, partnerInk, onPress, onMore }: BoardCardProps) {
   const unread = activity?.unread ?? 0;
   const last = activity?.lastActivityAt ?? null;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    // 줄 전체가 하나의 버튼이라 iOS 화면 읽기는 안쪽 메뉴 버튼에 닿지 못한다 → 줄에 "메뉴" 동작을 달아 둔다.
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityActions={[{ name: 'menu', label: '이름 바꾸기, 지우기' }]}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'menu') onMore();
+      }}
+    >
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
           {board.title}
@@ -32,56 +43,60 @@ export function BoardCard({ board, activity, partnerInk, onPress, onMore }: Boar
           <View style={styles.newRow}>
             <View style={[styles.dot, partnerInk && { backgroundColor: partnerInk.solid }]} />
             <Text style={[styles.newText, partnerInk && { color: partnerInk.text }]}>
-              새 흔적 {unread > UNREAD_CAP ? `${UNREAD_CAP}+` : unread}
-              {last ? ` · ${timeAgo(last)}` : ''}
+              {unread > UNREAD_CAP ? `새 흔적 ${UNREAD_CAP}개 넘게` : `새 흔적 ${unread}개`}
+              {last ? `, ${timeAgo(last)}` : ''}
             </Text>
           </View>
         ) : (
           <Text style={styles.meta}>
-            {last ? `마지막 흔적 · ${timeAgo(last)}` : '눌러서 첫 흔적을 남겨 보세요'}
+            {last ? `마지막 흔적 ${timeAgo(last)}` : '아직 빈 지도예요'}
           </Text>
         )}
       </View>
-      <Pressable onPress={onMore} hitSlop={10} style={styles.more} accessibilityLabel="지도 메뉴">
-        <Text style={styles.moreText}>⋯</Text>
+      <Pressable
+        onPress={onMore}
+        hitSlop={10}
+        style={({ pressed }) => [styles.more, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${board.title} 메뉴`}
+      >
+        <Icon name="more" size={22} color={colors.textMuted} />
       </Pressable>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    marginBottom: spacing.md,
+    minHeight: 68,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.sm + 4,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.6,
   },
   body: {
     flex: 1,
   },
   title: {
     ...typography.body,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.textStrong,
   },
   meta: {
     ...typography.caption,
+    ...numeric,
     color: colors.textMuted,
-    marginTop: spacing.xs,
+    marginTop: 3,
   },
   newRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xs,
+    marginTop: 3,
   },
   dot: {
     width: 8,
@@ -92,16 +107,14 @@ const styles = StyleSheet.create({
   },
   newText: {
     ...typography.caption,
+    ...numeric,
     fontWeight: '600',
     color: colors.partnerText,
   },
   more: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  moreText: {
-    fontSize: 20,
-    lineHeight: 22,
-    color: colors.textMuted,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

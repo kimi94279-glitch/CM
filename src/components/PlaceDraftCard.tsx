@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import type { PlaceDraftKind } from '../utils/placeDraft';
 import { Button } from './Button';
 
@@ -28,16 +28,16 @@ const NAME_MAX = 40;
 const HINT_TEXT: Record<PlaceDraftKind, string> = {
   public: '지도를 움직여 가운데 핀을 정확한 자리에 맞춰 주세요',
   publicUnsure: '지도를 움직여 가운데 핀을 정확한 자리에 맞춰 주세요',
-  live: '카카오 지도의 위치로 핀을 꽂아요 · 위치는 볼 때마다 카카오에서 불러와요',
+  live: '카카오 지도의 위치로 꽂아요. 위치는 볼 때마다 카카오에서 불러와요',
   noMatch: '근처까지 왔어요. 지도를 움직여 가운데 핀을 그 자리에 맞춰 주세요',
   direct: '지도를 움직여 가운데 핀을 정확한 자리에 맞춰 주세요',
 };
 
 const SOURCE_TEXT: Record<PlaceDraftKind, string | null> = {
-  public: '공공데이터에 등록된 이름이에요 · 바꿔도 돼요',
+  public: '공공데이터에 등록된 이름이에요. 바꿔도 돼요',
   publicUnsure: '가까이 등록된 가게예요. 찾던 곳이 맞나요?',
   live: '부를 이름을 붙여도 되고, 비워 두면 카카오 이름으로 보여요',
-  noMatch: '저장할 수 있는 장소 정보가 없어서 직접 찍어요 · 이름도 직접 써 주세요',
+  noMatch: '저장할 수 있는 장소 정보가 없어서 직접 꽂아요. 이름도 직접 써 주세요',
   direct: null,
 };
 
@@ -68,7 +68,7 @@ export function PlaceDraftCard({
             {liveInfo.name}
           </Text>
           <Text style={styles.liveAddress} numberOfLines={1}>
-            {liveInfo.address} · 카카오
+            {liveInfo.address}, 카카오 제공
           </Text>
         </View>
       ) : null}
@@ -79,10 +79,10 @@ export function PlaceDraftCard({
           kind === 'noMatch'
             ? '이름을 직접 써 주세요'
             : kind === 'live'
-              ? '부를 이름 (선택)'
+              ? '부를 이름(안 써도 돼요)'
               : '장소 이름'
         }
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={colors.textFaint}
         maxLength={NAME_MAX}
         style={styles.input}
         returnKeyType="done"
@@ -90,7 +90,9 @@ export function PlaceDraftCard({
       {source ? <Text style={styles.source}>{source}</Text> : null}
       {kind === 'publicUnsure' && onSwitchOther ? (
         <Text style={styles.switchLink} onPress={onSwitchOther} accessibilityRole="button">
-          {canSwitchToLive ? '다른 곳이에요 → 카카오 위치로 꽂기' : '다른 곳이에요 → 직접 찍기'}
+          {canSwitchToLive
+            ? '여기가 아니에요. 카카오 위치로 꽂을게요'
+            : '여기가 아니에요. 직접 꽂을게요'}
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -108,17 +110,20 @@ export function PlaceDraftCard({
   );
 }
 
-// 지도 가운데 고정 핀(누르면 지나감). 핀 끝이 화면 정중앙을 가리킨다.
+// 지도 가운데 고정 압정(누르면 지나감). 바늘 끝이 화면 정중앙을 가리킨다. 지도 압정 핀과 같은 모양.
 export function CenterPin({ color }: { color: string }) {
   return (
     <View style={styles.pinWrap} pointerEvents="none">
-      <View style={[styles.pinHead, { backgroundColor: color }]} />
-      <View style={[styles.pinStem, { backgroundColor: color }]} />
+      <View style={[styles.pinHead, { backgroundColor: color }]}>
+        <View style={styles.pinShine} />
+      </View>
+      <View style={styles.pinStem} />
+      <View style={styles.pinShadow} />
     </View>
   );
 }
 
-const PIN_HEAD = 22;
+const PIN_HEAD = 24;
 const PIN_STEM = 14;
 
 const styles = StyleSheet.create({
@@ -134,15 +139,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 4,
+    ...shadows.lifted,
   },
   hint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
   input: {
     ...typography.body,
+    lineHeight: undefined, // 한 줄 입력칸은 줄 간격 없이(iOS 에서 글자가 아래로 치우친다)
     color: colors.textStrong,
     backgroundColor: colors.surfaceMuted,
     borderRadius: radius.field,
@@ -175,8 +177,25 @@ const styles = StyleSheet.create({
     width: PIN_HEAD,
     height: PIN_HEAD,
     borderRadius: PIN_HEAD / 2,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    ...shadows.paper,
   },
-  pinStem: { width: 3, height: PIN_STEM, marginTop: -2, borderRadius: 1.5 },
+  pinShine: {
+    position: 'absolute',
+    top: 4,
+    left: 5,
+    width: 8,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  // 바늘(금속 회색)과 종이에 떨어진 그림자
+  pinStem: { width: 2, height: PIN_STEM, marginTop: -1, backgroundColor: '#8E8A82' },
+  pinShadow: {
+    position: 'absolute',
+    bottom: -2,
+    width: 10,
+    height: 4,
+    borderRadius: 5,
+    backgroundColor: 'rgba(58,46,28,0.25)',
+  },
 });

@@ -11,10 +11,9 @@ export function LoginRequired() {
   const { refresh } = useAuth();
   return (
     <View style={styles.wrap}>
-      <Text style={styles.emoji}>✏️</Text>
       <Text style={styles.title}>같이 그리려면 로그인이 필요해요</Text>
       <Text style={styles.desc}>
-        지금까지 그린 지도는 그대로 이어져요.{'\n'}로그인하면 초대를 보내고 받을 수 있어요.
+        로그인하면 초대를 보내고 받을 수 있어요. 지금까지 그린 지도는 그대로 이어져요.
       </Text>
       <SocialButtons mode="link" onSuccess={() => refresh()} />
     </View>
@@ -25,10 +24,6 @@ const styles = StyleSheet.create({
   wrap: {
     marginTop: spacing.xl,
   },
-  emoji: {
-    fontSize: 40,
-    marginBottom: spacing.md,
-  },
   title: {
     ...typography.title,
     color: colors.textStrong,
@@ -38,6 +33,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
     marginBottom: spacing.lg,
-    lineHeight: 22,
   },
 });

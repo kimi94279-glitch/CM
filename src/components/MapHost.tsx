@@ -2,12 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuthState';
 import { useInks } from '../hooks/useInks';
 import { useMapStyle } from '../hooks/useMapStyle';
 import { reportMessage } from '../services/monitoring';
 import { Button } from './Button';
+import { Icon } from './Icon';
 import { MapWebView, type MapCamera, type MapWebViewHandle } from './MapWebView';
 import {
   MapHostProvider,
@@ -25,6 +26,14 @@ const CAMERA_STORE_MAX = 50;
 // 보드를 바꾼 직후 잠깐은 이전 보드에서 늦게 온 카메라 보고를 버린다(지도 쪽 400ms 모음 + 여유).
 const CAMERA_SWITCH_GUARD_MS = 600;
 type CameraStore = Record<string, MapCamera & { at: number }>;
+// 지도 펼치기 연출은 보드마다 하루 한 번(매번 보면 기다리게 된다 — docs/Experience Design.md ②). 보드 → 마지막으로 펼친 날.
+const UNFOLD_STORE_KEY = 'map-unfolded';
+type UnfoldStore = Record<string, string>;
+
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
 
 function cameraFrom(store: CameraStore, boardId: string | null): MapCamera | null {
   const saved = boardId ? store[boardId] : undefined;
@@ -66,11 +75,22 @@ export function MapHost({ children }: { children: ReactNode }) {
   // 마지막으로 보고된 지도 가운데(보드 전환 가드와 무관하게 항상 갱신) — 핀 확정 위치
   const lastCenterRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
 
+  const unfoldedRef = useRef<UnfoldStore>({});
+
   useEffect(() => {
     AsyncStorage.getItem(CAMERA_STORE_KEY)
       .then((raw) => {
         if (raw)
           camerasRef.current = { ...(JSON.parse(raw) as CameraStore), ...camerasRef.current };
+      })
+      .catch(() => {});
+    AsyncStorage.getItem(UNFOLD_STORE_KEY)
+      .then((raw) => {
+        // 오늘 펼친 것만 남긴다(지난 날짜는 다시 펼칠 거라 들고 있을 필요가 없다)
+        const today = todayKey();
+        const saved = raw ? (JSON.parse(raw) as UnfoldStore) : {};
+        const kept = Object.fromEntries(Object.entries(saved).filter(([, day]) => day === today));
+        unfoldedRef.current = { ...kept, ...unfoldedRef.current };
       })
       .catch(() => {});
     return () => {
@@ -134,6 +154,15 @@ export function MapHost({ children }: { children: ReactNode }) {
         mapRef.current?.setFocus(null); // 이전 보드의 카메라 고정 해제.
         boardSwitchedAt.current = Date.now();
         mapRef.current?.setCamera(cameraFrom(camerasRef.current, boardId)); // 이 보드에서 마지막으로 보던 자리(없으면 장소 기준).
+        // 오늘 처음 여는 보드면 종이 지도 펼치기(타일이 뜨는 동안 접힌 종이로 가려 준다). 카메라를 맞춘 다음에.
+        const today = todayKey();
+        if (unfoldedRef.current[boardId] !== today) {
+          unfoldedRef.current[boardId] = today;
+          AsyncStorage.setItem(UNFOLD_STORE_KEY, JSON.stringify(unfoldedRef.current)).catch(
+            () => {}
+          );
+          mapRef.current?.unfold();
+        }
         setBoardData(EMPTY_DATA); // 데이터 도착 전 공백 — 이전 보드 마커 제거(잔상 1차 방어).
       },
       setData(boardId, data) {
@@ -212,6 +241,7 @@ export function MapHost({ children }: { children: ReactNode }) {
           {mapFailed ? (
             <View style={styles.failWrap} pointerEvents="box-none">
               <View style={styles.failCard}>
+                <Icon name="fold" size={28} color={colors.textMuted} />
                 <Text style={styles.failTitle}>지도를 불러오지 못했어요</Text>
                 <Text style={styles.failDesc}>인터넷 연결을 확인하고 다시 시도해 주세요.</Text>
                 <Button title="다시 시도" onPress={reloadMap} style={styles.failButton} />
@@ -237,25 +267,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.bg,
   },
   failCard: {
     alignSelf: 'stretch',
+    maxWidth: 420,
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     padding: spacing.lg,
-    alignItems: 'center',
+    ...shadows.paper,
   },
   failTitle: {
     ...typography.title,
     color: colors.textStrong,
-    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   failDesc: {
     ...typography.body,
     color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   failButton: {
     alignSelf: 'stretch',

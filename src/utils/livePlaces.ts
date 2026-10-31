@@ -29,7 +29,7 @@ export function applyLivePlaces(
       listPlaces.push(shown);
     } else if (live?.missing.includes(p.kakao_place_id)) {
       missingIds.add(p.id);
-      listPlaces.push({ ...p, name: `${p.name} · 카카오에서 찾을 수 없어요` });
+      listPlaces.push({ ...p, name: `${p.name} (카카오에서 찾을 수 없어요)` });
     } else {
       listPlaces.push(p);
     }

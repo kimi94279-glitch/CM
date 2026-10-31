@@ -1,8 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import type { PlaceSearchResult } from '../types/models';
+import { Icon, type IconName } from './Icon';
 import { SearchResultRow } from './SearchResultRow';
 
 interface SearchSheetProps {
@@ -21,7 +22,8 @@ interface SearchSheetProps {
   bottomInset: number;
 }
 
-// 지도 위 하단 검색 결과 시트(C-1). 상태: empty / loading / error / result + 항상 "직접 핀 찍기".
+// 지도 위 하단 검색 결과 시트(C-1). 상태: empty / loading / error / result + 항상 "지도에 직접 꽂기".
+// 빈 상태는 가운데 큰 이모지 + 제목 + 회색 줄(흔한 템플릿) 대신 왼쪽 정렬 한 덩어리: 작은 아이콘 + 할 일 한 문장.
 // 검색 결과(카카오)는 화면 표시 전용 — 고르면 공공데이터에서 같은 가게를 찾아 핀 확정으로 간다(ADR-016 Option D′).
 export function SearchSheet({
   query,
@@ -38,36 +40,27 @@ export function SearchSheet({
   return (
     <View style={[styles.card, { maxHeight, paddingBottom: bottomInset }]}>
       {!assistEnabled ? (
-        <View style={styles.center}>
-          <Text style={styles.emoji}>📍</Text>
-          <Text style={styles.invite}>지도에 직접 핀을 꽂아요</Text>
-          <Text style={styles.inviteSub}>아래 버튼을 누르고 지도를 움직여 자리를 맞춰 주세요.</Text>
-        </View>
+        <Note icon="pin">
+          찾기가 꺼져 있어요. 아래 버튼을 누르고 지도를 움직여 핀 자리를 맞춰 주세요.
+        </Note>
       ) : query.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emoji}>🔍</Text>
-          <Text style={styles.invite}>어디 가고 싶어?</Text>
-          <Text style={styles.inviteSub}>카페·맛집·가보고 싶은 곳을 검색해보세요.</Text>
-        </View>
+        <Note icon="search">
+          가게 이름이나 동네 이름을 써 보세요. 찾은 곳은 지도에 핀으로 꽂아요.
+        </Note>
       ) : isFetching ? (
-        <View style={styles.center}>
+        <View style={styles.note}>
           <ActivityIndicator color={colors.primary} />
-          <Text style={styles.inviteSub}>검색 중…</Text>
+          <Text style={styles.noteText}>찾는 중이에요</Text>
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.emoji}>⚠️</Text>
-          <Text style={styles.error}>검색에 문제가 생겼어요.</Text>
-          <Text style={styles.inviteSub}>잠시 후 다시 시도해주세요.</Text>
-        </View>
+        <Note icon="close" tone="danger">
+          지금은 찾기가 안 돼요. 인터넷 연결을 확인하고 다시 써 보세요.
+        </Note>
       ) : results.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emoji}>🗺️</Text>
-          <Text style={styles.noResultTitle} numberOfLines={2}>
-            ‘{query}’ 검색 결과가 없어요
-          </Text>
-          <Text style={styles.inviteSub}>이름을 바꾸거나 더 간단히 검색해볼까요?</Text>
-        </View>
+        <Note icon="compass">
+          ‘{query}’ 이름으로는 찾지 못했어요. 이름을 줄여 쓰거나, 지도에서 그 자리를 찾아 직접 꽂아
+          보세요.
+        </Note>
       ) : (
         <FlatList
           data={results}
@@ -79,7 +72,7 @@ export function SearchSheet({
             selecting ? (
               <View style={styles.selecting}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.attribution}>장소 정보를 확인하는 중…</Text>
+                <Text style={styles.attribution}>장소 정보를 맞춰 보는 중이에요</Text>
               </View>
             ) : (
               <Text style={styles.attribution}>검색 제공: 카카오</Text>
@@ -94,8 +87,28 @@ export function SearchSheet({
         style={({ pressed }) => [styles.directPin, pressed && styles.pressed]}
         accessibilityRole="button"
       >
-        <Text style={styles.directPinText}>📍 지도에 직접 핀 찍기</Text>
+        <Icon name="pin" size={18} color={colors.roadRed} />
+        <Text style={styles.directPinText}>지도에 직접 꽂기</Text>
       </Pressable>
+    </View>
+  );
+}
+
+// 시트 안 안내 한 덩어리(왼쪽 정렬): 작은 아이콘 + 문장.
+function Note({
+  icon,
+  tone = 'muted',
+  children,
+}: {
+  icon: IconName;
+  tone?: 'muted' | 'danger';
+  children: React.ReactNode;
+}) {
+  const color = tone === 'danger' ? colors.danger : colors.textMuted;
+  return (
+    <View style={styles.note}>
+      <Icon name={icon} size={20} color={color} />
+      <Text style={[styles.noteText, { color }]}>{children}</Text>
     </View>
   );
 }
@@ -109,22 +122,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingTop: spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 4,
+    ...shadows.lifted,
   },
-  center: {
-    paddingVertical: spacing.xl,
+  note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
   },
-  emoji: { fontSize: 28, marginBottom: spacing.xs },
-  invite: { ...typography.title, color: colors.textStrong },
-  inviteSub: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
-  error: { ...typography.body, color: colors.danger, textAlign: 'center' },
+  noteText: { ...typography.body, color: colors.textMuted, flex: 1 },
   attribution: {
     ...typography.caption,
     color: colors.textMuted,
@@ -133,17 +141,14 @@ const styles = StyleSheet.create({
   },
   selecting: { flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.md },
   directPin: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     paddingVertical: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
   },
-  directPinText: { ...typography.label, color: colors.textStrong, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
-  noResultTitle: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.textStrong,
-    textAlign: 'center',
-  },
+  directPinText: { ...typography.label, color: colors.textStrong },
+  pressed: { backgroundColor: colors.surfaceMuted },
 });

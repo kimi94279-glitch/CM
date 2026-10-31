@@ -5,7 +5,6 @@ import { useMapHost } from '../components/MapHostContext';
 import type { PlaceDraftParam } from '../navigation/types';
 import type { PlaceDraft, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
-import { tapHaptic } from '../utils/haptics';
 import {
   directDraft,
   draftFromMatch,
@@ -94,7 +93,7 @@ export function usePlacing(
     Keyboard.dismiss();
     addPlace.mutate(draft, {
       onSuccess: (saved) => {
-        tapHaptic(); // 핀이 꽂히는 손맛(지도에서는 '퐁' 떨어진다)
+        // 지도에서 '퐁' 떨어진다(onSaved → dropPin). 진동은 바늘이 닿는 순간 지도가 알려 줄 때(MapWebView pinLanded).
         onSaved?.(saved.id);
         setPlacing(null);
       },

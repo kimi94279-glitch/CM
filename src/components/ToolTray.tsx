@@ -1,27 +1,37 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography, type Ink } from '../constants/theme';
+import {
+  colors,
+  numeric,
+  radius,
+  shadows,
+  spacing,
+  typography,
+  type Ink,
+} from '../constants/theme';
 import { STICKER_EMOJIS, type CanvasTool } from '../hooks/useCanvasTools';
+import { prefersReducedMotion, SNAPPY_EASING } from '../utils/motion';
+import { Icon, type IconName } from './Icon';
 
 // 필통: 지도 아래에 늘 놓인 도구 줄. 그리기가 숨은 모드가 아니라 손에 드는 도구가 되도록(2026-10-31 경험 설계).
 // 도구를 들면 한 손가락은 그리기, 두 손가락은 지도 이동. 같은 도구를 다시 누르면 손(지도 이동)으로 돌아간다.
-// 위쪽 줄: 왼쪽 범례(장소 목록), 오른쪽 전체 보기. 도구를 들면 그 자리에 도구 안내 + 되돌리기(스티커는 이모지 고르기).
+// 위쪽 줄: 왼쪽 범례(장소 목록), 오른쪽 전체 보기. 도구를 들면 그 자리에 도구 안내 + 되돌리기(스티커는 스티커 고르기).
 
-const TOOLS: { tool: CanvasTool; icon: string; label: string }[] = [
-  { tool: 'hand', icon: '✋', label: '이동' },
-  { tool: 'pencil', icon: '✏️', label: '연필' },
-  { tool: 'ink', icon: '🖋️', label: '잉크' },
-  { tool: 'marker', icon: '🖍️', label: '형광펜' },
-  { tool: 'string', icon: '🧵', label: '실 자' },
-  { tool: 'sticker', icon: '✨', label: '스티커' },
+const TOOLS: { tool: CanvasTool; icon: IconName; label: string }[] = [
+  { tool: 'hand', icon: 'hand', label: '이동' },
+  { tool: 'pencil', icon: 'pencil', label: '연필' },
+  { tool: 'ink', icon: 'pen', label: '잉크' },
+  { tool: 'marker', icon: 'marker', label: '형광펜' },
+  { tool: 'string', icon: 'string', label: '실 자' },
+  { tool: 'sticker', icon: 'sticker', label: '스티커' },
 ];
 
 const HINTS: Partial<Record<CanvasTool, string>> = {
-  pencil: '연필 — 아직 정하지 않은 길 · 두 손가락으로 지도 이동',
-  ink: '잉크 — 정한 길, 다녀온 길',
-  marker: '형광펜 — 이 동네 좋아',
-  string: '실 자 — 두 곳 사이를 끌어서 거리 재기',
+  pencil: '아직 정하지 않은 길은 연필로. 지도는 두 손가락으로 움직여요',
+  ink: '정한 길, 다녀온 길은 잉크로',
+  marker: '마음에 드는 동네를 칠해요',
+  string: '두 곳 사이를 끌면 거리를 재요',
 };
 
 export function ToolTray({
@@ -42,7 +52,7 @@ export function ToolTray({
   ink: Ink; // 내 잉크 — 든 도구 강조색
   tool: CanvasTool;
   onPick: (tool: CanvasTool) => void;
-  onPin: () => void; // 📌: 지금 지도 가운데에 핀 꽂기
+  onPin: () => void; // 핀: 지금 지도 가운데에 핀 꽂기
   stickerEmoji: string;
   onPickEmoji: (emoji: string) => void;
   canUndo: boolean;
@@ -59,10 +69,11 @@ export function ToolTray({
           {STICKER_EMOJIS.map((e) => (
             <Pressable
               key={e}
-              style={[styles.emojiBtn, stickerEmoji === e && styles.emojiOn]}
+              style={[styles.emojiBtn, stickerEmoji === e && { backgroundColor: ink.tint }]}
               onPress={() => onPickEmoji(e)}
               accessibilityRole="button"
               accessibilityLabel={`스티커 ${e}`}
+              accessibilityState={{ selected: stickerEmoji === e }}
             >
               <Text style={styles.emoji}>{e}</Text>
             </Pressable>
@@ -74,24 +85,29 @@ export function ToolTray({
             {hint}
           </Text>
           <Pressable
-            style={[styles.undo, !canUndo && styles.undoOff]}
+            style={({ pressed }) => [
+              styles.undo,
+              !canUndo && styles.off,
+              pressed && styles.pressed,
+            ]}
             onPress={onUndo}
             disabled={!canUndo}
             accessibilityRole="button"
             accessibilityLabel="마지막 선 지우기"
           >
-            <Text style={styles.undoIcon}>↶</Text>
+            <Icon name="undo" size={20} />
           </Pressable>
         </View>
       ) : (
         <View style={styles.corners} pointerEvents="box-none">
           {onOpenLegend ? (
             <Pressable
-              style={styles.legend}
+              style={({ pressed }) => [styles.legend, pressed && styles.pressed]}
               onPress={onOpenLegend}
               accessibilityRole="button"
-              accessibilityLabel={`범례 ${placeCount}곳 열기`}
+              accessibilityLabel={`범례 열기, 장소 ${placeCount}곳`}
             >
+              <Icon name="legend" size={16} color={colors.tagInk} />
               <Text style={styles.legendText}>범례</Text>
               <Text style={styles.legendCount}>{placeCount}</Text>
             </Pressable>
@@ -99,42 +115,35 @@ export function ToolTray({
             <View />
           )}
           <Pressable
-            style={styles.round}
+            style={({ pressed }) => [styles.round, pressed && styles.pressed]}
             onPress={onRecenter}
             accessibilityRole="button"
-            accessibilityLabel="전체 장소 보기"
+            accessibilityLabel="장소 전체 보기"
           >
-            <Text style={styles.roundIcon}>⊙</Text>
+            <Icon name="compass" size={22} />
           </Pressable>
         </View>
       )}
 
       <View style={styles.tray}>
-        {TOOLS.map((t) => {
-          const on = tool === t.tool;
-          return (
-            <Pressable
-              key={t.tool}
-              style={[styles.tool, on && [styles.toolOn, { backgroundColor: ink.tint }]]}
-              onPress={() => onPick(t.tool)}
-              accessibilityRole="button"
-              accessibilityLabel={t.label}
-              accessibilityState={{ selected: on }}
-            >
-              <Text style={styles.toolIcon}>{t.icon}</Text>
-              <Text style={[styles.toolLabel, on && [styles.toolLabelOn, { color: ink.text }]]}>
-                {t.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {TOOLS.map((t) => (
+          <ToolButton
+            key={t.tool}
+            icon={t.icon}
+            label={t.label}
+            on={tool === t.tool}
+            ink={ink}
+            onPress={() => onPick(t.tool)}
+          />
+        ))}
+        <View style={styles.rule} />
         <Pressable
-          style={styles.tool}
+          style={({ pressed }) => [styles.tool, pressed && styles.pressed]}
           onPress={onPin}
           accessibilityRole="button"
           accessibilityLabel="지도 가운데에 핀 꽂기"
         >
-          <Text style={styles.toolIcon}>📌</Text>
+          <Icon name="pin" size={24} color={colors.roadRed} />
           <Text style={styles.toolLabel}>핀</Text>
         </Pressable>
       </View>
@@ -142,13 +151,57 @@ export function ToolTray({
   );
 }
 
-const shadow = {
-  shadowColor: '#000',
-  shadowOpacity: 0.16,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 5,
-} as const;
+// 필통의 도구 하나. 들면 0.12초 만에 5px 들린다(하루에도 수십 번 누르는 것이라 짧게, 빨리 닿고 천천히 멈추는 곡선).
+// 진동(selectHaptic)은 같은 순간 onPick 에서 울린다. 동작 줄이기면 움직이지 않고 바로 그 자리.
+function ToolButton({
+  icon,
+  label,
+  on,
+  ink,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  on: boolean;
+  ink: Ink;
+  onPress: () => void;
+}) {
+  const [lift] = useState(() => new Animated.Value(on ? LIFT : 0));
+  useEffect(() => {
+    const to = on ? LIFT : 0;
+    if (prefersReducedMotion()) {
+      lift.setValue(to);
+      return;
+    }
+    Animated.timing(lift, {
+      toValue: to,
+      duration: 120,
+      easing: SNAPPY_EASING,
+      useNativeDriver: true,
+    }).start();
+  }, [on, lift]);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: on }}
+    >
+      <Animated.View
+        style={[
+          styles.tool,
+          on && { backgroundColor: ink.tint },
+          { transform: [{ translateY: lift }] },
+        ]}
+      >
+        <Icon name={icon} size={24} color={on ? ink.solid : colors.textStrong} />
+        <Text style={[styles.toolLabel, on && { color: ink.text }]}>{label}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const LIFT = -5;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -157,55 +210,53 @@ const styles = StyleSheet.create({
     right: spacing.sm,
     gap: spacing.sm,
   },
+  // 필통 판: 떠 있는 판(그림자 lifted). 도구는 아이콘 + 이름, 든 도구는 살짝 들려 잉크색.
   tray: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 22,
+    borderRadius: radius.card,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
-    ...shadow,
+    ...shadows.lifted,
   },
   tool: {
     width: 46,
-    paddingVertical: spacing.xs,
+    paddingTop: 6,
+    paddingBottom: 4,
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: radius.field,
   },
-  toolOn: {
-    transform: [{ translateY: -5 }],
-  },
-  toolIcon: { fontSize: 21 },
-  toolLabel: { ...typography.caption, fontSize: 10.5, color: colors.textMuted, marginTop: 1 },
-  toolLabelOn: { fontWeight: '800' },
-  // 도구를 들었을 때 위쪽 줄: 안내 + 되돌리기, 스티커는 이모지 고르기
+  toolLabel: { ...typography.caption, fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  // 그리기 도구와 핀 사이 괘선
+  rule: { width: 1, height: 28, backgroundColor: colors.border },
+  // 도구를 들었을 때 위쪽 줄: 안내 + 되돌리기, 스티커는 스티커 고르기
   context: {
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     backgroundColor: colors.surface,
-    borderRadius: radius.card,
+    borderRadius: radius.field,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     maxWidth: '100%',
-    ...shadow,
+    ...shadows.paper,
   },
   hint: { ...typography.caption, color: colors.textStrong, flexShrink: 1, paddingLeft: spacing.xs },
   undo: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  undoOff: { opacity: 0.3 },
-  undoIcon: { fontSize: 20, color: colors.textStrong },
+  off: { opacity: 0.3 },
+  pressed: { opacity: 0.6 },
   emojiBtn: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.card,
+    borderRadius: radius.field,
   },
-  emojiOn: { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.primary },
   emoji: { fontSize: 22 },
-  // 손일 때 위쪽 줄: 범례(종이 꼬리표 모양) · 전체 보기
+  // 손일 때 위쪽 줄: 범례(종이 꼬리표) · 전체 보기
   corners: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -214,26 +265,25 @@ const styles = StyleSheet.create({
   },
   legend: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    backgroundColor: '#FFFAF0',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.tag,
     borderWidth: 1,
-    borderColor: '#E3D6BD',
-    borderRadius: 4,
-    paddingHorizontal: spacing.md,
+    borderColor: colors.tagRule,
+    borderRadius: radius.tag,
+    paddingHorizontal: spacing.md - 2,
     paddingVertical: spacing.sm,
-    ...shadow,
+    ...shadows.paper,
   },
-  legendText: { ...typography.label, fontWeight: '800', color: '#3A2F22' },
-  legendCount: { ...typography.caption, fontWeight: '700', color: '#8A7A62' },
+  legendText: { ...typography.label, color: colors.tagInk },
+  legendCount: { ...typography.caption, ...numeric, color: colors.textMuted },
   round: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.round,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow,
+    ...shadows.paper,
   },
-  roundIcon: { fontSize: 18, color: colors.textStrong },
 });
