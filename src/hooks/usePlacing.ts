@@ -3,13 +3,17 @@ import { Keyboard } from 'react-native';
 
 import { useMapHost } from '../components/MapHostContext';
 import type { PlaceDraftParam } from '../navigation/types';
-import type { PlaceDraft, PlaceSearchResult } from '../types/models';
+import { nearPlaces } from '../services/placeSearchService';
+import type { NearPlace, PlaceDraft, PlaceSearchResult } from '../types/models';
 import { friendlyError } from '../utils/errors';
 import {
   directDraft,
   draftFromMatch,
   liveDraft,
   metersBetween,
+  nearDraft,
+  snapRadiusM,
+  tappedDraft,
   type PlacingDraft,
 } from '../utils/placeDraft';
 import { useAddPlace, useMatchPlace } from './usePlaces';
@@ -73,6 +77,40 @@ export function usePlacing(
     });
   };
   const startDirect = (name: string) => start(directDraft(name), Date.now());
+
+  // 핀 도구로 지도를 누름 → 그 둘레의 공공데이터 가게 중 가장 가까운 곳으로 시작(카드에서 다른 가게·누른 자리로 바꿀 수 있음).
+  // 가게가 없거나 찾지 못하면 누른 자리에 직접.
+  // 찾는 중 두 번 눌러도 한 번만(지도 콜백은 등록 때의 함수를 들고 있어서 상태 대신 ref 로 막는다)
+  const [snapping, setSnapping] = useState(false);
+  const snappingRef = useRef(false);
+  const snapAt = (point: { lat: number; lng: number; level: number }) => {
+    if (snappingRef.current) return;
+    snappingRef.current = true;
+    const tapped = { latitude: point.lat, longitude: point.lng };
+    setSnapping(true);
+    nearPlaces(point.lat, point.lng, snapRadiusM(point.lat, point.level))
+      .then((list) =>
+        start(list.length ? nearDraft(list[0], list, tapped) : tappedDraft(tapped), Date.now())
+      )
+      .catch(() => start(tappedDraft(tapped), Date.now()))
+      .finally(() => {
+        snappingRef.current = false;
+        setSnapping(false);
+      });
+  };
+  const pickNear = (place: NearPlace) => {
+    if (!placing?.tapped || !placing.nearby) return;
+    const next = nearDraft(place, placing.nearby, placing.tapped);
+    setDraftName(next.name);
+    setDraftError(null);
+    setPlacing({ ...next, key: Date.now() });
+  };
+  const plainPin = () => {
+    if (!placing?.tapped) return;
+    setDraftName('');
+    setDraftError(null);
+    setPlacing({ ...tappedDraft(placing.tapped, placing.nearby), key: Date.now() });
+  };
 
   // "다른 곳이에요": 가까운 등록 가게가 아니면 카카오 실시간 핀으로, 그것도 안 되면 이름을 비우고 직접 찍기로.
   const switchToOther = () => {
@@ -153,6 +191,10 @@ export function usePlacing(
     selecting: matchPlace.isPending,
     selectResult,
     startDirect,
+    snapping,
+    snapAt,
+    pickNear,
+    plainPin,
     switchToOther,
     cancel,
     confirm,

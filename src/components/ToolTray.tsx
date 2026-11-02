@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -10,16 +10,19 @@ import {
   typography,
   type Ink,
 } from '../constants/theme';
-import { STICKER_EMOJIS, type CanvasTool } from '../hooks/useCanvasTools';
+import type { CanvasTool } from '../hooks/useCanvasTools';
+import { useSeenHints } from '../hooks/useSeenHints';
 import { prefersReducedMotion, SNAPPY_EASING } from '../utils/motion';
 import { Icon, type IconName } from './Icon';
+import { StickerChip, StickerDrawer } from './StickerDrawer';
 
 // 필통: 지도 아래에 늘 놓인 도구 줄. 그리기가 숨은 모드가 아니라 손에 드는 도구가 되도록(2026-10-31 경험 설계).
-// 도구를 들면 한 손가락은 그리기, 두 손가락은 지도 이동. 같은 도구를 다시 누르면 손(지도 이동)으로 돌아간다.
-// 위쪽 줄: 왼쪽 범례(장소 목록), 오른쪽 전체 보기. 도구를 들면 그 자리에 도구 안내 + 되돌리기(스티커는 스티커 고르기).
+// 아무것도 안 든 게 기본(한 손가락 = 지도 이동). 도구를 들면 한 손가락은 그 도구, 두 손가락은 지도 이동. 든 도구를 다시 누르면 내려놓는다.
+// 2026-11-01 실기기 의견으로 다시 짰다: "이동" 칸을 빼고(내려놓기 = 다시 누르기), 핀은 그리기 도구와 떨어진 칸에,
+// 되돌리기는 도구와 상관없이 늘 같은 자리(오른쪽 위 둥근 단추 줄)에, 도구 설명은 그 도구를 처음 들 때 한 번만.
+// 위쪽 줄: 왼쪽 범례(장소 목록), 오른쪽 되돌리기 · 바탕 고르기 · 전체 보기. 스티커를 들면 그 위에 스티커 서랍.
 
 const TOOLS: { tool: CanvasTool; icon: IconName; label: string }[] = [
-  { tool: 'hand', icon: 'hand', label: '이동' },
   { tool: 'pencil', icon: 'pencil', label: '연필' },
   { tool: 'ink', icon: 'pen', label: '잉크' },
   { tool: 'marker', icon: 'marker', label: '형광펜' },
@@ -27,21 +30,29 @@ const TOOLS: { tool: CanvasTool; icon: IconName; label: string }[] = [
   { tool: 'sticker', icon: 'sticker', label: '스티커' },
 ];
 
+// 처음 들 때 한 번만 보여 주는 설명
 const HINTS: Partial<Record<CanvasTool, string>> = {
-  pencil: '아직 정하지 않은 길은 연필로. 지도는 두 손가락으로 움직여요',
-  ink: '정한 길, 다녀온 길은 잉크로',
+  pencil: '아직 정하지 않은 길은 연필로 그어요',
+  ink: '정한 길, 다녀온 길은 잉크로 그어요',
   marker: '마음에 드는 동네를 칠해요',
-  string: '두 곳 사이를 끌면 거리를 재요',
+  string: '두 곳을 차례로 누르면 거리를 재요',
+  sticker: '고른 스티커는 지도를 누르면 붙어요',
+  pin: '가게 근처를 누르면 가장 가까운 가게에 꽂혀요',
 };
+const DRAW_TOOLS: CanvasTool[] = ['pencil', 'ink', 'marker', 'string'];
+// 도구 설명에 처음 한 번 덧붙이는 공통 안내
+const TWO_FINGER = { key: 'two-finger', text: '지도는 두 손가락으로 움직여요' };
+const PUT_DOWN = { key: 'put-down', text: '다시 누르면 내려놓아요' };
+const HINT_MS = 4500;
 
 export function ToolTray({
   bottom,
   ink,
   tool,
   onPick,
-  onPin,
-  stickerEmoji,
-  onPickEmoji,
+  sticker,
+  recentStickers,
+  onPickSticker,
   canUndo,
   onUndo,
   placeCount,
@@ -52,10 +63,10 @@ export function ToolTray({
   bottom: number;
   ink: Ink; // 내 잉크 — 든 도구 강조색
   tool: CanvasTool;
-  onPick: (tool: CanvasTool) => void;
-  onPin: () => void; // 핀: 지금 지도 가운데에 핀 꽂기
-  stickerEmoji: string;
-  onPickEmoji: (emoji: string) => void;
+  onPick: (tool: CanvasTool) => void; // 같은 도구를 다시 고르면 내려놓는다(useCanvasTools)
+  sticker: string;
+  recentStickers: string[];
+  onPickSticker: (sticker: string) => void;
   canUndo: boolean;
   onUndo: () => void;
   placeCount: number;
@@ -63,103 +74,152 @@ export function ToolTray({
   onOpenStyles: () => void; // 이 지도의 바탕 고르기
   onRecenter: () => void;
 }) {
-  const hint = HINTS[tool];
+  const seen = useSeenHints();
+  const [hint, setHint] = useState<{ tool: CanvasTool; lines: string[] } | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+    },
+    []
+  );
+  // 스티커 서랍: 스티커를 들 때 열리고, 하나 고르면 접힌다
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const pick = (next: CanvasTool) => {
+    onPick(next);
+    if (next === tool) return; // 내려놓기
+    if (next === 'sticker') setDrawerOpen(true);
+    if (!seen.loaded) return;
+    const lines: string[] = [];
+    const text = HINTS[next];
+    if (text && !seen.hasSeen(next)) {
+      lines.push(text);
+      seen.markSeen(next);
+      if (DRAW_TOOLS.includes(next) && !seen.hasSeen(TWO_FINGER.key)) {
+        lines.push(TWO_FINGER.text);
+        seen.markSeen(TWO_FINGER.key);
+      }
+      if (!seen.hasSeen(PUT_DOWN.key)) {
+        lines.push(PUT_DOWN.text);
+        seen.markSeen(PUT_DOWN.key);
+      }
+    }
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    if (!lines.length) {
+      setHint(null);
+      return;
+    }
+    setHint({ tool: next, lines });
+    hintTimer.current = setTimeout(() => setHint(null), HINT_MS + (lines.length - 1) * 1500);
+  };
+  const pickSticker = (s: string) => {
+    onPickSticker(s);
+    setDrawerOpen(false);
+  };
+
+  const shownHint = hint && hint.tool === tool ? hint.lines : null;
+  const stickerOn = tool === 'sticker';
+
   return (
     <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
-      {tool === 'sticker' ? (
-        <View style={styles.context}>
-          {STICKER_EMOJIS.map((e) => (
-            <Pressable
-              key={e}
-              style={[styles.emojiBtn, stickerEmoji === e && { backgroundColor: ink.tint }]}
-              onPress={() => onPickEmoji(e)}
-              accessibilityRole="button"
-              accessibilityLabel={`스티커 ${e}`}
-              accessibilityState={{ selected: stickerEmoji === e }}
-            >
-              <Text style={styles.emoji}>{e}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : hint ? (
-        <View style={styles.context}>
-          <Text style={styles.hint} numberOfLines={1}>
-            {hint}
-          </Text>
+      <View style={styles.column} pointerEvents="box-none">
+        {shownHint ? (
           <Pressable
-            style={({ pressed }) => [
-              styles.undo,
-              !canUndo && styles.off,
-              pressed && styles.pressed,
-            ]}
-            onPress={onUndo}
-            disabled={!canUndo}
-            accessibilityRole="button"
-            accessibilityLabel="마지막 선 지우기"
+            style={styles.hint}
+            onPress={() => setHint(null)}
+            accessibilityRole="text"
+            accessibilityLiveRegion="polite"
           >
-            <Icon name="undo" size={20} />
+            {shownHint.map((line, i) => (
+              <Text key={line} style={i === 0 ? styles.hintText : styles.hintSub}>
+                {line}
+              </Text>
+            ))}
           </Pressable>
-        </View>
-      ) : (
-        <View style={styles.corners} pointerEvents="box-none">
-          {onOpenLegend ? (
-            <Pressable
-              style={({ pressed }) => [styles.legend, pressed && styles.pressed]}
-              onPress={onOpenLegend}
-              accessibilityRole="button"
-              accessibilityLabel={`범례 열기, 장소 ${placeCount}곳`}
-            >
-              <Icon name="legend" size={16} color={colors.tagInk} />
-              <Text style={styles.legendText}>범례</Text>
-              <Text style={styles.legendCount}>{placeCount}</Text>
-            </Pressable>
-          ) : (
-            <View />
-          )}
-          <View style={styles.roundGroup}>
-            <Pressable
-              style={({ pressed }) => [styles.round, pressed && styles.pressed]}
-              onPress={onOpenStyles}
-              accessibilityRole="button"
-              accessibilityLabel="지도 바탕 고르기"
-            >
-              <Icon name="layers" size={22} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.round, pressed && styles.pressed]}
-              onPress={onRecenter}
-              accessibilityRole="button"
-              accessibilityLabel="장소 전체 보기"
-            >
-              <Icon name="compass" size={22} />
-            </Pressable>
+        ) : null}
+
+        {stickerOn && drawerOpen ? (
+          <StickerDrawer ink={ink} value={sticker} recent={recentStickers} onPick={pickSticker} />
+        ) : null}
+        {stickerOn && !drawerOpen ? (
+          <StickerChip ink={ink} value={sticker} onOpen={() => setDrawerOpen(true)} />
+        ) : null}
+
+        {stickerOn && drawerOpen ? null : (
+          <View style={styles.corners} pointerEvents="box-none">
+            {onOpenLegend ? (
+              <Pressable
+                style={({ pressed }) => [styles.legend, pressed && styles.pressed]}
+                onPress={onOpenLegend}
+                accessibilityRole="button"
+                accessibilityLabel={`범례 열기, 장소 ${placeCount}곳`}
+              >
+                <Icon name="legend" size={16} color={colors.tagInk} />
+                <Text style={styles.legendText}>범례</Text>
+                <Text style={styles.legendCount}>{placeCount}</Text>
+              </Pressable>
+            ) : (
+              <View />
+            )}
+            <View style={styles.roundGroup}>
+              {canUndo ? (
+                <RoundButton icon="undo" label="방금 한 것 되돌리기" onPress={onUndo} />
+              ) : null}
+              <RoundButton icon="layers" label="지도 바탕 고르기" onPress={onOpenStyles} />
+              <RoundButton icon="compass" label="장소 전체 보기" onPress={onRecenter} />
+            </View>
+          </View>
+        )}
+
+        <View style={styles.trayRow}>
+          <View style={styles.tray}>
+            {TOOLS.map((t) => (
+              <ToolButton
+                key={t.tool}
+                icon={t.icon}
+                label={t.label}
+                on={tool === t.tool}
+                ink={ink}
+                onPress={() => pick(t.tool)}
+              />
+            ))}
+          </View>
+          {/* 핀: 그리기 도구와 떨어진 칸. 들고 가게 근처를 누르면 가장 가까운 가게에 꽂힌다 */}
+          <View style={styles.pinTray}>
+            <ToolButton
+              icon="pin"
+              label="핀"
+              on={tool === 'pin'}
+              ink={ink}
+              iconColor={colors.roadRed}
+              onPress={() => pick('pin')}
+            />
           </View>
         </View>
-      )}
-
-      <View style={styles.tray}>
-        {TOOLS.map((t) => (
-          <ToolButton
-            key={t.tool}
-            icon={t.icon}
-            label={t.label}
-            on={tool === t.tool}
-            ink={ink}
-            onPress={() => onPick(t.tool)}
-          />
-        ))}
-        <View style={styles.rule} />
-        <Pressable
-          style={({ pressed }) => [styles.tool, pressed && styles.pressed]}
-          onPress={onPin}
-          accessibilityRole="button"
-          accessibilityLabel="지도 가운데에 핀 꽂기"
-        >
-          <Icon name="pin" size={24} color={colors.roadRed} />
-          <Text style={styles.toolLabel}>핀</Text>
-        </Pressable>
       </View>
     </View>
+  );
+}
+
+function RoundButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Icon name={icon} size={22} />
+    </Pressable>
   );
 }
 
@@ -170,12 +230,14 @@ function ToolButton({
   label,
   on,
   ink,
+  iconColor = colors.textStrong,
   onPress,
 }: {
   icon: IconName;
   label: string;
   on: boolean;
   ink: Ink;
+  iconColor?: string;
   onPress: () => void;
 }) {
   const [lift] = useState(() => new Animated.Value(on ? LIFT : 0));
@@ -196,7 +258,7 @@ function ToolButton({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={on ? `${label}, 들고 있음. 다시 누르면 내려놓기` : label}
       accessibilityState={{ selected: on }}
     >
       <Animated.View
@@ -206,7 +268,7 @@ function ToolButton({
           { transform: [{ translateY: lift }] },
         ]}
       >
-        <Icon name={icon} size={24} color={on ? ink.solid : colors.textStrong} />
+        <Icon name={icon} size={24} color={on ? ink.solid : iconColor} />
         <Text style={[styles.toolLabel, on && { color: ink.text }]}>{label}</Text>
       </Animated.View>
     </Pressable>
@@ -220,55 +282,50 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.sm,
     right: spacing.sm,
-    gap: spacing.sm,
+    alignItems: 'center',
   },
-  // 필통 판: 떠 있는 판(그림자 lifted). 도구는 아이콘 + 이름, 든 도구는 살짝 들려 잉크색.
+  // 가로 화면·태블릿에서 양끝까지 늘어나지 않게
+  column: { width: '100%', maxWidth: 560, gap: spacing.sm },
+  // 필통 판 + 핀 칸: 떠 있는 두 판(그림자 lifted). 도구는 아이콘 + 이름, 든 도구는 살짝 들려 잉크색.
+  trayRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
   tray: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 6,
+    ...shadows.lifted,
+  },
+  pinTray: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: 6,
     ...shadows.lifted,
   },
   tool: {
-    width: 46,
+    width: 50,
     paddingTop: 6,
     paddingBottom: 4,
     alignItems: 'center',
     borderRadius: radius.field,
   },
   toolLabel: { ...typography.caption, fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  // 그리기 도구와 핀 사이 괘선
-  rule: { width: 1, height: 28, backgroundColor: colors.border },
-  // 도구를 들었을 때 위쪽 줄: 안내 + 되돌리기, 스티커는 스티커 고르기
-  context: {
+  // 처음 한 번 도구 설명: 먹색 말풍선(잠깐 떴다 사라진다, 누르면 바로 닫힘)
+  hint: {
     alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.field,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
     maxWidth: '100%',
-    ...shadows.paper,
-  },
-  hint: { ...typography.caption, color: colors.textStrong, flexShrink: 1, paddingLeft: spacing.xs },
-  undo: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  off: { opacity: 0.3 },
-  pressed: { opacity: 0.6 },
-  emojiBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(28, 28, 26, 0.92)',
     borderRadius: radius.field,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 2,
   },
-  emoji: { fontSize: 22 },
-  // 손일 때 위쪽 줄: 범례(종이 꼬리표) · 전체 보기
+  hintText: { ...typography.label, color: colors.onPrimary, textAlign: 'center' },
+  hintSub: { ...typography.caption, color: 'rgba(255,255,255,0.78)', textAlign: 'center' },
+  pressed: { opacity: 0.6 },
+  // 위쪽 줄: 범례(종이 꼬리표) · 되돌리기 · 바탕 · 전체 보기
   corners: {
     flexDirection: 'row',
     justifyContent: 'space-between',

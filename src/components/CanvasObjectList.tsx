@@ -61,8 +61,8 @@ export function CanvasObjectList({
       {places.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
-            아직 꽂은 핀이 없어요. 가고 싶은 곳을 찾아서 꽂거나, 필통의 핀으로 지도 가운데에 바로
-            꽂아요.
+            아직 꽂은 핀이 없어요. 가고 싶은 곳을 찾아서 꽂거나, 필통의 핀을 들고 가게 근처를 누르면
+            가장 가까운 가게에 꽂혀요.
           </Text>
           <Button title="장소 찾기" variant="secondary" onPress={onAdd} />
         </View>

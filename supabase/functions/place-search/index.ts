@@ -13,6 +13,9 @@
 //   쿼터 절약: 같은 검색어 핀은 카카오 1번으로 같이 찾고, 1쪽에 없을 때만 near(핀의 동네 중심) 반경 2km → 2·3쪽.
 //   그 검색어로 카카오를 다시 찾아 같은 ID 의 지금 좌표·이름을 돌려준다 — 화면 표시 전용, 저장하지 않는다(데브톡 151294).
 //   missing = 카카오에서 더는 안 나옴(폐업·이전 등), failed = 카카오 오류(다음에 다시).
+// 요청 4 — 누른 자리 둘레 가게:  POST { action: 'near', latitude, longitude, radius?: m (15~300, 기본 60) }
+//   응답: { places: { poiId, name, branch, category, address, latitude, longitude, distance }[] }  (가까운 순 최대 6)
+//   공공데이터(poi)만 본다 — 카카오 호출 없음. 핀 도구로 가게 근처를 대충 누르면 가장 가까운 가게에 꽂는다(2026-11-01).
 
 import { parseDong, pickMatch, type PoiCandidate } from './match.ts';
 
@@ -22,6 +25,8 @@ const RESOLVE_MAX_PAGES = 3; // 카카오 키워드 검색은 15건 × 3쪽(45�
 const RESOLVE_NEAR_PAGES = 2;
 const RESOLVE_NEAR_RADIUS_M = 2000; // 동네 중심 → 실제 가게까지 여유
 const RESOLVE_CONCURRENCY = 5;
+const NEAR_DEFAULT_RADIUS_M = 60;
+const NEAR_MAX = 6;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -139,6 +144,65 @@ async function match(body: Record<string, unknown>): Promise<Response> {
     });
   }
   return json({ match: null, dong: dongOut });
+}
+
+// 두 좌표 사이 거리(m, 하버사인)
+function metersBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const toRad = Math.PI / 180;
+  const dLat = (bLat - aLat) * toRad;
+  const dLng = (bLng - aLng) * toRad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+async function near(body: Record<string, unknown>): Promise<Response> {
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return json({ error: 'latitude, longitude are required' }, 400);
+  }
+  const radius = Math.min(
+    300,
+    Math.max(15, Math.round(Number(body.radius) || NEAR_DEFAULT_RADIUS_M))
+  );
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey) {
+    return json({ error: 'server not configured' }, 500);
+  }
+
+  // poi_lookup 은 네모 칸(반경) 안을 가까운 순으로 준다 — 모서리 쪽은 원 밖이라 거리로 한 번 더 거른다
+  const res = await fetch(`${supabaseUrl}/rest/v1/rpc/poi_lookup`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_lat: latitude, p_lng: longitude, p_radius_m: radius }),
+  });
+  if (!res.ok) {
+    return json({ error: 'lookup failed', status: res.status }, 502);
+  }
+  const lookup = (await res.json()) as LookupResponse;
+  const places = (lookup.candidates ?? [])
+    .map((c) => ({
+      poiId: c.id,
+      name: c.name,
+      branch: c.branch,
+      category: c.category,
+      address: c.address,
+      latitude: c.lat,
+      longitude: c.lng,
+      distance: Math.round(metersBetween(latitude, longitude, c.lat, c.lng)),
+    }))
+    .filter((p) => p.distance <= radius)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, NEAR_MAX);
+  return json({ places });
 }
 
 interface ResolveGroup {
@@ -262,6 +326,7 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     if (body.action === 'match') return await match(body);
     if (body.action === 'resolve') return await resolve(body);
+    if (body.action === 'near') return await near(body);
     return await search(body.query);
   } catch (e) {
     return json({ error: String(e) }, 500);

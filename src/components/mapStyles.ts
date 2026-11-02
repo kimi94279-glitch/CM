@@ -88,12 +88,14 @@ const THEMES: Record<MapStyleName, Theme> = {
     ripples: null,
     waterway: '#6FAED8',
     building: ['#E7D3B6', 1, 14],
+    // 길 색은 한 톤 낮춘다(2026-11-01 실기기: 주황 길이 너무 튀어서 사람이 그린 선·핀보다 먼저 보였다).
+    // 등급 구분(빨강 > 주황 > 노랑 > 흰 길)은 그대로, 채도와 굵기만 줄였다.
     roads: {
-      motorway: ['#E0393E', '#8E1C20', 1.15],
-      major: ['#F28B30', '#A8561A', 1.05],
-      secondary: ['#F7D046', '#B39020', 1],
-      tertiary: ['#FFFFFF', '#BFAE92', 1],
-      minor: ['#FFFFFF', '#D2C5AE', 1],
+      motorway: ['#D9625B', '#9E3E38', 1.05],
+      major: ['#F0B276', '#BC8350', 0.95],
+      secondary: ['#F4DC8E', '#BBA35C', 0.9],
+      tertiary: ['#FFFFFF', '#C5B79F', 0.9],
+      minor: ['#FFFFFF', '#D6CBB6', 0.9],
       path: ['#B19F80', null, 1, [2, 1.5]],
     },
     rail: ['#2A2A2A', 'dashes'],
@@ -220,8 +222,8 @@ const THEMES: Record<MapStyleName, Theme> = {
     waterway: '#3F8FD0',
     building: ['#DCD4C9', 1, 14],
     roads: {
-      motorway: ['#E5533D', '#932A1C', 1.1],
-      major: ['#F3A23E', '#A2611C', 1],
+      motorway: ['#DC6A58', '#9E3E30', 1.05],
+      major: ['#F0B67A', '#B98652', 0.95],
       secondary: ['#FCE38A', '#A69046', 0.95],
       tertiary: ['#FFFFFF', '#9C978F', 0.9],
       minor: ['#FFFFFF', '#B9B3A8', 0.85],

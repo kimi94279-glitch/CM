@@ -1,12 +1,13 @@
-import type { PlaceMatchResponse, PlaceSearchResult } from '../types/models';
+import type { NearPlace, PlaceMatchResponse, PlaceSearchResult } from '../types/models';
 
 // 핀 확정 모드의 출발점(ADR-016 하이브리드, docs/Place Matching.md §5·§11).
 //   public       = 공공데이터 레코드와 맞음 → 그 이름·좌표로 시작(고칠 수 있음)
 //   publicUnsure = 맞는 것 같지만 확인 필요(가까운 다른 가게·부분 일치) → 카드에서 "다른 곳이에요"
 //   live         = 공공데이터에 없음 → 카카오 실시간 핀: 카카오 위치를 보여 주기만 하고, 저장은 장소 ID·검색어·동네 중심 자리표시
 //   noMatch      = 실시간 핀도 못 만듦(카카오 ID·동네 정보 없음) → 사용자가 직접 찍고 이름을 씀
-//   direct       = 검색 없이 지금 지도 가운데에 직접 찍기
-export type PlaceDraftKind = 'public' | 'publicUnsure' | 'live' | 'noMatch' | 'direct';
+//   near         = 핀 도구로 누른 자리 둘레의 공공데이터 가게(가장 가까운 곳부터, 카드에서 다른 가게로 바꿀 수 있음)
+//   direct       = 검색 없이 직접 찍기(지금 지도 가운데 또는 누른 자리)
+export type PlaceDraftKind = 'public' | 'publicUnsure' | 'live' | 'noMatch' | 'near' | 'direct';
 
 // 실시간 핀으로 바꾸는 데 필요한 것 — 카카오 값(info·at)은 화면 표시용 메모리에만 있다.
 export interface LiveOption {
@@ -30,6 +31,9 @@ export interface PlacingDraft {
   // 처음 지도를 옮길 곳(공공 좌표·카카오 위치·동네 중심). null = 지금 자리 그대로
   camera: { latitude: number; longitude: number } | null;
   live: LiveOption | null; // 실시간 핀으로 바꿀 수 있으면(공공 매칭이 틀렸을 때 "다른 곳이에요")
+  // 핀 도구로 누른 자리와 그 둘레 가게들(near) — 카드에서 다른 가게나 "가게가 아니에요"(누른 자리 그대로)로 바꿀 때
+  tapped?: { latitude: number; longitude: number };
+  nearby?: NearPlace[];
 }
 
 const KAKAO_ID = /^[0-9]{1,20}$/;
@@ -137,4 +141,53 @@ export function directDraft(name: string, kakaoPlaceId: string | null = null): P
     camera: null,
     live: null,
   };
+}
+
+// 핀 도구 "대충 찍기": 누른 자리 둘레의 가게 하나(기본 가장 가까운 곳)로 시작한다. 이름·좌표 = 공공데이터 레코드.
+export function nearDraft(
+  pick: NearPlace,
+  nearby: NearPlace[],
+  tapped: { latitude: number; longitude: number }
+): PlacingDraft {
+  const point = { latitude: pick.latitude, longitude: pick.longitude };
+  return {
+    kind: 'near',
+    name: [pick.name, pick.branch].filter(Boolean).join(' '),
+    provider: 'public',
+    providerPlaceId: pick.poiId,
+    kakaoPlaceId: null,
+    liveQuery: null,
+    ...point,
+    camera: point,
+    live: null,
+    tapped,
+    nearby,
+  };
+}
+
+// 둘레에 가게가 없거나 "가게가 아니에요": 누른 자리에 직접(이름은 사용자가 씀).
+export function tappedDraft(
+  tapped: { latitude: number; longitude: number },
+  nearby: NearPlace[] = []
+): PlacingDraft {
+  return {
+    kind: 'direct',
+    name: '',
+    provider: 'manual',
+    providerPlaceId: null,
+    kakaoPlaceId: null,
+    liveQuery: null,
+    latitude: tapped.latitude,
+    longitude: tapped.longitude,
+    camera: tapped,
+    live: null,
+    tapped,
+    nearby,
+  };
+}
+
+// 누른 자리에서 가게를 찾을 반경(m): 손가락 끝 오차(약 40화면 px)를 지금 줌의 거리로. 너무 멀리 보고 있으면 300m 까지만.
+export function snapRadiusM(latitude: number, zoom: number): number {
+  const metersPerPx = (40075016.686 * Math.cos((latitude * Math.PI) / 180)) / (512 * 2 ** zoom);
+  return Math.min(300, Math.max(20, Math.round(metersPerPx * 40)));
 }

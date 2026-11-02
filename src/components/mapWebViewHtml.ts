@@ -57,7 +57,11 @@ const DRAW_CAP = 40;
 
 // WebView 로 넘기는 잉크: 사람 구분별 solid(핀·테두리)·soft(펜 선)
 export function toMapInks(inks: PeopleInks) {
-  const pick = (who: Who) => ({ solid: inks[who].solid, soft: inks[who].soft });
+  const pick = (who: Who) => ({
+    solid: inks[who].solid,
+    soft: inks[who].soft,
+    text: inks[who].text,
+  });
   return { me: pick('me'), partner: pick('partner'), other: pick('other') };
 }
 
@@ -95,8 +99,11 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
     .chip{display:inline-block;padding:0 5px 0 6px;border-radius:2px;background:#FFFBF2;border:1px solid #E3D6BD;border-left:3px solid;
       box-shadow:0 1px 2px rgba(58,46,28,0.28);font-size:13px;line-height:18px;}
     .far .tack-name{display:none;}
-    /* 지도 출처(ODbL)는 늘 보여야 한다 — 아래 필통 위로 올린다 */
-    .maplibregl-ctrl-bottom-right{bottom:170px;}
+    /* 지도 출처(ODbL): 작은 ⓘ(누르면 펼침)로 오른쪽 위 버튼들 아래에 — 아래 필통·버튼과 겹치지 않게. 글자는 작게, 종이색 바탕. */
+    .maplibregl-ctrl-bottom-right{bottom:auto;top:108px;right:4px;}
+    .maplibregl-ctrl-attrib.maplibregl-compact{min-height:22px;background:rgba(255,253,246,0.85);font-size:10px;}
+    .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button{width:22px;height:22px;opacity:0.55;}
+    .maplibregl-ctrl-attrib.maplibregl-compact-show{padding:2px 26px 2px 6px;}
     /* 새로 꽂힌 핀은 위에서 '퐁' 떨어진다(손맛) */
     /* 0.32초: 떨어질 땐 점점 빨리(중력), 바늘이 2px 박혔다가 제자리. 튐은 이 2px 하나뿐(곡선으로 또 튀기지 않는다). */
     .tack.drop .tack-head,.tack.drop .tack-needle{animation:tackDrop .32s both;}
@@ -258,7 +265,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
         var el = objectMarkerMap[id].el;
         if (!el || !el.dataset) continue;
         var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * (parseFloat(el.dataset.scale) || 1);
-        el.style.fontSize = px + 'px';
+        el.style.fontSize = px * (parseFloat(el.dataset.k) || 1) + 'px';
         applyCull(el, px);
       }
     }
@@ -446,20 +453,42 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       el.dataset.lvl = (o.zoom_level == null ? map.getZoom() : o.zoom_level);
       el.dataset.scale = scale;
       el.dataset.id = o.id;
-      el.textContent = (o.payload && o.payload.emoji) || '';
+      var text = stickerTextOf(o);
+      el.textContent = text || (o.payload && o.payload.emoji) || '';
+      el.dataset.k = text ? TEXT_STICKER_K : 1;
       var px = worldScaleFontPx(parseFloat(el.dataset.lvl)) * scale;
-      el.style.fontSize = px + 'px';
+      el.style.fontSize = px * parseFloat(el.dataset.k) + 'px';
       // 가시성 기준선(이후 줌 변경은 resizeObjects 히스테리시스가 관리).
       el.dataset.vis = px >= 6 ? '1' : '0';
       el.style.display = el.dataset.vis === '1' ? '' : 'none';
-      // 작성자 색 외곽선(다이컷 스티커처럼 글리프 둘레). em 단위라 world-space 크기와 함께 스케일된다.
-      var c = inkOf(o.who).solid;
-      el.style.textShadow = '0.05em 0 0 ' + c + ',-0.05em 0 0 ' + c + ',0 0.05em 0 ' + c + ',0 -0.05em 0 ' + c;
+      var ink = inkOf(o.who), c = ink.solid;
+      if (text){
+        // 글자 딱지: 흰 종이 + 작성자 잉크 테두리·글자(인스타 스토리의 위치 스티커처럼). em 단위라 줌과 함께 커진다.
+        el.style.textShadow = 'none';
+        el.style.background = '#FFFFFF';
+        el.style.color = ink.text;
+        el.style.border = '0.12em solid ' + c;
+        el.style.padding = '0.22em 0.55em';
+        el.style.fontWeight = '800';
+        el.style.whiteSpace = 'nowrap';
+        el.style.fontFamily = '-apple-system, "Apple SD Gothic Neo", "Noto Sans KR", Roboto, sans-serif';
+        el.style.boxShadow = '0 0.08em 0.3em rgba(40,30,10,0.28)';
+      } else {
+        // 작성자 색 외곽선(다이컷 스티커처럼 글리프 둘레). em 단위라 world-space 크기와 함께 스케일된다.
+        el.style.textShadow = '0.05em 0 0 ' + c + ',-0.05em 0 0 ' + c + ',0 0.05em 0 ' + c + ',0 -0.05em 0 ' + c;
+      }
       // 선택 링(선택 시 표시, 아니면 해제) — UPDATE 시 토글도 처리. 작성자 색과 겹치지 않게 잉크색 점선.
       el.style.outline = (o.id === SELECTED_ID) ? '3px dashed ' + SELECT_COLOR : 'none';
       el.style.outlineOffset = '4px';
-      el.style.borderRadius = '6px';
+      el.style.borderRadius = text ? '0.45em' : '6px';
     }
+    // 글자 스티커(payload.text)의 글자. 이모지 스티커면 ''.
+    var TEXT_STICKER_K = 0.6; // 같은 크기 이모지 대비 글자 크기
+    function stickerTextOf(o){
+      var t = o && o.payload && o.payload.text;
+      return typeof t === 'string' ? t.slice(0, 24) : '';
+    }
+    function isSticker(o){ return !!(o && o.type === 'sticker' && o.payload && (o.payload.emoji || stickerTextOf(o))); }
     // 핸들러는 id·marker(안정)만 참조 → 생성 시 1회만 부착(UPDATE 시 재부착 불필요).
     // 이동은 수동 터치 드래그: 선택된 객체만 동작. Marker draggable 은 터치에서 합성 click 을
     // 삼켜 objectTap 이 죽으므로 사용하지 않는다. touchmove 좌표는 map.unproject 로 환산.
@@ -690,6 +719,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       map.panBy([gesture.c[0] - c[0], gesture.c[1] - c[1]], { animate: false });
       map.zoomTo(gesture.z + Math.log2(d / gesture.d), { duration: 0, around: map.unproject(c) });
       gesture.c = c;
+      if (RULER_START) drawRulerStart(); // 실 자 첫 끝이 지도와 함께 움직이게
     }
     var penPointer = null; // 애플펜슬로 그리는 중이면 그 포인터(손바닥 터치는 무시)
     pen.addEventListener('pointerdown', function(e){
@@ -717,23 +747,68 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       if (gesture){ e.preventDefault(); moveGesture(); return; }
       if (!stroke) return;
       e.preventDefault();
-      var p = localPt(e), last = stroke[stroke.length - 1];
+      if (DRAW_TOOL === 'string'){ var pe = localPt(e); stroke = [stroke[0], pe]; drawRulerPreview(stroke[0], pe); return; }
+      // 빠르게 그으면 화면 한 번 그릴 동안 손가락 위치가 여러 개 모인다 — 다 받아야 곡선이 각지지 않는다
+      var evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+      if (!evs.length) evs = [e];
+      for (var i = 0; i < evs.length; i++) addStrokePt(localPt(evs[i]));
+    });
+    function addStrokePt(p){
+      var last = stroke[stroke.length - 1];
       if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 2) return; // 손떨림 점 줄이기
-      if (DRAW_TOOL === 'string'){ stroke = [stroke[0], p]; drawRulerPreview(stroke[0], p); return; }
       stroke.push(p);
       penCtx.beginPath(); penCtx.moveTo(last[0], last[1]); penCtx.lineTo(p[0], p[1]); penCtx.stroke();
-    });
+    }
+    // 실 자 = 두 번 탭(2026-11-01 — 끌어서 재기는 손가락으로 어렵다는 실기기 의견). 첫 탭 = 한쪽 끝(지도에 점이 찍힘),
+    // 두 번째 탭 = 다른 쪽 끝 → 실을 건다. 같은 자리를 다시 누르면 취소. 끌어서 재기도 그대로 된다.
+    // 첫 끝은 지도 좌표로 들고 있어서, 사이에 두 손가락으로 지도를 옮겨도 그 자리에 남는다.
+    var RULER_START = null;
+    function drawRulerStart(){
+      clearPen();
+      if (!RULER_START) return;
+      var p = map.project(RULER_START);
+      penCtx.setLineDash([]); penCtx.globalAlpha = 1;
+      penCtx.fillStyle = '#B5502F'; penCtx.beginPath(); penCtx.arc(p.x, p.y, 5, 0, Math.PI * 2); penCtx.fill();
+      penCtx.strokeStyle = 'rgba(181,80,47,0.35)'; penCtx.lineWidth = 2; penCtx.beginPath(); penCtx.arc(p.x, p.y, 11, 0, Math.PI * 2); penCtx.stroke();
+      var text = '다른 쪽 끝을 눌러요';
+      penCtx.font = 'bold 13px sans-serif';
+      var w = penCtx.measureText(text).width + 14, x = p.x - w / 2, y = p.y - 40;
+      penCtx.fillStyle = '#FFFDF6'; penCtx.fillRect(x, y, w, 22);
+      penCtx.strokeStyle = '#B5502F'; penCtx.lineWidth = 1.5; penCtx.strokeRect(x, y, w, 22);
+      penCtx.fillStyle = '#8A3A20'; penCtx.fillText(text, x + 7, y + 15);
+    }
     function endStroke(e){
       if (penPointer !== null){
         if (e && e.pointerId !== penPointer) return; // 손바닥이 떨어진 것
         penPointer = null;
       }
       if (e && touches[e.pointerId]) delete touches[e.pointerId];
-      if (gesture){ if (Object.keys(touches).length === 0) gesture = null; return; }
+      if (gesture){
+        if (Object.keys(touches).length === 0){ gesture = null; if (RULER_START) drawRulerStart(); }
+        return;
+      }
       if (!stroke) return;
+      // 손을 뗀 자리까지(마지막 움직임 뒤에 손가락이 조금 더 갔을 수 있다)
+      if (e && e.type === 'pointerup'){
+        var up = localPt(e);
+        if (DRAW_TOOL === 'string') stroke = [stroke[0], up];
+        else addStrokePt(up);
+      }
       var kind = DRAW_TOOL || 'ink';
       var pts = stroke;
-      if (kind !== 'string'){
+      if (kind === 'string'){
+        var a = stroke[0], b = stroke[stroke.length - 1];
+        if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 10){ // 탭
+          stroke = null;
+          if (!RULER_START){ var q0 = map.unproject(b); RULER_START = [q0.lng, q0.lat]; drawRulerStart(); return; }
+          var s = map.project(RULER_START); RULER_START = null;
+          if (Math.hypot(s.x - b[0], s.y - b[1]) < 14){ clearPen(); return; } // 같은 자리 = 취소
+          pts = [[s.x, s.y], b];
+        } else {
+          RULER_START = null;
+          pts = [a, b];
+        }
+      } else {
         var eps = 1.2; pts = simplify(stroke, eps);
         while (pts.length > 400){ eps *= 1.5; pts = simplify(stroke, eps); } // 한 획 최대 400점
       }
@@ -757,7 +832,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
     // RN → WebView 진입점: 도구 들기/내려놓기(null = 손). 들면 한 손가락은 그리기(지도 끌기 잠금), 두 손가락은 지도 이동.
     window.setDrawTool = function(tool){
       DRAW_TOOL = tool || null;
-      stroke = null; gesture = null; touches = {}; penPointer = null;
+      stroke = null; gesture = null; touches = {}; penPointer = null; RULER_START = null;
       pen.style.display = DRAW_TOOL ? 'block' : 'none';
       if (DRAW_TOOL) sizePen(); else clearPen();
       if (!map) return;
@@ -777,8 +852,7 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       // incoming: 유효한 sticker 만 id 맵으로.
       var incoming = {};
       OBJECTS.forEach(function(o){
-        if (!o || o.type !== 'sticker') return; // P0: sticker 외 렌더 금지
-        if (!(o.payload && o.payload.emoji)) return;
+        if (!isSticker(o)) return; // 스티커(이모지·글자) 외에는 마커로 그리지 않는다(선은 draw 레이어)
         incoming[o.id] = o;
       });
       // REMOVE: 기존에 있으나 incoming 에 없는 것.
@@ -840,10 +914,24 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       function inside(q){ return q[0] > -40 && q[0] < W + 40 && q[1] > -40 && q[1] < H + 40; }
       // 스티커(이모지)
       OBJECTS.forEach(function(o){
-        if (!o || o.type !== 'sticker' || !(o.payload && o.payload.emoji)) return;
+        if (!isSticker(o)) return;
         var q = toCard(o.longitude, o.latitude); if (!inside(q)) return;
         var px = worldScaleFontPx(o.zoom_level) * ((o.payload && o.payload.scale) || 1) * k;
         if (px < 8) return;
+        var text = stickerTextOf(o);
+        if (text){
+          var fs = Math.min(px * TEXT_STICKER_K, 200), ink = inkOf(o.who);
+          g.font = cardFont(800, fs); g.textAlign = 'center'; g.textBaseline = 'middle';
+          var tw = g.measureText(text).width, bw = tw + fs * 1.1, bh = fs * 1.6, r = fs * 0.45;
+          var bx = q[0] - bw / 2, by = q[1] - bh / 2;
+          g.beginPath();
+          g.moveTo(bx + r, by); g.arcTo(bx + bw, by, bx + bw, by + bh, r); g.arcTo(bx + bw, by + bh, bx, by + bh, r);
+          g.arcTo(bx, by + bh, bx, by, r); g.arcTo(bx, by, bx + bw, by, r); g.closePath();
+          g.fillStyle = '#FFFFFF'; g.fill();
+          g.lineWidth = fs * 0.12; g.strokeStyle = ink.solid; g.stroke();
+          g.fillStyle = ink.text; g.fillText(text, q[0], q[1] + fs * 0.04);
+          return;
+        }
         g.font = Math.min(px, 400) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(o.payload.emoji, q[0], q[1]);
       });
@@ -1066,8 +1154,14 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
           style: resolveStyle(STYLE),
           center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
           zoom: EMPTY_ZOOM,
-          attributionControl: true
+          // 출처는 작은 ⓘ 하나로(누르면 펼침). 처음 몇 초만 펼쳐 보여 주고 접는다 — 자리를 많이 차지해서(2026-11-01 실기기).
+          // 전체 출처는 설정 "정보"와 내보낸 지도 한 장의 판권에 늘 있다.
+          attributionControl: { compact: true }
         });
+        setTimeout(function(){
+          var a = document.querySelector('.maplibregl-ctrl-attrib');
+          if (a) a.classList.remove('maplibregl-compact-show');
+        }, 4000);
         map.on('styleimagemissing', function(e){
           var make = IMAGES[e.id];
           if (make && !map.hasImage(e.id)) map.addImage(e.id, make(), { pixelRatio: 2 });

@@ -48,19 +48,21 @@ import { shareJpegBase64 } from '../utils/shareImage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardDetail'>;
 
-// 태블릿 판정: 짧은 변(세로/가로 회전 무관)이 600dp 이상이면 Side Panel 레이아웃.
+// 옆 패널 레이아웃: 태블릿(짧은 변 600dp 이상, 회전 무관) 또는 폰을 눕혔을 때(가로 700dp 이상 — 아래 시트를 올리면 지도가 안 보여서).
 const TABLET_MIN = 600;
+const LANDSCAPE_SIDE_MIN = 700;
 const SIDE_PANEL_WIDTH = 320;
 
 // Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다 — 책상에 펼친 종이 지도 위의 물건들.
-// 위: 종이 꼬리표(지도 이름·사람) + 🔍 찾기 + 📮 한 장으로 접기. 아래: 필통(도구 줄) + 범례(모바일=Half Sheet, 태블릿=옆 패널).
+// 위: 종이 꼬리표(지도 이름·사람) + 찾기 + 한 장으로 접기. 아래: 필통(그리기 도구 · 스티커 · 핀) + 범례(모바일=Half Sheet, 태블릿=옆 패널).
 // 지도 자체는 네비게이터 뒤 싱글톤 MapHost 가 그리고, 이 화면은 데이터·콜백만 주입한다(useBoardMapSync).
 // 아래쪽(필통 · 핀 쪽지 바 · 편집 바)과 검색 · 범례 · 핀 확정은 서로 배타 — 하나를 열 때 나머지를 닫는다.
 export function BoardDetailScreen({ route, navigation }: Props) {
   const { boardId, title } = route.params;
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const isTablet = Math.min(width, height) >= TABLET_MIN;
+  const isTablet =
+    Math.min(width, height) >= TABLET_MIN || (width > height && width >= LANDSCAPE_SIDE_MIN);
   const keyboardHeight = useKeyboardHeight();
   const barBottom = insets.bottom + spacing.lg;
 
@@ -107,10 +109,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const [searchQuery, resetSearchQuery] = useSubmittedQuery(searchText);
   const search = usePlaceSearch(searchQuery);
 
-  const tools = useCanvasTools(boardId, () => {
-    Keyboard.dismiss();
-    setReactionPlaceId(null);
-  });
+  const tools = useCanvasTools(
+    boardId,
+    () => {
+      Keyboard.dismiss();
+      setReactionPlaceId(null);
+    },
+    (placeId) => deletePlace.mutate(placeId) // 되돌리기로 방금 꽂은 핀 빼기
+  );
 
   // 싱글톤 지도(MapHost) 컨트롤러 — 데이터·콜백·카메라는 아래 useBoardMapSync 와 effect 에서 넣는다.
   const map = useMapHost();
@@ -147,7 +153,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       setReactionPlaceId(null);
       tools.stopTools();
     },
-    (placeId) => map.dropPin(boardId, placeId)
+    (placeId) => {
+      map.dropPin(boardId, placeId);
+      tools.pushPlaceUndo(placeId);
+    }
   );
   const { placing } = placingFlow;
 
@@ -238,9 +247,13 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         setReactionPlaceId(id);
       },
       onObjectPress: (id, point) => {
-        // 스티커 도구로 그린 선(형광펜 등) 위를 탭 → 선 선택 대신 그 자리에 스티커
+        // 스티커·핀 도구로 그린 선(형광펜 등) 위를 탭 → 선 선택 대신 그 자리에 스티커·핀
         if (toolsLive && tools.stickerMode && point) {
           tools.placeSticker(point);
+          return;
+        }
+        if (toolsLive && tools.pinMode && point) {
+          placingFlow.snapAt(point);
           return;
         }
         setReactionPlaceId(null);
@@ -253,6 +266,11 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           tools.placeSticker(point);
           return;
         }
+        // 핀 도구: 누른 자리 둘레에서 가장 가까운 가게에 꽂는다(핀 확정 카드로)
+        if (toolsLive && tools.pinMode && point) {
+          placingFlow.snapAt(point);
+          return;
+        }
         // 기본: 배경 탭 → 바·강조·선택 해제(메모 입력 중이면 키보드도 내림).
         Keyboard.dismiss();
         setReactionPlaceId(null);
@@ -262,7 +280,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       onDrawEnd: tools.saveStroke,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, tools.stickerMode, tools.stickerEmoji, toolsLive, map]);
+  }, [boardId, tools.stickerMode, tools.pinMode, tools.sticker, toolsLive, map]);
 
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
@@ -315,7 +333,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 지도 영역(로딩/에러 + 상단 꼬리표 + 필통 + 아래쪽 바들). 투명 + box-none 으로 지도 터치를 통과시킨다.
   const mapArea = (
-    <View style={styles.mapArea} pointerEvents="box-none">
+    <View
+      style={[
+        styles.mapArea,
+        // 눕힌 폰의 노치·둥근 모서리 쪽으로 단추가 들어가지 않게(옆 패널이 있으면 오른쪽은 패널이 받는다)
+        { marginLeft: insets.left, marginRight: isTablet ? 0 : insets.right },
+      ]}
+      pointerEvents="box-none"
+    >
       {placesQuery.isError ? (
         <View style={[StyleSheet.absoluteFill, styles.errorFill]}>
           <Text style={styles.errorText}>장소를 불러오지 못했어요.</Text>
@@ -349,15 +374,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       {/* 필통: 핀 쪽지 바·편집 바·검색·범례·핀 확정 중에는 비켜 준다 */}
       {toolsLive ? (
         <ToolTray
-          bottom={insets.bottom + spacing.sm}
+          bottom={keyboardHeight > 0 ? keyboardHeight + spacing.sm : insets.bottom + spacing.sm}
           ink={inks.me}
           tool={tools.tool}
           onPick={tools.pickTool}
-          onPin={() => placingFlow.startDirect('')}
-          stickerEmoji={tools.stickerEmoji}
-          onPickEmoji={tools.setStickerEmoji}
+          sticker={tools.sticker}
+          recentStickers={tools.recentStickers}
+          onPickSticker={tools.setSticker}
           canUndo={tools.canUndo}
-          onUndo={tools.undoDraw}
+          onUndo={tools.undo}
           placeCount={listPlaces.length}
           onOpenLegend={isTablet ? undefined : openSheet}
           onOpenStyles={openStyles}
@@ -410,6 +435,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         onSwitchOther={placingFlow.switchToOther}
         canSwitchToLive={!!placing.live}
         liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
+        nearby={placing.nearby}
+        nearPickedId={placing.kind === 'near' ? placing.providerPlaceId : null}
+        onPickNear={placingFlow.pickNear}
+        onPlainPin={placing.tapped ? placingFlow.plainPin : undefined}
         lift={keyboardHeight}
         bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
       />
@@ -459,8 +488,21 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       <View style={styles.surface} pointerEvents="box-none">
         <View style={styles.tabletRow} pointerEvents="box-none">
           {mapArea}
-          <View style={[styles.sidePanel, { paddingTop: insets.top + spacing.sm }]}>
+          <View
+            style={[
+              styles.sidePanel,
+              {
+                width: Math.min(SIDE_PANEL_WIDTH, Math.round(width * 0.4)) + insets.right,
+                paddingTop: insets.top + spacing.sm,
+                paddingRight: insets.right,
+              },
+            ]}
+          >
             {list(goAdd)}
+            {/* 지도 오른쪽 아래 출처 단추가 이 패널 밑에 깔리므로 출처를 패널에도 적는다 */}
+            <Text style={[styles.panelCredit, { paddingBottom: insets.bottom + spacing.sm }]}>
+              {PRINT_CREDIT_LINES.join('\n')}
+            </Text>
           </View>
         </View>
         {placingUI}
@@ -520,10 +562,18 @@ const styles = StyleSheet.create({
   mapArea: { flex: 1 },
   tabletRow: { flex: 1, flexDirection: 'row' },
   sidePanel: {
-    width: SIDE_PANEL_WIDTH,
     backgroundColor: colors.surface,
     borderLeftWidth: 1,
     borderColor: colors.border,
+  },
+
+  panelCredit: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.textFaint,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
   },
 
   errorFill: {

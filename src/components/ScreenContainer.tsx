@@ -22,8 +22,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  // 가로 화면·태블릿에서 글줄이 화면 끝까지 늘어나지 않게 가운데 720dp 까지만
   content: {
     flex: 1,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },

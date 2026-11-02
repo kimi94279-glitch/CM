@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, radius, shadows, spacing, typography } from '../constants/theme';
+import { colors, numeric, radius, shadows, spacing, typography } from '../constants/theme';
+import type { NearPlace } from '../types/models';
 import type { PlaceDraftKind } from '../utils/placeDraft';
 import { Button } from './Button';
 
@@ -18,6 +19,11 @@ interface PlaceDraftCardProps {
   canSwitchToLive?: boolean;
   // live: 카카오에서 불러온 이름·주소(표시만, 저장하지 않음)
   liveInfo?: { name: string; address: string } | null;
+  // 핀 도구로 누른 자리 둘레 가게들(가까운 순) — 다른 가게로 바꾸거나, 가게가 아니면 누른 자리 그대로
+  nearby?: NearPlace[];
+  nearPickedId?: string | null;
+  onPickNear?: (place: NearPlace) => void;
+  onPlainPin?: () => void;
   // 키보드가 올라오면 그만큼 카드를 올린다
   lift: number;
   bottomInset: number;
@@ -30,6 +36,7 @@ const HINT_TEXT: Record<PlaceDraftKind, string> = {
   publicUnsure: '지도를 움직여 가운데 핀을 정확한 자리에 맞춰 주세요',
   live: '카카오 지도의 위치로 꽂아요. 위치는 볼 때마다 카카오에서 불러와요',
   noMatch: '근처까지 왔어요. 지도를 움직여 가운데 핀을 그 자리에 맞춰 주세요',
+  near: '누른 곳에서 가장 가까운 가게에 꽂아요',
   direct: '지도를 움직여 가운데 핀을 정확한 자리에 맞춰 주세요',
 };
 
@@ -38,6 +45,7 @@ const SOURCE_TEXT: Record<PlaceDraftKind, string | null> = {
   publicUnsure: '가까이 등록된 가게예요. 찾던 곳이 맞나요?',
   live: '부를 이름을 붙여도 되고, 비워 두면 카카오 이름으로 보여요',
   noMatch: '저장할 수 있는 장소 정보가 없어서 직접 꽂아요. 이름도 직접 써 주세요',
+  near: null,
   direct: null,
 };
 
@@ -54,6 +62,10 @@ export function PlaceDraftCard({
   onSwitchOther,
   canSwitchToLive = false,
   liveInfo = null,
+  nearby = [],
+  nearPickedId = null,
+  onPickNear,
+  onPlainPin,
   lift,
   bottomInset,
 }: PlaceDraftCardProps) {
@@ -88,6 +100,55 @@ export function PlaceDraftCard({
         returnKeyType="done"
       />
       {source ? <Text style={styles.source}>{source}</Text> : null}
+      {nearby.length && onPickNear ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.nearRow}
+          contentContainerStyle={styles.nearRowContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {nearby.map((p) => {
+            const on = p.poiId === nearPickedId;
+            const label = [p.name, p.branch].filter(Boolean).join(' ');
+            return (
+              <Pressable
+                key={p.poiId}
+                onPress={() => onPickNear(p)}
+                style={({ pressed }) => [
+                  styles.nearChip,
+                  on && styles.nearChipOn,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${label}, ${p.distance}미터`}
+              >
+                <Text style={[styles.nearName, on && styles.nearNameOn]} numberOfLines={1}>
+                  {label}
+                </Text>
+                <Text style={[styles.nearDist, on && styles.nearNameOn]}>{p.distance}m</Text>
+              </Pressable>
+            );
+          })}
+          {onPlainPin ? (
+            <Pressable
+              onPress={onPlainPin}
+              style={({ pressed }) => [
+                styles.nearChip,
+                kind === 'direct' && styles.nearChipOn,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: kind === 'direct' }}
+            >
+              <Text style={[styles.nearName, kind === 'direct' && styles.nearNameOn]}>
+                가게가 아니에요
+              </Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      ) : null}
       {kind === 'publicUnsure' && onSwitchOther ? (
         <Text style={styles.switchLink} onPress={onSwitchOther} accessibilityRole="button">
           {canSwitchToLive
@@ -163,6 +224,25 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
+  // 둘레 가게 고르기(가로로 넘김)
+  nearRow: { marginTop: spacing.sm, marginHorizontal: -spacing.md },
+  nearRowContent: { paddingHorizontal: spacing.md, gap: spacing.xs },
+  nearChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 220,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.round,
+    paddingHorizontal: spacing.md - 4,
+    paddingVertical: 6,
+  },
+  nearChipOn: { backgroundColor: colors.textStrong, borderColor: colors.textStrong },
+  nearName: { ...typography.caption, color: colors.textStrong, flexShrink: 1 },
+  nearNameOn: { color: colors.onPrimary },
+  nearDist: { ...typography.caption, ...numeric, color: colors.textMuted },
+  pressed: { opacity: 0.6 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   action: { flex: 1 },
   pinWrap: {

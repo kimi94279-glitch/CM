@@ -1,0 +1,24 @@
+diff --git a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContentWrapper.kt b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContentWrapper.kt
+index d972f2a..9e10fec 100644
+--- a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContentWrapper.kt
++++ b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContentWrapper.kt
+@@ -1,6 +1,7 @@
+ package com.swmansion.rnscreens
+ 
+ import android.annotation.SuppressLint
++import android.view.MotionEvent
+ import com.facebook.react.bridge.ReactContext
+ import com.facebook.react.views.view.ReactViewGroup
+ 
+@@ -35,4 +36,11 @@ class ScreenContentWrapper(
+     ) {
+         delegate?.onContentWrapperLayout(changed, left, top, right, bottom)
+     }
++
++    // CM patch: 화면 내용을 감싸기만 하는 뷰라 빈 곳의 터치를 스스로 가져가지 않는다.
++    // ReactViewGroup.onTouchEvent 는 pointerEvents 가 auto 면 true 를 돌려 터치를 삼키는데,
++    // 이 뷰의 매니저(ViewGroupManager)는 pointerEvents 를 받지 않아 투명한 화면(지도 화면) 뒤의 지도로 터치가 못 내려갔다.
++    // 불투명한 화면은 그 안의 내용 뷰가 터치를 받으므로 영향이 없다.
++    @SuppressLint("ClickableViewAccessibility")
++    override fun onTouchEvent(event: MotionEvent): Boolean = false
+ }

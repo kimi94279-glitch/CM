@@ -112,6 +112,18 @@ export interface PlaceMatch {
   confidence: 'high' | 'low';
 }
 
+// 지도를 누른 자리 둘레의 공공데이터 가게(place-search near, 가까운 순). 핀 도구로 대충 누르면 가장 가까운 곳에 꽂는다.
+export interface NearPlace {
+  poiId: string;
+  name: string;
+  branch: string | null;
+  category: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  distance: number; // 누른 자리에서 m
+}
+
 export interface PlaceMatchResponse {
   match: PlaceMatch | null;
   dong: { name: string; latitude: number; longitude: number } | null;

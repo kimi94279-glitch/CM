@@ -1,6 +1,7 @@
 import type {
   LivePlace,
   LiveResolveResponse,
+  NearPlace,
   PlaceMatchResponse,
   PlaceSearchResult,
 } from '../types/models';
@@ -49,6 +50,21 @@ export async function matchPlace(result: PlaceSearchResult): Promise<PlaceMatchR
     jibunAddress: result.jibunAddress ?? null,
   });
   return { match: data?.match ?? null, dong: data?.dong ?? null };
+}
+
+// 지도를 누른 자리 둘레(radius m)의 공공데이터 가게, 가까운 순. 카카오는 부르지 않는다.
+export async function nearPlaces(
+  latitude: number,
+  longitude: number,
+  radius: number
+): Promise<NearPlace[]> {
+  const data = await invokePlaceSearch<{ places?: NearPlace[] }>({
+    action: 'near',
+    latitude,
+    longitude,
+    radius,
+  });
+  return data?.places ?? [];
 }
 
 // 실시간 핀 1개를 다시 찾는 열쇠 — near 는 핀에 저장된 동네 중심(우리 데이터, 카카오 검색 반경을 좁혀 호출을 줄인다)
