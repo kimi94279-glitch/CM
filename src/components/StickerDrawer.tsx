@@ -61,6 +61,7 @@ export function StickerDrawer({
             <Pressable
               key={t.key}
               onPress={() => setTab(t.key)}
+              hitSlop={{ top: 6, bottom: 4 }}
               style={styles.tab}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
@@ -162,6 +163,7 @@ export function StickerChip({
     <Pressable
       onPress={onOpen}
       style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+      hitSlop={{ top: 4, bottom: 4 }}
       accessibilityRole="button"
       accessibilityLabel={`든 스티커 ${stickerText(value)}, 바꾸려면 누르세요`}
     >
@@ -265,9 +267,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   customGo: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.round,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

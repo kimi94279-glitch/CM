@@ -208,6 +208,10 @@ export function MapHost({ children }: { children: ReactNode }) {
         if (boardIdRef.current !== boardId) return;
         mapRef.current?.dropPin(placeId);
       },
+      pendingPin(boardId, point) {
+        if (boardIdRef.current !== boardId) return;
+        mapRef.current?.pendingPin(point);
+      },
       getCenter() {
         return lastCenterRef.current;
       },

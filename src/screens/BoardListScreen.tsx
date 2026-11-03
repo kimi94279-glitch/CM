@@ -21,6 +21,7 @@ import { useInks } from '../hooks/useInks';
 import { isGuest } from '../services/authService';
 import type { RootStackParamList } from '../navigation/types';
 import type { Board } from '../types/models';
+import { keepWords } from '../utils/keepWords';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardList'>;
 
@@ -124,7 +125,10 @@ export function BoardListScreen({ navigation }: Props) {
           style={styles.guestBanner}
           accessibilityRole="button"
         >
-          <Text style={styles.guestText}>로그인해 두면 폰을 바꿔도 지도가 남아요</Text>
+          {/* 큰 글씨에서 두 줄이 될 때 "요" 한 글자만 떨어지거나 낱말이 갈리지 않게: 어절 단위로, 두 줄 길이는 고르게 */}
+          <Text style={styles.guestText} textBreakStrategy="balanced">
+            {keepWords('로그인해 두면 폰을 바꿔도 지도가 남아요')}
+          </Text>
           <Text style={styles.guestLink}>로그인</Text>
           <Icon name="forward" size={16} color={colors.textStrong} />
         </Pressable>

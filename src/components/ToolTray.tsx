@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   colors,
@@ -50,6 +50,7 @@ export function ToolTray({
   ink,
   tool,
   onPick,
+  pinBusy = false,
   sticker,
   recentStickers,
   onPickSticker,
@@ -64,6 +65,7 @@ export function ToolTray({
   ink: Ink; // 내 잉크 — 든 도구 강조색
   tool: CanvasTool;
   onPick: (tool: CanvasTool) => void; // 같은 도구를 다시 고르면 내려놓는다(useCanvasTools)
+  pinBusy?: boolean; // 핀 도구로 누른 자리 둘레 가게를 찾는 중
   sticker: string;
   recentStickers: string[];
   onPickSticker: (sticker: string) => void;
@@ -151,6 +153,7 @@ export function ToolTray({
             {onOpenLegend ? (
               <Pressable
                 style={({ pressed }) => [styles.legend, pressed && styles.pressed]}
+                hitSlop={{ top: 6, bottom: 6 }}
                 onPress={onOpenLegend}
                 accessibilityRole="button"
                 accessibilityLabel={`범례 열기, 장소 ${placeCount}곳`}
@@ -193,6 +196,7 @@ export function ToolTray({
               on={tool === 'pin'}
               ink={ink}
               iconColor={colors.roadRed}
+              busy={pinBusy}
               onPress={() => pick('pin')}
             />
           </View>
@@ -231,6 +235,7 @@ function ToolButton({
   on,
   ink,
   iconColor = colors.textStrong,
+  busy = false,
   onPress,
 }: {
   icon: IconName;
@@ -238,6 +243,7 @@ function ToolButton({
   on: boolean;
   ink: Ink;
   iconColor?: string;
+  busy?: boolean; // 아이콘 자리에 도는 표시
   onPress: () => void;
 }) {
   const [lift] = useState(() => new Animated.Value(on ? LIFT : 0));
@@ -268,8 +274,19 @@ function ToolButton({
           { transform: [{ translateY: lift }] },
         ]}
       >
-        <Icon name={icon} size={24} color={on ? ink.solid : iconColor} />
-        <Text style={[styles.toolLabel, on && { color: ink.text }]}>{label}</Text>
+        {busy ? (
+          <ActivityIndicator size="small" color={ink.solid} style={styles.busy} />
+        ) : (
+          <Icon name={icon} size={24} color={on ? ink.solid : iconColor} />
+        )}
+        {/* 칸 폭이 정해진 도구 줄이라 큰 글씨 설정에서도 1.3배까지만(뜻은 아이콘·읽어 주기 이름이 같이 전한다) */}
+        <Text
+          style={[styles.toolLabel, on && { color: ink.text }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+        >
+          {label}
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -311,6 +328,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.field,
   },
+  busy: { width: 24, height: 24 },
   toolLabel: { ...typography.caption, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   // 처음 한 번 도구 설명: 먹색 말풍선(잠깐 떴다 사라진다, 누르면 바로 닫힘)
   hint: {
@@ -347,10 +365,11 @@ const styles = StyleSheet.create({
   legendText: { ...typography.label, color: colors.tagInk },
   legendCount: { ...typography.caption, ...numeric, color: colors.textMuted },
   roundGroup: { flexDirection: 'row', gap: spacing.sm },
+  // 둥근 단추: 안드로이드 최소 터치 48dp
   round: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.round,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

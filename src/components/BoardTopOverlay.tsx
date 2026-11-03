@@ -5,7 +5,7 @@ import { colors, radius, shadows, spacing, typography } from '../constants/theme
 import { Icon } from './Icon';
 import { SearchBar } from './SearchBar';
 
-const BAR_HEIGHT = 44;
+const BAR_HEIGHT = 48; // 안드로이드 최소 터치 48dp
 
 // 보드 지도 위 상단. 첫 행동이 "검색"이 아니라 "지도 보기"가 되도록, 검색창 대신 지도에 붙인 종이 꼬리표(지도 이름 ·
 // 함께 그리는 사람)를 두고 검색은 돋보기 버튼으로 뺐다(2026-10-31 경험 설계). 접힌 지도 버튼 = 지도 한 장으로 접기(내보내기).
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   round: {
     width: BAR_HEIGHT,
     height: BAR_HEIGHT,
-    borderRadius: radius.round,
+    borderRadius: BAR_HEIGHT / 2,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

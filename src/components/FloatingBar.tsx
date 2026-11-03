@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
   },
   rule: { width: 1, height: 24, backgroundColor: colors.border },
   close: {
-    width: 36,
-    height: 44,
+    width: 40,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },

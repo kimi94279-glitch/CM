@@ -71,6 +71,8 @@ export interface MapHostController {
   exportCard(options: ExportCardOptions): Promise<string | null>;
   // 방금 꽂은 핀 — 지도에서 '퐁' 떨어지는 연출(토큰 일치 시에만).
   dropPin(boardId: string, placeId: string): void;
+  // 핀 도구로 누른 자리에 먼저 꽂아 두는 압정(가게를 찾는 동안). null = 거둔다.
+  pendingPin(boardId: string, point: { lat: number; lng: number } | null): void;
   // 지금 지도 가운데(마지막으로 보고된 카메라)와 보고 시각(ms). 핀 확정 모드에서 가운데 핀 자리로 쓴다.
   getCenter(): { lat: number; lng: number; at: number } | null;
   // 지도 표시/숨김(포커스 전환 시).

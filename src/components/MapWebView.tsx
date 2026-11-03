@@ -159,6 +159,8 @@ export interface MapWebViewHandle {
   exportCard(options: ExportCardOptions): Promise<string | null>;
   // 방금 꽂은 핀이 '퐁' 떨어지게(아직 안 그려졌으면 그려질 때)
   dropPin(placeId: string): void;
+  // 핀 도구로 누른 자리에 먼저 꽂아 두는 압정(가게를 찾는 동안). null = 거둔다.
+  pendingPin(point: { lat: number; lng: number } | null): void;
   // 지도를 열 때 종이 지도 펼치기 연출: 접힌 종이로 바로 덮는다. 지도가 아직 안 떴으면 뜰 때.
   unfold(): void;
   // 화면 전환이 끝났으니 펴도 된다(지도가 다 그려지면 그때 펴진다)
@@ -364,6 +366,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
       dropPin(placeId) {
         webRef.current?.injectJavaScript(
           `window.dropPin && window.dropPin(${JSON.stringify(placeId)}); true;`
+        );
+      },
+      pendingPin(point) {
+        webRef.current?.injectJavaScript(
+          `window.pendingPin && window.pendingPin(${JSON.stringify(point)}); true;`
         );
       },
       unfold() {

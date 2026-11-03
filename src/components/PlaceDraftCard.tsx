@@ -120,6 +120,7 @@ export function PlaceDraftCard({
                   on && styles.nearChipOn,
                   pressed && styles.pressed,
                 ]}
+                hitSlop={{ top: 4, bottom: 4 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
                 accessibilityLabel={`${label}, ${p.distance}미터`}
@@ -228,6 +229,7 @@ const styles = StyleSheet.create({
   nearRow: { marginTop: spacing.sm, marginHorizontal: -spacing.md },
   nearRowContent: { paddingHorizontal: spacing.md, gap: spacing.xs },
   nearChip: {
+    minHeight: 40, // + 위아래 hitSlop 4 = 48dp
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

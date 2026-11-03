@@ -60,6 +60,6 @@ export function ObjectEditBar({
 }
 
 const styles = StyleSheet.create({
-  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.6 },
 });

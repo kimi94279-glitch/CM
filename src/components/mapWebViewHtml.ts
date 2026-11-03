@@ -135,6 +135,11 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
     #unfold.done{opacity:0;transition:opacity .18s ease-out;}
     /* 동작 줄이기: 끄지 않고 줄인다 — 떨어지지 않고 0.18초 동안 나타나기만 */
     @media (prefers-reduced-motion: reduce){.tack.drop .tack-head,.tack.drop .tack-needle{animation:tackFade .18s ease-out both;}}
+    /* 핀 도구로 누른 자리: 가게를 찾는 동안 머리 둘레가 퍼진다(누른 게 먹었다는 표시, 찾으면 핀 확정 카드가 이어받는다) */
+    .tack.pending::after{content:'';position:absolute;left:-6px;top:-6px;width:36px;height:36px;border-radius:18px;box-sizing:border-box;
+      border:2px solid currentColor;opacity:0;animation:tackSeek 1s cubic-bezier(.23,1,.32,1) .3s infinite;}
+    @keyframes tackSeek{from{transform:scale(.6);opacity:.7}to{transform:scale(1.3);opacity:0}}
+    @media (prefers-reduced-motion: reduce){.tack.pending::after{animation:none;opacity:.5;}}
     @keyframes tackFade{from{opacity:0}to{opacity:1}}
     /* 종이 효과: 지도 그림 바로 위, 핀·스티커 아래(캔버스 바로 뒤에 끼운다). 손가락은 지도로 통과. */
     #paper{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
@@ -381,6 +386,20 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
     };
     // '퐁' 0.32초. 바늘이 종이에 닿는 순간(60%, 약 0.19초)에 RN 이 진동을 울린다 — 보이는 것과 손에 오는 것이 같은 순간.
     // 동작 줄이기면 떨어지지 않고 나타나기만 하고, 진동은 바로.
+    // RN → WebView: 핀 도구로 누른 자리에 내 잉크 압정을 먼저 꽂는다(가게를 찾는 동안). null = 거둔다.
+    var pendingTack = null;
+    window.pendingPin = function(p){
+      if (pendingTack){ pendingTack.remove(); pendingTack = null; }
+      if (!p || !map) return;
+      var el = document.createElement('div');
+      el.className = 'tack pending';
+      el.innerHTML = '<div class="tack-head"></div><div class="tack-needle"></div>';
+      el.firstChild.style.background = INKS.me.solid;
+      el.style.color = INKS.me.solid;
+      el.style.pointerEvents = 'none';
+      startDrop(el); // 바늘이 닿는 순간 진동(pinLanded)
+      pendingTack = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(map);
+    };
     function startDrop(el){
       el.classList.remove('drop'); void el.offsetWidth; el.classList.add('drop');
       var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

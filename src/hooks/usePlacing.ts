@@ -88,6 +88,7 @@ export function usePlacing(
     snappingRef.current = true;
     const tapped = { latitude: point.lat, longitude: point.lng };
     setSnapping(true);
+    map.pendingPin(boardId, { lat: point.lat, lng: point.lng }); // 찾는 동안 누른 자리에 압정(바늘이 닿으면 진동)
     nearPlaces(point.lat, point.lng, snapRadiusM(point.lat, point.level))
       .then((list) =>
         start(list.length ? nearDraft(list[0], list, tapped) : tappedDraft(tapped), Date.now())
@@ -96,6 +97,7 @@ export function usePlacing(
       .finally(() => {
         snappingRef.current = false;
         setSnapping(false);
+        map.pendingPin(boardId, null); // 핀 확정 카드의 가운데 핀이 이어받는다
       });
   };
   const pickNear = (place: NearPlace) => {

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Keyboard,
   StyleSheet,
   Text,
@@ -193,6 +194,25 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     !reactionPlaceId &&
     !tools.selectedObject;
 
+  // 안드로이드 뒤로 키: 지도 위에 열린 것부터 하나씩 닫고, 다 닫혔을 때만 지도 서랍으로 나간다
+  // (예전엔 스티커 서랍·범례·핀 확정 카드가 열려 있어도 바로 나갔다 — 2026-11-03 impeccable android 규칙 참고).
+  // 닫는 순서 = 위에 겹친 순서. 매 렌더 다시 거는 건 지금 상태를 보기 위해서(가볍다).
+  useEffect(() => {
+    if (!isFocused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (placing) placingFlow.cancel();
+      else if (searchOpen) closeSearch();
+      else if (stylesOpen) setStylesOpen(false);
+      else if (sheetOpen) setSheetOpen(false);
+      else if (reactionPlaceId) setReactionPlaceId(null);
+      else if (tools.selectedObject) tools.selectObject(null);
+      else if (tools.tool !== 'hand') tools.stopTools();
+      else return false;
+      return true;
+    });
+    return () => sub.remove();
+  });
+
   // 이 지도의 바탕(boards.map_style, 0017) — 같이 그리는 사람에게도 같은 바탕. 고르지 않았으면 기기 기본 바탕.
   const boardsQuery = useBoards(workspace?.id);
   const boardRow = boardsQuery.data?.find((b) => b.id === boardId);
@@ -378,6 +398,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           ink={inks.me}
           tool={tools.tool}
           onPick={tools.pickTool}
+          pinBusy={placingFlow.snapping}
           sticker={tools.sticker}
           recentStickers={tools.recentStickers}
           onPickSticker={tools.setSticker}

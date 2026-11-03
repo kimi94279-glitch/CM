@@ -222,7 +222,7 @@ export function PlaceActionBar({
 const styles = StyleSheet.create({
   emojiBtn: {
     width: 44,
-    height: 44,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 24 },
   kakaoLinkBtn: {
-    height: 44,
+    height: 48,
     paddingLeft: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
