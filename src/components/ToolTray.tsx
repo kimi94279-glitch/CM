@@ -1,15 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  colors,
-  numeric,
-  radius,
-  shadows,
-  spacing,
-  typography,
-  type Ink,
-} from '../constants/theme';
+import { colors, numeric, radius, spacing, typography, type Ink } from '../constants/theme';
 import type { CanvasTool } from '../hooks/useCanvasTools';
 import { useSeenHints } from '../hooks/useSeenHints';
 import { prefersReducedMotion, SNAPPY_EASING } from '../utils/motion';
@@ -18,9 +10,10 @@ import { StickerChip, StickerDrawer } from './StickerDrawer';
 
 // 필통: 지도 아래에 늘 놓인 도구 줄. 그리기가 숨은 모드가 아니라 손에 드는 도구가 되도록(2026-10-31 경험 설계).
 // 아무것도 안 든 게 기본(한 손가락 = 지도 이동). 도구를 들면 한 손가락은 그 도구, 두 손가락은 지도 이동. 든 도구를 다시 누르면 내려놓는다.
-// 2026-11-01 실기기 의견으로 다시 짰다: "이동" 칸을 빼고(내려놓기 = 다시 누르기), 핀은 그리기 도구와 떨어진 칸에,
-// 되돌리기는 도구와 상관없이 늘 같은 자리(오른쪽 위 둥근 단추 줄)에, 도구 설명은 그 도구를 처음 들 때 한 번만.
-// 위쪽 줄: 왼쪽 범례(장소 목록), 오른쪽 되돌리기 · 바탕 고르기 · 전체 보기. 스티커를 들면 그 위에 스티커 서랍.
+// 2026-11-03 섞은 시안(A 조용한 한 줄 + B 지도 앱 문법): 떠 있는 하얀 판 여러 개 대신 먹색 필통 하나 —
+// 맨 앞 빨간 핀, 그다음 그리기 도구 다섯(아이콘만, 이름은 읽어 주기와 든 도구 표시로). 바탕 고르기는 위쪽 "더 보기"로 옮겼다.
+// 필통 위 줄: 왼쪽 "꽂은 곳 N"(누르면 아래에서 꽂은 곳 시트 — 찾기도 거기), 오른쪽 되돌리기·전체 보기.
+// 도구를 들면 더 조용하게: 왼쪽은 든 도구 이름, 오른쪽은 되돌리기만. 도구 설명은 처음 들 때 한 번만(먹색 말풍선).
 
 const TOOLS: { tool: CanvasTool; icon: IconName; label: string }[] = [
   { tool: 'pencil', icon: 'pencil', label: '연필' },
@@ -29,6 +22,10 @@ const TOOLS: { tool: CanvasTool; icon: IconName; label: string }[] = [
   { tool: 'string', icon: 'string', label: '실 자' },
   { tool: 'sticker', icon: 'sticker', label: '스티커' },
 ];
+const TOOL_LABEL: Partial<Record<CanvasTool, string>> = {
+  ...Object.fromEntries(TOOLS.map((t) => [t.tool, t.label])),
+  pin: '핀',
+};
 
 // 처음 들 때 한 번만 보여 주는 설명
 const HINTS: Partial<Record<CanvasTool, string>> = {
@@ -38,6 +35,14 @@ const HINTS: Partial<Record<CanvasTool, string>> = {
   string: '두 곳을 차례로 누르면 거리를 재요',
   sticker: '고른 스티커는 지도를 누르면 붙어요',
   pin: '가게 근처를 누르면 가장 가까운 가게에 꽂혀요',
+};
+// 든 도구 이름 옆 짧은 손짓 안내(늘 보임 — 지금 한 손가락이 무엇을 하는지)
+const HELD_NOTE: Partial<Record<CanvasTool, string>> = {
+  pencil: '두 손가락으로 지도 이동',
+  ink: '두 손가락으로 지도 이동',
+  marker: '두 손가락으로 지도 이동',
+  string: '두 곳을 차례로',
+  pin: '가게 근처를 눌러요',
 };
 const DRAW_TOOLS: CanvasTool[] = ['pencil', 'ink', 'marker', 'string'];
 // 도구 설명에 처음 한 번 덧붙이는 공통 안내
@@ -57,8 +62,7 @@ export function ToolTray({
   canUndo,
   onUndo,
   placeCount,
-  onOpenLegend,
-  onOpenStyles,
+  onOpenPlaces,
   onRecenter,
 }: {
   bottom: number;
@@ -72,8 +76,7 @@ export function ToolTray({
   canUndo: boolean;
   onUndo: () => void;
   placeCount: number;
-  onOpenLegend?: () => void; // 태블릿은 옆 패널이 늘 목록이라 없음
-  onOpenStyles: () => void; // 이 지도의 바탕 고르기
+  onOpenPlaces?: () => void; // 꽂은 곳 시트 열기. 태블릿·가로는 옆 패널이 늘 목록이라 없음
   onRecenter: () => void;
 }) {
   const seen = useSeenHints();
@@ -122,6 +125,8 @@ export function ToolTray({
 
   const shownHint = hint && hint.tool === tool ? hint.lines : null;
   const stickerOn = tool === 'sticker';
+  const holding = tool !== 'hand';
+  const heldNote = HELD_NOTE[tool];
 
   return (
     <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
@@ -149,34 +154,51 @@ export function ToolTray({
         ) : null}
 
         {stickerOn && drawerOpen ? null : (
-          <View style={styles.corners} pointerEvents="box-none">
-            {onOpenLegend ? (
+          <View style={styles.over} pointerEvents="box-none">
+            {holding && !stickerOn ? (
+              // 든 도구: 이름 + 지금 한 손가락이 하는 일
+              <View style={styles.held} accessibilityLiveRegion="polite">
+                <View style={[styles.heldDot, { backgroundColor: ink.solid }]} />
+                <Text style={styles.heldName}>{TOOL_LABEL[tool]}</Text>
+                {heldNote ? <Text style={styles.heldNote}>{heldNote}</Text> : null}
+              </View>
+            ) : !holding && onOpenPlaces ? (
+              // 꽂은 곳 쪽지: 위에 손잡이 — 누르면(끌어올리면) 아래에서 꽂은 곳 시트
               <Pressable
-                style={({ pressed }) => [styles.legend, pressed && styles.pressed]}
-                hitSlop={{ top: 6, bottom: 6 }}
-                onPress={onOpenLegend}
+                style={({ pressed }) => [styles.peek, pressed && styles.pressed]}
+                onPress={onOpenPlaces}
+                hitSlop={{ top: 8, bottom: 4 }}
                 accessibilityRole="button"
-                accessibilityLabel={`범례 열기, 장소 ${placeCount}곳`}
+                accessibilityLabel={`꽂은 곳 ${placeCount}곳, 목록과 찾기 열기`}
               >
-                <Icon name="legend" size={16} color={colors.tagInk} />
-                <Text style={styles.legendText}>범례</Text>
-                <Text style={styles.legendCount}>{placeCount}</Text>
+                <View style={styles.peekGrab} />
+                <Icon name="legend" size={16} color={colors.onPrimary} />
+                <Text style={styles.peekText}>꽂은 곳</Text>
+                <Text style={styles.peekCount}>{placeCount}</Text>
               </Pressable>
             ) : (
               <View />
             )}
-            <View style={styles.roundGroup}>
-              {canUndo ? (
-                <RoundButton icon="undo" label="방금 한 것 되돌리기" onPress={onUndo} />
-              ) : null}
-              <RoundButton icon="layers" label="지도 바탕 고르기" onPress={onOpenStyles} />
-              <RoundButton icon="compass" label="장소 전체 보기" onPress={onRecenter} />
+            <View style={styles.minis}>
+              {canUndo ? <Mini icon="undo" label="방금 한 것 되돌리기" onPress={onUndo} /> : null}
+              {holding ? null : <Mini icon="compass" label="장소 전체 보기" onPress={onRecenter} />}
             </View>
           </View>
         )}
 
-        <View style={styles.trayRow}>
-          <View style={styles.tray}>
+        <View style={styles.pillRow}>
+          <View style={styles.pill}>
+            {/* 핀: 맨 앞 빨간 동그라미. 들고 가게 근처를 누르면 가장 가까운 가게에 꽂힌다 */}
+            <ToolButton
+              icon="pin"
+              label="핀"
+              on={tool === 'pin'}
+              ink={ink}
+              accent={colors.roadRed}
+              busy={pinBusy}
+              onPress={() => pick('pin')}
+            />
+            <View style={styles.gap} />
             {TOOLS.map((t) => (
               <ToolButton
                 key={t.tool}
@@ -188,53 +210,34 @@ export function ToolTray({
               />
             ))}
           </View>
-          {/* 핀: 그리기 도구와 떨어진 칸. 들고 가게 근처를 누르면 가장 가까운 가게에 꽂힌다 */}
-          <View style={styles.pinTray}>
-            <ToolButton
-              icon="pin"
-              label="핀"
-              on={tool === 'pin'}
-              ink={ink}
-              iconColor={colors.roadRed}
-              busy={pinBusy}
-              onPress={() => pick('pin')}
-            />
-          </View>
         </View>
       </View>
     </View>
   );
 }
 
-function RoundButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-}) {
+function Mini({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.mini, pressed && styles.pressed]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Icon name={icon} size={22} />
+      <Icon name={icon} size={22} color={colors.onPrimary} />
     </Pressable>
   );
 }
 
-// 필통의 도구 하나. 들면 0.12초 만에 5px 들린다(하루에도 수십 번 누르는 것이라 짧게, 빨리 닿고 천천히 멈추는 곡선).
-// 진동(selectHaptic)은 같은 순간 onPick 에서 울린다. 동작 줄이기면 움직이지 않고 바로 그 자리.
+// 필통의 도구 하나: 먹색 판 위 흰 아이콘. 들면 흰 동그라미 위 내 잉크색으로 0.12초 만에 살짝 들린다
+// (하루에도 수십 번 누르는 것이라 짧게, 빨리 닿고 천천히 멈추는 곡선). 진동(selectHaptic)은 같은 순간 onPick 에서.
+// accent 가 있으면(핀) 내려놓은 상태도 그 색 동그라미. 동작 줄이기면 움직이지 않고 바로 그 자리.
 function ToolButton({
   icon,
   label,
   on,
   ink,
-  iconColor = colors.textStrong,
+  accent,
   busy = false,
   onPress,
 }: {
@@ -242,7 +245,7 @@ function ToolButton({
   label: string;
   on: boolean;
   ink: Ink;
-  iconColor?: string;
+  accent?: string;
   busy?: boolean; // 아이콘 자리에 도는 표시
   onPress: () => void;
 }) {
@@ -260,39 +263,30 @@ function ToolButton({
       useNativeDriver: true,
     }).start();
   }, [on, lift]);
+  const bg = on ? colors.surface : (accent ?? 'transparent');
+  const fg = on ? (accent ?? ink.solid) : colors.onPrimary;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={on ? `${label}, 들고 있음. 다시 누르면 내려놓기` : label}
-      accessibilityState={{ selected: on }}
+      accessibilityState={{ selected: on, busy }}
     >
       <Animated.View
-        style={[
-          styles.tool,
-          on && { backgroundColor: ink.tint },
-          { transform: [{ translateY: lift }] },
-        ]}
+        style={[styles.tool, { backgroundColor: bg }, { transform: [{ translateY: lift }] }]}
       >
         {busy ? (
-          <ActivityIndicator size="small" color={ink.solid} style={styles.busy} />
+          <ActivityIndicator size="small" color={fg} />
         ) : (
-          <Icon name={icon} size={24} color={on ? ink.solid : iconColor} />
+          <Icon name={icon} size={24} color={fg} />
         )}
-        {/* 칸 폭이 정해진 도구 줄이라 큰 글씨 설정에서도 1.3배까지만(뜻은 아이콘·읽어 주기 이름이 같이 전한다) */}
-        <Text
-          style={[styles.toolLabel, on && { color: ink.text }]}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
-        >
-          {label}
-        </Text>
       </Animated.View>
     </Pressable>
   );
 }
 
-const LIFT = -5;
+const LIFT = -3;
+const DARK = 'rgba(28, 28, 26, 0.92)'; // 인쇄 먹(textStrong) 판
 
 const styles = StyleSheet.create({
   wrap: {
@@ -302,39 +296,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   // 가로 화면·태블릿에서 양끝까지 늘어나지 않게
-  column: { width: '100%', maxWidth: 560, gap: spacing.sm },
-  // 필통 판 + 핀 칸: 떠 있는 두 판(그림자 lifted). 도구는 아이콘 + 이름, 든 도구는 살짝 들려 잉크색.
-  trayRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
-  tray: {
+  column: { width: '100%', maxWidth: 420, gap: spacing.sm },
+  // 먹색 필통: 떠 있는 판 하나. 도구는 48dp 동그라미(안드로이드 최소 터치)
+  pillRow: { alignItems: 'center' },
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: 6,
-    ...shadows.lifted,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: DARK,
+    paddingHorizontal: 8,
+    gap: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  pinTray: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: 6,
-    ...shadows.lifted,
-  },
+  gap: { width: 6 },
   tool: {
-    width: 50,
-    paddingTop: 6,
-    paddingBottom: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    borderRadius: radius.field,
+    justifyContent: 'center',
   },
-  busy: { width: 24, height: 24 },
-  toolLabel: { ...typography.caption, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   // 처음 한 번 도구 설명: 먹색 말풍선(잠깐 떴다 사라진다, 누르면 바로 닫힘)
   hint: {
     alignSelf: 'center',
     maxWidth: '100%',
-    backgroundColor: 'rgba(28, 28, 26, 0.92)',
+    backgroundColor: DARK,
     borderRadius: radius.field,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -342,37 +333,63 @@ const styles = StyleSheet.create({
   },
   hintText: { ...typography.label, color: colors.onPrimary, textAlign: 'center' },
   hintSub: { ...typography.caption, color: 'rgba(255,255,255,0.78)', textAlign: 'center' },
-  pressed: { opacity: 0.6 },
-  // 위쪽 줄: 범례(종이 꼬리표) · 되돌리기 · 바탕 · 전체 보기
-  corners: {
+  pressed: { opacity: 0.7 },
+  // 필통 위 줄: 꽂은 곳 쪽지(또는 든 도구 이름) | 되돌리기 · 전체 보기
+  over: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingHorizontal: spacing.xs,
   },
-  legend: {
+  peek: {
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.tag,
-    borderWidth: 1,
-    borderColor: colors.tagRule,
-    borderRadius: radius.tag,
-    paddingHorizontal: spacing.md - 2,
-    paddingVertical: spacing.sm,
-    ...shadows.paper,
+    paddingLeft: 12,
+    paddingRight: 14,
+    borderRadius: 20,
+    backgroundColor: DARK,
   },
-  legendText: { ...typography.label, color: colors.tagInk },
-  legendCount: { ...typography.caption, ...numeric, color: colors.textMuted },
-  roundGroup: { flexDirection: 'row', gap: spacing.sm },
-  // 둥근 단추: 안드로이드 최소 터치 48dp
-  round: {
+  // 쪽지 위 작은 손잡이: 끌어올리면 시트가 나온다는 표시
+  peekGrab: {
+    position: 'absolute',
+    top: -7,
+    left: '50%',
+    marginLeft: -12,
+    width: 24,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(28, 28, 26, 0.5)',
+  },
+  peekText: { ...typography.label, fontSize: 13.5, color: colors.onPrimary },
+  peekCount: {
+    ...typography.label,
+    ...numeric,
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  held: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: DARK,
+    maxWidth: 260,
+  },
+  heldDot: { width: 9, height: 9, borderRadius: 5 },
+  heldName: { ...typography.label, fontSize: 13, color: colors.onPrimary },
+  heldNote: { ...typography.caption, color: 'rgba(255,255,255,0.72)', flexShrink: 1 },
+  minis: { flexDirection: 'row', gap: spacing.sm },
+  mini: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.surface,
+    backgroundColor: DARK,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.paper,
   },
 });

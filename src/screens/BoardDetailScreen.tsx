@@ -20,9 +20,11 @@ import { ObjectEditBar } from '../components/CanvasToolBars';
 import { HalfSheet } from '../components/HalfSheet';
 import { useMapHost } from '../components/MapHostContext';
 import { isMapStyleName, PRINT_CREDIT_LINES, type MapStyleName } from '../components/mapStyles';
+import { MapMoreMenu } from '../components/MapMoreMenu';
 import { MapStylePicker } from '../components/MapStylePicker';
 import { PlaceActionBar, usePlaceActions } from '../components/PlaceActionBar';
 import { CenterPin, PlaceDraftCard } from '../components/PlaceDraftCard';
+import { SearchBar } from '../components/SearchBar';
 import { SearchSheet } from '../components/SearchSheet';
 import { ToolTray } from '../components/ToolTray';
 import { KAKAO_SEARCH_ASSIST } from '../constants/config';
@@ -55,7 +57,8 @@ const LANDSCAPE_SIDE_MIN = 700;
 const SIDE_PANEL_WIDTH = 320;
 
 // Surface First: 지도가 화면(Surface)이고, 모든 UI는 그 위에 Overlay 된다 — 책상에 펼친 종이 지도 위의 물건들.
-// 위: 종이 꼬리표(지도 이름·사람) + 찾기 + 한 장으로 접기. 아래: 필통(그리기 도구 · 스티커 · 핀) + 범례(모바일=Half Sheet, 태블릿=옆 패널).
+// 위: 지도 위에 바로 얹은 이름·사람 + 더 보기(바탕·한 장으로 접기·이름 바꾸기). 아래: 먹색 필통(핀 · 그리기 도구 · 스티커)
+// + 꽂은 곳(모바일 = 필통 위 쪽지로 여는 아래 시트, 맨 위가 찾기 / 태블릿·가로 = 옆 패널). 2026-11-03 섞은 시안.
 // 지도 자체는 네비게이터 뒤 싱글톤 MapHost 가 그리고, 이 화면은 데이터·콜백만 주입한다(useBoardMapSync).
 // 아래쪽(필통 · 핀 쪽지 바 · 편집 바)과 검색 · 범례 · 핀 확정은 서로 배타 — 하나를 열 때 나머지를 닫는다.
 export function BoardDetailScreen({ route, navigation }: Props) {
@@ -104,6 +107,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   // 이 지도의 바탕 고르기 판
   const [stylesOpen, setStylesOpen] = useState(false);
+  // 오른쪽 위 "더 보기" 메뉴
+  const [moreOpen, setMoreOpen] = useState(false);
   // 지도 위 검색(모바일, 상단 SearchBar + 하단 SearchSheet). 입력 → 400ms 뒤 제출된 검색어로 카카오 검색.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -200,7 +205,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   useEffect(() => {
     if (!isFocused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (placing) placingFlow.cancel();
+      if (moreOpen) setMoreOpen(false);
+      else if (placing) placingFlow.cancel();
       else if (searchOpen) closeSearch();
       else if (stylesOpen) setStylesOpen(false);
       else if (sheetOpen) setSheetOpen(false);
@@ -218,6 +224,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const boardRow = boardsQuery.data?.find((b) => b.id === boardId);
   // 지도 이름: 꼬리표를 눌러 바꾸면 목록이 갱신되므로 목록 쪽 이름이 최신이다(들어올 때 받은 이름은 처음 한 번만).
   const shownTitle = boardRow?.title ?? title;
+  const renameBoard = () => navigation.navigate('CreateBoard', { boardId, title: shownTitle });
   const boardStyle = isMapStyleName(boardRow?.map_style) ? boardRow.map_style : null;
   const deviceStyle = useMapStyle();
   const setBoardStyle = useSetBoardMapStyle(workspace?.id);
@@ -313,7 +320,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   const reactionPlace = reactionPlaceId
     ? listPlaces.find((p) => p.id === reactionPlaceId)
     : undefined;
-  const mobileSearching = !isTablet && searchOpen;
   // 함께 그리는 사람(꼬리표·지도 한 장 범례). 솔로면 나만.
   const people = [
     { name: '나', color: inks.me.solid },
@@ -374,21 +380,15 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      {/* 모바일 검색은 지도 위에서(openSearch), 태블릿은 PlaceAdd 화면. */}
+      {/* 찾기는 아래로 옮겼다: 모바일 = 꽂은 곳 시트 맨 위 → 아래 입력칸, 태블릿 = 옆 패널 맨 위 → PlaceAdd 화면 */}
       <BoardTopOverlay
         topInset={insets.top}
         title={shownTitle}
         people={people}
-        onPressTitle={() => navigation.navigate('CreateBoard', { boardId, title: shownTitle })}
-        search={
-          mobileSearching
-            ? { text: searchText, onChangeText: setSearchText, onClose: closeSearch }
-            : null
-        }
+        onPressTitle={renameBoard}
         onBack={() => navigation.goBack()}
-        onPressSearch={isTablet ? goAdd : openSearch}
-        onPressExport={exportOnePage}
-        exporting={exporting}
+        onPressMore={() => setMoreOpen(true)}
+        busy={exporting}
       />
 
       {/* 필통: 핀 쪽지 바·편집 바·검색·범례·핀 확정 중에는 비켜 준다 */}
@@ -405,8 +405,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           canUndo={tools.canUndo}
           onUndo={tools.undo}
           placeCount={listPlaces.length}
-          onOpenLegend={isTablet ? undefined : openSheet}
-          onOpenStyles={openStyles}
+          onOpenPlaces={isTablet ? undefined : openSheet}
           onRecenter={() => map.recenter()}
         />
       ) : null}
@@ -466,6 +465,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
     </>
   ) : null;
 
+  // 꽂은 곳 목록: 맨 위 찾기 줄(onAdd 로 찾기) + 빨간 핀(핀 도구 들기 — 시트는 닫는다)
   const list = (onAdd: () => void, onClose?: () => void) => (
     <CanvasObjectList
       places={listPlaces}
@@ -477,8 +477,26 @@ export function BoardDetailScreen({ route, navigation }: Props) {
       onAdd={onAdd}
       onDelete={confirmDelete}
       onClose={onClose}
+      onSearch={onAdd}
+      onPin={() => {
+        setSheetOpen(false);
+        if (tools.tool !== 'pin') tools.pickTool('pin');
+      }}
     />
   );
+
+  // 오른쪽 위 "더 보기": 자주 안 쓰는 것들(화면 맨 위에 덮어 그린다 — 바깥을 누르면 닫힘)
+  const moreUI = moreOpen ? (
+    <MapMoreMenu
+      top={insets.top + spacing.xs + 50}
+      items={[
+        { icon: 'layers', label: '지도 바탕 고르기', onPress: openStyles },
+        { icon: 'fold', label: '지도 한 장으로 접기', onPress: exportOnePage },
+        { icon: 'memo', label: '이름 바꾸기', onPress: renameBoard },
+      ]}
+      onClose={() => setMoreOpen(false)}
+    />
+  ) : null;
 
   // 이 지도의 바탕 고르기 판(아래 시트). 고르면 바로 지도가 바뀌고(낙관 반영) 같이 그리는 사람에게도 저장된다.
   // 시트가 낮아 지도가 보이므로, 넘겨 보며 바로 비교할 수 있다.
@@ -528,6 +546,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         </View>
         {placingUI}
         {stylesUI}
+        {moreUI}
       </View>
     );
   }
@@ -539,10 +558,10 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
       {sheetOpen && !searchOpen ? (
         <HalfSheet
-          height={Math.round(height * 0.5)}
+          height={Math.round(height * 0.58)}
           bottomInset={insets.bottom}
           onDismissed={() => setSheetOpen(false)}
-          closeLabel="범례 닫기"
+          closeLabel="꽂은 곳 닫기"
         >
           {(dismiss) => list(openSearch, dismiss)}
         </HalfSheet>
@@ -552,13 +571,23 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
       {placingUI}
 
-      {/* 검색 결과 Sheet: keyboardHeight 만큼 위로 올림(양 플랫폼 결정적).
+      {moreUI}
+
+      {/* 찾기: 입력칸 + 결과가 아래에(엄지 닿는 곳), keyboardHeight 만큼 위로 올림(양 플랫폼 결정적).
           box-none → 시트 미점유 상단 지도는 계속 보이고 조작 가능(Surface First). */}
       {searchOpen ? (
         <View
           style={[styles.searchSheetWrap, { paddingBottom: keyboardHeight }]}
           pointerEvents="box-none"
         >
+          <View style={styles.searchBarRow}>
+            <SearchBar
+              value={searchText}
+              onChangeText={setSearchText}
+              onClose={closeSearch}
+              placeholder="가게·장소 이름"
+            />
+          </View>
           <SearchSheet
             query={searchQuery}
             isFetching={search.isFetching}
@@ -568,7 +597,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
             selecting={placingFlow.selecting}
             onDirectPin={() => placingFlow.startDirect(searchText.trim())}
             assistEnabled={KAKAO_SEARCH_ASSIST}
-            maxHeight={Math.max(200, height - keyboardHeight - insets.top - 80)}
+            maxHeight={Math.max(160, height - keyboardHeight - insets.top - 80 - 56)}
             bottomInset={keyboardHeight > 0 ? spacing.sm : insets.bottom}
           />
         </View>
@@ -617,6 +646,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  searchBarRow: { flexDirection: 'row', marginBottom: spacing.sm },
   // 검색 Sheet 래퍼: 화면 전체를 덮되 box-none(상단 지도 통과), 카드는 하단 정렬.
   searchSheetWrap: {
     position: 'absolute',
