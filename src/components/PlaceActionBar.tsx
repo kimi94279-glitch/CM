@@ -15,6 +15,7 @@ import { REACTION_EMOJI, REACTION_LABEL, REACTION_ORDER } from '../constants/rea
 import { colors, radius, spacing, typography } from '../constants/theme';
 import type { PeopleInks } from '../hooks/useInks';
 import { useAddMemo, useRemoveMemo } from '../hooks/usePlaceMemos';
+import { useUpdatePlace } from '../hooks/usePlaces';
 import { useAddReaction, useRemoveReaction } from '../hooks/usePlaceReactions';
 import type { PlaceMemo, PlaceReaction, ReactionType } from '../types/models';
 import { friendlyError } from '../utils/errors';
@@ -23,10 +24,13 @@ import { whoOf } from '../utils/who';
 import { FloatingBar, floatingShadow } from './FloatingBar';
 import { Icon } from './Icon';
 
+const NAME_MAX = 40;
+
 export interface PlaceActions {
   toggleReaction: (placeId: string, type: ReactionType, mine: boolean) => void;
   sendMemo: (placeId: string, content: string) => void;
   removeMemo: (memoId: string) => void;
+  renamePlace: (placeId: string, name: string) => void;
 }
 
 // 반응·메모 저장. 바가 아니라 화면에서 부른다 — 바는 핀을 바꾸거나 닫으면 언마운트되는데,
@@ -37,6 +41,7 @@ export function usePlaceActions(boardId: string): PlaceActions {
   const removeReaction = useRemoveReaction(boardId);
   const addMemo = useAddMemo(boardId);
   const removeMemo = useRemoveMemo(boardId);
+  const updatePlace = useUpdatePlace(boardId);
   return {
     toggleReaction: (placeId, type, mine) => {
       const onError = (e: unknown) => Alert.alert('반응을 남기지 못했어요', friendlyError(e));
@@ -52,15 +57,22 @@ export function usePlaceActions(boardId: string): PlaceActions {
       removeMemo.mutate(memoId, {
         onError: (e) => Alert.alert('쪽지를 지우지 못했어요', friendlyError(e)),
       }),
+    renamePlace: (placeId, name) =>
+      updatePlace.mutate(
+        { placeId, patch: { name } },
+        { onError: (e) => Alert.alert('이름을 붙이지 못했어요', friendlyError(e)) }
+      ),
   };
 }
 
 // 핀을 탭하면 뜨는 바(ADR-014 대화): 반응(banter) 토글 + 한 줄 쪽지 + 카카오맵 링크.
+// 바 위에는 핀 이름 꼬리표 — 핀 도구로 바로 꽂아 이름이 없으면 "이름 붙이기", 누르면 그 자리에서 쓴다(2026-11-05).
 // 쪽지 버튼으로 입력창(+ 이 핀의 최근 대화)을 바 위에 열고, 입력 중에는 키보드 위로 올린다.
 // 화면에서 핀마다 key 를 달아 쓰므로 다른 핀으로 바뀌면 입력창은 닫힌 채로 새로 시작한다.
 // 반응·메모 목록은 화면이 지도에 주입하는 것을 그대로 받는다(바가 열릴 때마다 다시 불러오지 않게).
 export function PlaceActionBar({
   placeId,
+  name,
   kakaoPlaceId,
   reactions,
   memos,
@@ -73,6 +85,7 @@ export function PlaceActionBar({
   onClose,
 }: {
   placeId: string;
+  name: string; // 핀 이름('' = 아직 없음)
   kakaoPlaceId: string | null; // 카카오로 찾아 꽂은 핀이면 링크(영업시간·리뷰는 카카오맵에서)
   reactions: PlaceReaction[];
   memos: PlaceMemo[];
@@ -109,7 +122,22 @@ export function PlaceActionBar({
   const toggleMemo = () => {
     setMemoText('');
     if (memoOpen) Keyboard.dismiss();
+    setNaming(false);
     setMemoOpen(!memoOpen);
+  };
+  // 이름 붙이기·바꾸기(바 위 꼬리표를 누르면 입력 줄)
+  const [naming, setNaming] = useState(false);
+  const [nameText, setNameText] = useState(name);
+  const startNaming = () => {
+    setNameText(name);
+    setMemoOpen(false);
+    setNaming(true);
+  };
+  const saveName = () => {
+    const next = nameText.trim();
+    if (next !== name) actions.renamePlace(placeId, next);
+    setNaming(false);
+    Keyboard.dismiss();
   };
   const sendMemo = () => {
     const content = memoText.trim();
@@ -172,10 +200,56 @@ export function PlaceActionBar({
     </View>
   ) : null;
 
+  const nameCard = naming ? (
+    <View style={styles.memoCard}>
+      <View style={styles.memoInputRow}>
+        <TextInput
+          style={styles.memoInput}
+          value={nameText}
+          onChangeText={setNameText}
+          placeholder="이 핀의 이름 (예: 만나는 곳)"
+          placeholderTextColor={colors.textMuted}
+          maxLength={NAME_MAX}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={saveName}
+        />
+        <Pressable
+          style={styles.memoSend}
+          onPress={saveName}
+          accessibilityRole="button"
+          accessibilityLabel="이름 저장"
+        >
+          <Text style={styles.memoSendText}>저장</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : (
+    <Pressable
+      onPress={startNaming}
+      style={({ pressed }) => [styles.nameTag, pressed && styles.nameTagPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={name ? `${name}, 이름 바꾸기` : '이름 붙이기'}
+    >
+      {name ? (
+        <Text style={styles.nameTagText} numberOfLines={1}>
+          {name}
+        </Text>
+      ) : (
+        <>
+          <Icon name="plus" size={14} color={colors.tagInk} />
+          <Text style={styles.nameTagText}>이름 붙이기</Text>
+        </>
+      )}
+    </Pressable>
+  );
+
   return (
     <FloatingBar
-      bottom={memoOpen && keyboardHeight > 0 ? keyboardHeight + spacing.sm : restingBottom}
-      above={memoCard}
+      bottom={
+        (memoOpen || naming) && keyboardHeight > 0 ? keyboardHeight + spacing.sm : restingBottom
+      }
+      above={memoOpen ? memoCard : nameCard}
       onClose={() => {
         Keyboard.dismiss();
         onClose();
@@ -277,5 +351,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   memoSendDisabled: { opacity: 0.4 },
+  // 바 위 이름 꼬리표(종이 꼬리표 — 누르면 이름 쓰기)
+  nameTag: {
+    alignSelf: 'center',
+    maxWidth: 280,
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.tag,
+    borderRadius: radius.tag,
+    borderWidth: 1,
+    borderColor: colors.tagRule,
+    paddingHorizontal: spacing.md - 4,
+    ...floatingShadow,
+  },
+  nameTagPressed: { backgroundColor: colors.surfaceMuted },
+  nameTagText: { ...typography.label, color: colors.tagInk, flexShrink: 1 },
   memoSendText: { ...typography.label, color: colors.onPrimary },
 });

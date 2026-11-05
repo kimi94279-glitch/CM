@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { addPlace, listPlaces, removePlace } from '../services/placeService';
+import { addPlace, listPlaces, removePlace, updatePlace } from '../services/placeService';
 import {
   matchPlace,
   resolveLivePlace,
@@ -39,6 +39,32 @@ export function useAddPlace(boardId: string) {
     mutationFn: (draft: PlaceDraft) => addPlace(boardId, draft),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['places', boardId] });
+    },
+  });
+}
+
+// 핀 고치기(이름·자리) — 목록에 바로 반영하고(낙관), 실패하면 되돌린다.
+export function useUpdatePlace(boardId: string) {
+  const queryClient = useQueryClient();
+  const key = ['places', boardId];
+  return useMutation({
+    mutationFn: (v: {
+      placeId: string;
+      patch: { name?: string; latitude?: number; longitude?: number };
+    }) => updatePlace(v.placeId, v.patch),
+    onMutate: async (v) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<Place[]>(key);
+      queryClient.setQueryData<Place[]>(key, (list) =>
+        (list ?? []).map((p) => (p.id === v.placeId ? { ...p, ...v.patch } : p))
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(key, ctx.prev);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }

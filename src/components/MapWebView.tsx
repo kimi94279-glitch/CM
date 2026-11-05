@@ -17,6 +17,7 @@ import {
   type DrawStroke,
   type DrawTool,
   type ExportCardOptions,
+  type MapPoint,
 } from './MapHostContext';
 import type { PeopleInks } from '../hooks/useInks';
 import { tapHaptic } from '../utils/haptics';
@@ -31,9 +32,9 @@ interface MapWebViewProps {
   objects?: MapObject[];
   onMarkerPress?: (placeId: string) => void;
   // 핀 외 빈 지도(배경) 탭. point(좌표/레벨)는 객체 배치용 — 없으면 단순 배경 탭(팔레트 닫기 등).
-  onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
+  onMapPress?: (point?: MapPoint) => void;
   // 객체(스티커) 탭 → 편집 선택. 드래그 이동 종료 → 새 좌표 저장.
-  onObjectPress?: (id: string, point?: { lat: number; lng: number; level: number }) => void;
+  onObjectPress?: (id: string, point?: MapPoint) => void;
   onObjectMove?: (id: string, lat: number, lng: number) => void;
   // 현재 편집 선택된 객체 id(선택 링 표시). null = 해제.
   selectedObjectId?: string | null;
@@ -491,7 +492,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           typeof msg.lat === 'number' &&
           typeof msg.lng === 'number' &&
           typeof msg.level === 'number';
-        onMapPress?.(hasPoint ? { lat: msg.lat, lng: msg.lng, level: msg.level } : undefined);
+        onMapPress?.(
+          hasPoint
+            ? { lat: msg.lat, lng: msg.lng, level: msg.level, onBuilding: msg.onBuilding === true }
+            : undefined
+        );
         return;
       }
       if (msg.type === 'markerClick' && typeof msg.id === 'string') {
@@ -505,7 +510,9 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(function
           typeof msg.level === 'number';
         onObjectPress?.(
           msg.id,
-          hasPoint ? { lat: msg.lat, lng: msg.lng, level: msg.level } : undefined
+          hasPoint
+            ? { lat: msg.lat, lng: msg.lng, level: msg.level, onBuilding: msg.onBuilding === true }
+            : undefined
         );
         return;
       }

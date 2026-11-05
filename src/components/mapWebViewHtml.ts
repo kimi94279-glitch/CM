@@ -400,6 +400,11 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
       startDrop(el); // 바늘이 닿는 순간 진동(pinLanded)
       pendingTack = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(map);
     };
+    // 그 화면 점이 건물 위인가(건물 층은 줌 14부터 — 그보다 멀리서 보면 늘 아니다)
+    function onBuilding(pt){
+      try { return !!map.getLayer('building') && map.queryRenderedFeatures(pt, { layers: ['building'] }).length > 0; }
+      catch (e) { return false; }
+    }
     function startDrop(el){
       el.classList.remove('drop'); void el.offsetWidth; el.classList.add('drop');
       var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1198,10 +1203,11 @@ export function buildMapHtml(places: MapPlace[], inks: PeopleInks, mapStyle: Map
             var b = 8, pt = e.point;
             var hit = map.queryRenderedFeatures([[pt.x - b, pt.y - b], [pt.x + b, pt.y + b]], { layers: DRAW_LAYERS })
               .filter(function(f){ var id = String(f.properties.id); return id.indexOf('temp-') !== 0 && id.indexOf('pending-') !== 0; })[0];
-            if (hit){ send({ type:'objectTap', id: hit.properties.id, lat: e.lngLat.lat, lng: e.lngLat.lng, level: Math.round(map.getZoom()) }); return; }
+            if (hit){ send({ type:'objectTap', id: hit.properties.id, lat: e.lngLat.lat, lng: e.lngLat.lng, level: Math.round(map.getZoom()), onBuilding: onBuilding(e.point) }); return; }
           }
           // level = 생성 줌(world-space 스케일 기준). zoom_level 컬럼이 integer 라 반올림해 전달.
-          send({ type:'mapTap', lat: e.lngLat.lat, lng: e.lngLat.lng, level: Math.round(map.getZoom()) });
+          // onBuilding = 누른 곳이 건물 위인지(핀 도구: 건물이면 가장 가까운 가게 자리로, 아니면 누른 자리 그대로).
+          send({ type:'mapTap', lat: e.lngLat.lat, lng: e.lngLat.lng, level: Math.round(map.getZoom()), onBuilding: onBuilding(e.point) });
         });
 
         // 줌 변경 시 객체 크기를 world-space 기준으로 재계산(GL JS는 줌 중 연속 발화 → 부드러움).

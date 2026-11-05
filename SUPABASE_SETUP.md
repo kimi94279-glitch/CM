@@ -83,7 +83,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 
 ---
 
-## 3.5 추가 마이그레이션 (0002 ~ 0018)
+## 3.5 추가 마이그레이션 (0002 ~ 0019)
 
 `0001` 이후의 마이그레이션은 **별도로 적용해야 한다**(자동 적용 아님). SQL Editor에서 순서대로 실행한다.
 
@@ -106,6 +106,7 @@ where relname in ('users','couples','couple_invites','boards','places','place_me
 | `0016_place_kakao_live.sql` | 카카오 실시간 핀: `places.live_query` + provider `('public','manual','kakao_live')`(예전 `kakao`·`naver` 제거) + `places_live_check` | 필수(하이브리드 — docs/Place Matching.md §11). 적용 전 `kakao`·`naver` 행이 없어야 함. 재실행 안전 |
 | `0017_board_map_style.sql` | 지도마다 바탕: `boards.map_style`(null = 기기 기본 바탕, 글자 모양만 CHECK — 바탕을 더해도 마이그레이션 불필요) | 필수(지도 바탕 고르기). 재실행 안전 |
 | `0018_push_text_sticker.sql` | 글자 스티커(`map_objects.payload.text`) 알림 문구 — `trg_push_map_object` 만 다시 만듦 | 권장(글자 스티커 알림이 "✨  스티커"로 비지 않게). 재실행 안전 |
+| `0019_push_unnamed_place.sql` | 이름 없는 핀 알림 문구("새 핀") — `trg_push_place` 만 다시 만듦 | 권장(핀 바로 꽂기 — 이름이 비면 "📍  추가"로 나가지 않게). 재실행 안전 |
 
 ### 공공데이터 적재·갱신 (0014 뒤 — 자동)
 

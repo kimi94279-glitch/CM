@@ -29,8 +29,9 @@ export function PlaceCard({
         <View style={styles.tackShine} />
       </View>
       <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>
-          {place.name}
+        {/* 핀 도구로 바로 꽂은 핀은 이름이 없을 수 있다(핀을 눌러 나중에 붙인다) */}
+        <Text style={[styles.name, !place.name && styles.unnamed]} numberOfLines={1}>
+          {place.name || '이름 없는 핀'}
         </Text>
         {authorLabel ? (
           <Text style={[styles.author, { color: ink.text }]} numberOfLines={1}>
@@ -45,7 +46,7 @@ export function PlaceCard({
           hitSlop={8}
           style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel={`${place.name} 지우기`}
+          accessibilityLabel={`${place.name || '이름 없는 핀'} 지우기`}
           accessibilityState={{ busy: deleting }}
         >
           {deleting ? (
@@ -101,6 +102,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textStrong,
   },
+  unnamed: { fontWeight: '400', color: colors.textMuted },
   author: {
     ...typography.caption,
     fontWeight: '600',

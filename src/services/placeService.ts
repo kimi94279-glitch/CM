@@ -28,6 +28,15 @@ async function nextOrderIndex(boardId: string): Promise<number> {
   return data ? data.order_index + 1 : 0;
 }
 
+// 핀 고치기: 이름(나중에 붙이기) 또는 자리(가게 자리 ↔ 누른 자리). RLS: 같은 공간 멤버(places_update).
+export async function updatePlace(
+  placeId: string,
+  patch: { name?: string; latitude?: number; longitude?: number }
+): Promise<void> {
+  const { error } = await supabase.from('places').update(patch).eq('id', placeId);
+  if (error) throw error;
+}
+
 // 장소 삭제 (RLS: 커플 멤버만). order_index 재인덱싱은 하지 않는다(공백 허용).
 export async function removePlace(placeId: string): Promise<void> {
   const { error } = await supabase.from('places').delete().eq('id', placeId);

@@ -40,6 +40,7 @@ import { usePartnerId, usePartnerProfile } from '../hooks/usePartnerProfile';
 import { usePlaceMemos } from '../hooks/usePlaceMemos';
 import { usePlaceReactions } from '../hooks/usePlaceReactions';
 import { useDeletePlace, useLivePlaces, usePlaceSearch, usePlaces } from '../hooks/usePlaces';
+import { usePinDrop } from '../hooks/usePinDrop';
 import { usePlacing } from '../hooks/usePlacing';
 import { useSubmittedQuery } from '../hooks/useSubmittedQuery';
 import type { RootStackParamList } from '../navigation/types';
@@ -166,6 +167,24 @@ export function BoardDetailScreen({ route, navigation }: Props) {
   );
   const { placing } = placingFlow;
 
+  // 핀 도구: 누르는 즉시 꽂기(건물이면 가장 가까운 가게 자리, 길·공원이면 누른 자리 — 이름은 나중에, usePinDrop)
+  const pinDrop = usePinDrop(boardId, (placeId) => {
+    map.dropPin(boardId, placeId);
+    tools.pushPlaceUndo(placeId);
+  });
+  const pinNotice = pinDrop.note
+    ? {
+        text: pinDrop.note.snapped ? '가게 자리에 붙였어요' : '누른 자리에 꽂았어요',
+        actionLabel: pinDrop.note.other
+          ? pinDrop.note.snapped
+            ? '누른 자리로'
+            : '가게 자리로'
+          : undefined,
+        onAction: pinDrop.moveToOther,
+        onDismiss: pinDrop.dismissNote,
+      }
+    : null;
+
   // 알림 탭 진입(route.params.focus): 장소면 그 핀, 스티커처럼 장소가 없으면 좌표가 대상.
   // 장소 목록이 아직 없으면 대상이 null 이고, 목록이 도착하면 그때 적용된다.
   const focus = route.params.focus;
@@ -280,7 +299,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           return;
         }
         if (toolsLive && tools.pinMode && point) {
-          placingFlow.snapAt(point);
+          tools.stopTools();
+          pinDrop.dropAt(point);
           return;
         }
         setReactionPlaceId(null);
@@ -295,7 +315,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         }
         // 핀 도구: 누른 자리 둘레에서 가장 가까운 가게에 꽂는다(핀 확정 카드로)
         if (toolsLive && tools.pinMode && point) {
-          placingFlow.snapAt(point);
+          tools.stopTools();
+          pinDrop.dropAt(point);
           return;
         }
         // 기본: 배경 탭 → 바·강조·선택 해제(메모 입력 중이면 키보드도 내림).
@@ -311,10 +332,14 @@ export function BoardDetailScreen({ route, navigation }: Props) {
 
   // 삭제 확인(Alert) 후 실행. order_index 재인덱싱은 하지 않는다.
   const confirmDelete = (place: Place) => {
-    Alert.alert(`${place.name} 핀을 뺄까요?`, '이 핀에 남긴 반응과 쪽지도 같이 지워져요.', [
-      { text: '취소', style: 'cancel' },
-      { text: '빼기', style: 'destructive', onPress: () => deletePlace.mutate(place.id) },
-    ]);
+    Alert.alert(
+      place.name ? `${place.name} 핀을 뺄까요?` : '이 핀을 뺄까요?',
+      '이 핀에 남긴 반응과 쪽지도 같이 지워져요.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '빼기', style: 'destructive', onPress: () => deletePlace.mutate(place.id) },
+      ]
+    );
   };
 
   const reactionPlace = reactionPlaceId
@@ -398,7 +423,8 @@ export function BoardDetailScreen({ route, navigation }: Props) {
           ink={inks.me}
           tool={tools.tool}
           onPick={tools.pickTool}
-          pinBusy={placingFlow.snapping}
+          pinBusy={pinDrop.busy}
+          notice={pinNotice}
           sticker={tools.sticker}
           recentStickers={tools.recentStickers}
           onPickSticker={tools.setSticker}
@@ -414,6 +440,7 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         <PlaceActionBar
           key={reactionPlaceId}
           placeId={reactionPlaceId}
+          name={reactionPlace?.name ?? ''}
           kakaoPlaceId={reactionPlace ? kakaoPlaceIdOf(reactionPlace) : null}
           reactions={reactions}
           memos={memos}
@@ -455,10 +482,6 @@ export function BoardDetailScreen({ route, navigation }: Props) {
         onSwitchOther={placingFlow.switchToOther}
         canSwitchToLive={!!placing.live}
         liveInfo={placing.kind === 'live' ? (placing.live?.info ?? null) : null}
-        nearby={placing.nearby}
-        nearPickedId={placing.kind === 'near' ? placing.providerPlaceId : null}
-        onPickNear={placingFlow.pickNear}
-        onPlainPin={placing.tapped ? placingFlow.plainPin : undefined}
         lift={keyboardHeight}
         bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
       />

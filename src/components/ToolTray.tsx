@@ -56,6 +56,7 @@ export function ToolTray({
   tool,
   onPick,
   pinBusy = false,
+  notice = null,
   sticker,
   recentStickers,
   onPickSticker,
@@ -70,6 +71,13 @@ export function ToolTray({
   tool: CanvasTool;
   onPick: (tool: CanvasTool) => void; // 같은 도구를 다시 고르면 내려놓는다(useCanvasTools)
   pinBusy?: boolean; // 핀 도구로 누른 자리 둘레 가게를 찾는 중
+  // 잠깐 뜨는 쪽지(핀을 꽂은 직후 "가게 자리에 붙였어요 · 누른 자리로" 등). 누르면 닫힌다.
+  notice?: {
+    text: string;
+    actionLabel?: string;
+    onAction?: () => void;
+    onDismiss: () => void;
+  } | null;
   sticker: string;
   recentStickers: string[];
   onPickSticker: (sticker: string) => void;
@@ -131,6 +139,27 @@ export function ToolTray({
   return (
     <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
       <View style={styles.column} pointerEvents="box-none">
+        {notice ? (
+          <View style={styles.notice} accessibilityLiveRegion="polite">
+            <Pressable
+              onPress={notice.onDismiss}
+              style={styles.noticeTextBox}
+              accessibilityRole="text"
+              accessibilityLabel={notice.text}
+            >
+              <Text style={styles.noticeText}>{notice.text}</Text>
+            </Pressable>
+            {notice.actionLabel && notice.onAction ? (
+              <Pressable
+                onPress={notice.onAction}
+                style={({ pressed }) => [styles.noticeAction, pressed && styles.pressed]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.noticeActionText}>{notice.actionLabel}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {shownHint ? (
           <Pressable
             style={styles.hint}
@@ -333,6 +362,25 @@ const styles = StyleSheet.create({
   },
   hintText: { ...typography.label, color: colors.onPrimary, textAlign: 'center' },
   hintSub: { ...typography.caption, color: 'rgba(255,255,255,0.78)', textAlign: 'center' },
+  // 꽂은 직후 쪽지: 먹색 한 줄 + 오른쪽에 밑줄 단추(반대쪽 자리로)
+  notice: {
+    alignSelf: 'center',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    backgroundColor: DARK,
+    borderRadius: radius.field,
+    paddingLeft: spacing.md,
+  },
+  noticeTextBox: { flexShrink: 1, paddingVertical: spacing.sm },
+  noticeText: { ...typography.label, color: colors.onPrimary },
+  noticeAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md },
+  noticeActionText: {
+    ...typography.label,
+    color: colors.onPrimary,
+    textDecorationLine: 'underline',
+  },
   pressed: { opacity: 0.7 },
   // 필통 위 줄: 꽂은 곳 쪽지(또는 든 도구 이름) | 되돌리기 · 전체 보기
   over: {

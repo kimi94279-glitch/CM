@@ -478,17 +478,18 @@ function layers(t: Theme): Json[] {
       },
     })
   );
-  if (t.building) {
-    L.push(
-      omt({
-        id: 'building',
-        type: 'fill',
-        'source-layer': 'building',
-        minzoom: t.building[2],
-        paint: { 'fill-color': t.building[0], 'fill-opacity': t.building[1] },
-      })
-    );
-  }
+  // 건물: 바탕이 건물을 안 그려도(지도책) 안 보이는 층은 둔다 — 핀 도구가 누른 곳이 건물인지 알아야 해서(2026-11-05)
+  L.push(
+    omt({
+      id: 'building',
+      type: 'fill',
+      'source-layer': 'building',
+      minzoom: t.building ? t.building[2] : 14,
+      paint: t.building
+        ? { 'fill-color': t.building[0], 'fill-opacity': t.building[1] }
+        : { 'fill-color': '#000000', 'fill-opacity': 0 },
+    })
+  );
 
   // 도로: 테두리(아래) → 안쪽(위). 터널은 뺀다.
   const casing = t.casing ?? [1, 2, 3];

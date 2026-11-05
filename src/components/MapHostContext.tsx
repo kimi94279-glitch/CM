@@ -14,6 +14,14 @@ export interface MapBoardData {
 // 필통의 그리는 도구: 연필(아직 정하지 않은 길) · 잉크(정한 길) · 형광펜(이 동네 좋아) · 실 자(두 점 사이 거리감)
 export type DrawTool = 'pencil' | 'ink' | 'marker' | 'string';
 
+// 지도를 누른 자리. level = 그때 줌(반올림), onBuilding = 건물 위를 눌렀는지(핀 도구가 가게 자리로 붙일지 정한다).
+export interface MapPoint {
+  lat: number;
+  lng: number;
+  level: number;
+  onBuilding?: boolean;
+}
+
 export function isDrawTool(v: unknown): v is DrawTool {
   return v === 'pencil' || v === 'ink' || v === 'marker' || v === 'string';
 }
@@ -39,9 +47,9 @@ export interface ExportCardOptions {
 // WebView 메시지가 현재 포커스된 보드로 라우팅될 콜백 집합.
 export interface MapCallbacks {
   onMarkerPress?: (id: string) => void;
-  onMapPress?: (point?: { lat: number; lng: number; level: number }) => void;
+  onMapPress?: (point?: MapPoint) => void;
   // 객체 탭. 그린 선을 탭했으면 그 자리(point)도 온다 — 스티커 도구면 선택 대신 그 자리에 붙인다.
-  onObjectPress?: (id: string, point?: { lat: number; lng: number; level: number }) => void;
+  onObjectPress?: (id: string, point?: MapPoint) => void;
   onObjectMove?: (id: string, lat: number, lng: number) => void;
   onDrawEnd?: (stroke: DrawStroke) => void;
 }
